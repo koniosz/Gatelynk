@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+dist
+build
+.next
+out
+.expo
+
+# Turbo cache
+.turbo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode
+.idea
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Database
+*.db
+*.sqlite
+
+# Prisma
+prisma/migrations/**/migration_lock.toml

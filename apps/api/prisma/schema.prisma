@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── LICENSE ──────────────────────────────────────────────────────────────────
+
+model LicensePlan {
+  id           Int          @id @default(autoincrement())
+  code         String       @unique // starter | standard | pro
+  name         String
+  maxUnits     Int?         // null = unlimited
+  maxBuildings Int?
+  maxAdmins    Int
+  licenseKeys  LicenseKey[]
+
+  @@map("license_plans")
+}
+
+model LicenseKey {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  planId      Int
+  plan        LicensePlan @relation(fields: [planId], references: [id])
+  status      LicenseKeyStatus @default(ACTIVE)
+  validUntil  DateTime?
+  createdAt   DateTime  @default(now())
+
+  activatedBy Int?
+  admin       Admin?    @relation(fields: [activatedBy], references: [id])
+  activatedAt DateTime?
+
+  @@map("license_keys")
+}
+
+enum LicenseKeyStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  REVOKED
+}
+
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
+
+model Admin {
+  id           Int          @id @default(autoincrement())
+  email        String       @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime     @default(now())
+
+  licenseKey   LicenseKey?
+  buildings    Building[]
+
+  @@map("admins")
+}
+
+// ─── BUILDING ─────────────────────────────────────────────────────────────────
+
+model Building {
+  id        Int      @id @default(autoincrement())
+  adminId   Int
+  admin     Admin    @relation(fields: [adminId], references: [id])
+  name      String
+  address   String
+  nip       String?
+  regon     String?
+  createdAt DateTime @default(now())
+
+  unitTypes UnitType[]
+  units     Unit[]
+  residents Resident[]
+
+  @@map("buildings")
+}
+
+// ─── UNIT TYPES ───────────────────────────────────────────────────────────────
+
+model UnitType {
+  id         Int       @id @default(autoincrement())
+  buildingId Int?      // null = system (global)
+  building   Building? @relation(fields: [buildingId], references: [id])
+  code       String
+  name       String
+  icon       String
+  isSystem   Boolean   @default(false)
+  units      Unit[]
+
+  @@unique([buildingId, code])
+  @@map("unit_types")
+}
+
+// ─── UNITS ────────────────────────────────────────────────────────────────────
+
+model Unit {
+  id          Int      @id @default(autoincrement())
+  buildingId  Int
+  building    Building @relation(fields: [buildingId], references: [id])
+  unitTypeId  Int
+  unitType    UnitType @relation(fields: [unitTypeId], references: [id])
+  number      String
+  floor       Int?
+  areaSqm     Decimal? @db.Decimal(8, 2)
+  description String?
+  createdAt   DateTime @default(now())
+
+  unitResidents UnitResident[]
+  invitations   Invitation[]
+
+  @@unique([buildingId, number])
+  @@map("units")
+}
+
+// ─── RESIDENTS ────────────────────────────────────────────────────────────────
+
+model Resident {
+  id         Int      @id @default(autoincrement())
+  buildingId Int
+  building   Building @relation(fields: [buildingId], references: [id])
+  firstName  String
+  lastName   String
+  email      String
+  phone      String?
+  createdAt  DateTime @default(now())
+
+  unitResidents UnitResident[]
+  invitations   Invitation[]
+
+  @@unique([buildingId, email])
+  @@map("residents")
+}
+
+model UnitResident {
+  id         Int      @id @default(autoincrement())
+  unitId     Int
+  unit       Unit     @relation(fields: [unitId], references: [id])
+  residentId Int
+  resident   Resident @relation(fields: [residentId], references: [id])
+  role       ResidentRole
+  sinceDate  DateTime
+  untilDate  DateTime?
+
+  @@map("unit_residents")
+}
+
+enum ResidentRole {
+  OWNER
+  TENANT
+}
+
+// ─── INVITATIONS ──────────────────────────────────────────────────────────────
+
+model Invitation {
+  id         Int              @id @default(autoincrement())
+  residentId Int
+  resident   Resident         @relation(fields: [residentId], references: [id])
+  unitId     Int
+  unit       Unit             @relation(fields: [unitId], references: [id])
+  tokenHash  String           @unique
+  status     InvitationStatus @default(PENDING)
+  sentAt     DateTime         @default(now())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
