@@ -1,0 +1,59 @@
+# Fly.io config for @gatelynk/web (Next.js panel).
+#
+# Region:   FRA — w tym samym DC co API (zmniejsza latency dla SSR + API
+#           calls z server components).
+# Build:    z monorepo root, Dockerfile w infra/prod/Dockerfile.web.
+# Build-arg: NEXT_PUBLIC_API_URL musi być znany w czasie buildu — Next
+#           inline'uje go do JS-a. Ustawiamy go w `fly deploy --build-arg`.
+
+app = "gatelynk-web"
+primary_region = "fra"
+
+[build]
+  dockerfile = "infra/prod/Dockerfile.web"
+  [build.args]
+    NEXT_PUBLIC_API_URL = "https://api.gatelynk.com/api"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+  # Next.js standalone czyta HOSTNAME, żeby zdecydować na czym nasłuchiwać.
+  # Domyślnie z naszego Dockerfile było 0.0.0.0 (IPv4-only), ale Fly proxy
+  # łączy się z VM-em po IPv6 (fdaa:...). Bez IPv6 listenera proxy zwraca
+  # „waiting for machine to be reachable" → 502. `::` w Node tworzy dual-stack
+  # socket (IPv6 + IPv4-mapped), więc obie strony są ogarnięte.
+  HOSTNAME = "::"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # auto_stop wyłączone — Fly proxy uznaje tylko 2xx za passing health check.
+  # `/` w Next.js redirectuje na `/login` (307), więc check leci jako critical
+  # i Fly nie chce odpalić zatrzymanej maszyny dla nowego ruchu (PR01).
+  # Trzymamy 1 maszynę zawsze (~$2-3/mo) — alternatywą byłby endpoint /healthz
+  # zwracający 200 w panelu, ale to wymaga zmian w kodzie Next.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+# Path = /login — Next.js panel z middleware, który redirectuje `/` na
+# `/login` (307). Fly HTTP check honoruje tylko 2xx, więc na `/` check
+# leciał jako "critical: connect: connection refused" i deploy uznawano za
+# failed nawet gdy panel działał. `/login` to pełna strona logowania (200).
+[[http_service.checks]]
+  grace_period = "30s"
+  interval = "15s"
+  method = "get"
+  timeout = "5s"
+  path = "/login"
+  protocol = "http"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1

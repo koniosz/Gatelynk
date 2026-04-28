@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common'
@@ -7,17 +8,30 @@ import { PrismaService } from '../prisma/prisma.service'
 import { ConfigService } from '@nestjs/config'
 import { createHash, randomBytes } from 'crypto'
 import { Resend } from 'resend'
-import { INVITATION_EXPIRES_DAYS } from '@gatelynk/shared'
+
+const INVITATION_EXPIRES_DAYS = 7
 
 @Injectable()
 export class InvitationsService {
-  private resend: Resend
+  private readonly logger = new Logger(InvitationsService.name)
+  // null gdy RESEND_API_KEY nie jest ustawiony (np. pierwszy deploy na Fly).
+  // Resend SDK rzuca w konstruktorze gdy klucz jest pusty — bez tej obrony
+  // cały moduł nie startuje (cf. MailService, który ma analogiczny pattern).
+  // Tworzenie invitation w DB nadal działa; tylko wysyłka maila jest skipowana
+  // — admin może ręcznie skopiować link z odpowiedzi.
+  private resend: Resend | null
 
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
   ) {
-    this.resend = new Resend(this.config.get('RESEND_API_KEY'))
+    const apiKey = this.config.get<string>('RESEND_API_KEY')
+    if (apiKey) {
+      this.resend = new Resend(apiKey)
+    } else {
+      this.resend = null
+      this.logger.warn('RESEND_API_KEY not configured — invitation emails will be skipped')
+    }
   }
 
   async send(buildingId: number, residentId: number, unitId: number, adminId: number) {
@@ -48,20 +62,26 @@ export class InvitationsService {
 
     const inviteUrl = `${this.config.get('FRONTEND_URL')}/accept-invitation?token=${token}`
 
-    await this.resend.emails.send({
-      from: 'GateLynk <noreply@gatelynk.pl>',
-      to: resident.email,
-      subject: `Zaproszenie do ${unit.building.name}`,
-      html: this.buildEmailHtml({
-        name: `${resident.firstName} ${resident.lastName}`,
-        buildingName: unit.building.name,
-        unitLabel: `${unit.unitType.name} ${unit.number}`,
-        inviteUrl,
-        expiresAt,
-      }),
-    })
+    if (this.resend) {
+      await this.resend.emails.send({
+        from: 'GateLynk <noreply@gatelynk.pl>',
+        to: resident.email,
+        subject: `Zaproszenie do ${unit.building.name}`,
+        html: this.buildEmailHtml({
+          name: `${resident.firstName} ${resident.lastName}`,
+          buildingName: unit.building.name,
+          unitLabel: `${unit.unitType.name} ${unit.number}`,
+          inviteUrl,
+          expiresAt,
+        }),
+      })
+    } else {
+      // Bez Resend nie wyślemy maila — zwracamy `inviteUrl` w response,
+      // żeby admin mógł skopiować link ręcznie. Lepsze niż twardy 500.
+      this.logger.warn(`Invitation email skipped (no RESEND_API_KEY) — link: ${inviteUrl}`)
+    }
 
-    return { success: true, invitationId: invitation.id, expiresAt }
+    return { success: true, invitationId: invitation.id, expiresAt, inviteUrl: this.resend ? undefined : inviteUrl }
   }
 
   async accept(token: string) {

@@ -1,0 +1,71 @@
+# Fly.io config for @gatelynk/api.
+#
+# Region:   FRA (Frankfurt) — najbliższy datacenter w UE dla Polski (~25ms).
+#           Trzymamy tu i appkę, i Fly Managed Postgres, żeby DB latency był
+#           lokalny (~1ms intra-region) zamiast cross-region (~30-50ms).
+# Build:    z monorepo root, Dockerfile w infra/prod/Dockerfile.api.
+# Tunnel:   API obsługuje WS na /api/edge/tunnel — Edge inicjuje wss://. Fly
+#           proxy automatycznie obsługuje WebSocket upgrade dla 443/HTTPS.
+# Tailscale: TS_AUTHKEY ustawiamy przez `fly secrets set` (nie commitujemy).
+#           Bez TS_AUTHKEY entrypoint pomija tailscale i `syncAccessPoints`
+#           się nie powiedzie — appka działa, tylko brak auto-sync z Edge.
+
+app = "gatelynk-api"
+primary_region = "fra"
+
+[build]
+  # fly.toml leży w monorepo root → build context = monorepo root.
+  # COPY w Dockerfile na ścieżkach `apps/api/`, `packages/` rozwiązuje się
+  # poprawnie.
+  #
+  # Deploy:  `fly deploy --config fly.api.toml --remote-only`
+  dockerfile = "infra/prod/Dockerfile.api"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+  # Set podczas deployu jako secret: TS_AUTHKEY, JWT_SECRET, DATABASE_URL,
+  # FRONTEND_URL, RESEND_API_KEY, APN_*. Patrz `fly secrets list` po deployu.
+
+# ── HTTP service ─────────────────────────────────────────────────────────────
+# Fly proxy słucha na 80/443 i forwarduje na nasze internal_port (3000).
+# `auto_stop_machines = "off"` bo:
+#   1) Edge trzyma persistent WS — uśpienie machine zrywa tunnel
+#   2) tailscaled w userspace musi działać cały czas (cold-start to ~5-10s
+#      podnoszenia tailscale up, w tym czasie syncAccessPoints by failował)
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+# ── Health check ─────────────────────────────────────────────────────────────
+# `AppController` ma `@Get('health')` z prefixem `api`, więc endpoint to
+# `/api/health` i zwraca 200 z `{status:'ok', timestamp:...}`.
+# Domyślnie Fly HTTP check uznaje tylko 2xx za passing — bez tego endpointa
+# proxy zwracał [PR01] na zewnątrz, mimo że Nest faktycznie nasłuchiwał.
+#
+# grace_period 60s — cold-start z tailscaled up + Nest bootstrap ~30-40s,
+# 30s było za krótkie i pierwszy check leciał w pustkę → critical → restart loop.
+[[http_service.checks]]
+  grace_period = "60s"
+  interval = "15s"
+  method = "get"
+  timeout = "5s"
+  path = "/api/health"
+  protocol = "http"
+
+# ── Machines spec ────────────────────────────────────────────────────────────
+# shared-cpu-1x z 1GB RAM. Prisma + tailscaled + Nest = ~400-600MB resident.
+# 512MB dla devu wystarczy ale wąsko; 1GB daje headroom na Prisma migrate
+# deploy + image upload pikach.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  cpus = 1
