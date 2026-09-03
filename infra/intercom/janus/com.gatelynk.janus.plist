@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GateLynk Janus Gateway — macOS launchd agent (Edge / Mac Mini).
+
+  Media server dla domofonu Akuvox ↔ iOS (SIP↔WebRTC). Projekt:
+  docs/intercom-akuvox-call.md. Uruchamiany jako user-agent (gui/501) — analogia
+  do com.gatelynk.ollama.plist (apps/edge/install/). KeepAlive=true → launchd
+  auto-restartuje po crashu i po loginie.
+
+  UWAGA (macOS Tahoe TCC Local Network, patrz apps/edge/install/README.md):
+  Janus łączy się do Akuvoxa (192.168.1.x) i do TURN-a. Owijamy w
+  /usr/bin/caffeinate -i żeby dziecko dziedziczyło Local Network permission
+  (Apple-signed parent) — ten sam trik co Edge node.
+
+  Instalacja (na Mac Mini, jako user shc_development):
+    cp com.gatelynk.janus.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.gatelynk.janus.plist
+
+  Status / restart / logi:
+    launchctl print gui/$(id -u)/com.gatelynk.janus
+    launchctl kickstart -k gui/$(id -u)/com.gatelynk.janus
+    tail -f /tmp/janus.out.log /tmp/janus.err.log
+
+  Wyłączenie:
+    launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.gatelynk.janus.plist
+
+  Ścieżka binarki: dla Homebrew na Apple Silicon to /opt/homebrew/bin/janus.
+  Na Intel Mac: /usr/local/bin/janus. Dostosuj ProgramArguments.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.gatelynk.janus</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/caffeinate</string>
+		<string>-i</string>
+		<string>/opt/homebrew/bin/janus</string>
+		<string>-F</string>
+		<string>/opt/homebrew/etc/janus</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>StandardOutPath</key>
+	<string>/tmp/janus.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/janus.err.log</string>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+</dict>
+</plist>

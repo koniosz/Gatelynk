@@ -19,8 +19,12 @@ if [ -n "$TS_AUTHKEY" ]; then
   echo "[entrypoint] starting tailscaled (userspace + HTTP proxy on :1055)"
   mkdir -p /var/lib/tailscale /var/run/tailscale
 
+  # --state=mem: → węzeł EPHEMERAL: Tailscale sam usuwa go z tailnetu po
+  # rozłączeniu. Bez tego każdy boot maszyny Fly zostawiał martwy węzeł
+  # fly-api-…-N (do 2026-07-30 uzbierało się ~190 sztuk offline).
   /usr/sbin/tailscaled \
     --tun=userspace-networking \
+    --state=mem: \
     --statedir=/var/lib/tailscale \
     --socket=/var/run/tailscale/tailscaled.sock \
     --outbound-http-proxy-listen=localhost:1055 \
@@ -34,18 +38,24 @@ if [ -n "$TS_AUTHKEY" ]; then
   done
 
   HOSTNAME_TS="${TS_HOSTNAME:-fly-api-${FLY_MACHINE_ID:-$(hostname)}}"
-  /usr/bin/tailscale up \
+  # NIE-fatalne (2026-07-30): wygasły TS_AUTHKEY ubijał CAŁE API w crash-loop
+  # („invalid key: API key … not valid" + set -e). Tailscale służy tylko do
+  # proxy Cloud→Edge (asystent, snapshoty domofonu) — bez niego API MUSI
+  # wstać, degradujemy tylko te funkcje. Po wygaśnięciu klucza: nowy
+  # pre-authorized key (tag:cloud) w admin console → flyctl secrets set TS_AUTHKEY.
+  if /usr/bin/tailscale up \
     --authkey="$TS_AUTHKEY" \
     --hostname="$HOSTNAME_TS" \
     --accept-routes \
     --accept-dns=false \
-    --reset
-
-  echo "[entrypoint] tailscale up — hostname=$HOSTNAME_TS"
-  /usr/bin/tailscale status || true
-
-  # Eksportujemy proxy URL dla Node.js (czytane przez EdgeService.fetchEdge()).
-  export TS_HTTP_PROXY="http://localhost:1055"
+    --reset; then
+    echo "[entrypoint] tailscale up — hostname=$HOSTNAME_TS"
+    /usr/bin/tailscale status || true
+    # Eksportujemy proxy URL dla Node.js (czytane przez EdgeService.fetchEdge()).
+    export TS_HTTP_PROXY="http://localhost:1055"
+  else
+    echo "[entrypoint] WARN: tailscale up FAILED (wygasly TS_AUTHKEY?) — API startuje BEZ proxy do Edge (asystent/snapshoty domofonu nie będą działać do rotacji klucza)"
+  fi
 else
   echo "[entrypoint] TS_AUTHKEY not set — skipping tailscale (Edge HTTP fetches will fail)"
 fi
@@ -57,4 +67,4 @@ echo "[entrypoint] running prisma migrate deploy"
 pnpm exec prisma migrate deploy
 
 echo "[entrypoint] starting Nest application"
-exec node dist/src/main
+exec node dist/main

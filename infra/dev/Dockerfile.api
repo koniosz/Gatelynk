@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1.7
+
+# Multi-stage build for @gatelynk/api.
+#
+# Stage 1 (deps)    : pnpm install z lockfile — generuje też Prisma client
+#                     (postinstall hook deklarowany w `package.json`).
+# Stage 2 (build)   : `nest build` → `apps/api/dist/src/main.js`.
+# Stage 3 (runtime) : kopia builda + node_modules. Migracje Prisma idą
+#                     w CMD na starcie kontenera (idempotent — `migrate
+#                     deploy` po prostu nie robi nic gdy DB jest na bieżąco).
+#
+# Build context: monorepo root (../../ z punktu widzenia compose w infra/dev/).
+# To jest konieczne, bo pnpm workspaces wymaga widzieć wszystkie package.json
+# żeby zresolvować `workspace:*` zależności (api zadeklarowała `@gatelynk/shared`
+# nawet jeśli kodowo nie importuje — pnpm i tak chce mieć metadane).
+
+# ─── base ───────────────────────────────────────────────────────────────────
+FROM node:22-bookworm-slim AS base
+WORKDIR /app
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates dumb-init \
+ && rm -rf /var/lib/apt/lists/*
+# corepack pin = ten sam pnpm co lokalnie (patrz packageManager w root package.json)
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+
+# ─── deps: pełna instalacja z toolchainem do natywnych modułów ──────────────
+FROM base AS deps
+# bcrypt/apn potrafią potrzebować builda od źródeł na arm64 (gdy prebuilt nie
+# matchuje glibc kontenera). Trzymamy je tu jako fallback; jak prebuilty
+# wystarczą — npm scripts po prostu ich nie użyją.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
+# Kopiujemy lockfile + workspace metadata przed sourcecodem — to daje cache
+# hit na warstwie deps gdy zmieniasz tylko kod, ale nie deps.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/edge/package.json apps/edge/
+COPY apps/web/package.json apps/web/
+COPY packages/shared/package.json packages/shared/
+COPY packages/device-drivers/package.json packages/device-drivers/
+# `--frozen-lockfile` = exit non-zero gdy pnpm musiałby zmodyfikować lockfile.
+# Plus chroni przed cichym driftem deps między CI a lokalnym dev-em.
+RUN pnpm install --frozen-lockfile
+
+# Faza 7.1 (2026-05-08) — drift Prismy 5.22/7.5 rozwiązany przez usunięcie
+# `@prisma/adapter-pg` z dependencies (production app używa standardowego
+# PrismaClient bez adapter-a; seed-y też). Lockfile nie ściąga już 7.x,
+# więc workaround `rm -rf @prisma/client` z poprzednich wersji nie jest
+# potrzebny.
+
+# ─── build: kompilacja TypeScript ───────────────────────────────────────────
+FROM deps AS build
+COPY apps/api apps/api/
+COPY packages packages/
+RUN cd apps/api && pnpm exec prisma generate
+RUN pnpm --filter @gatelynk/api run build
+
+# ─── runtime: minimalny image bez toolchaina ────────────────────────────────
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=build /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/package.json ./
+COPY --from=build /app/apps/api/package.json apps/api/
+COPY --from=build /app/apps/api/dist apps/api/dist
+COPY --from=build /app/apps/api/prisma apps/api/prisma
+COPY --from=build /app/packages packages
+# pnpm `nodeLinker: hoisted` → wszystkie deps są w root node_modules.
+# Kopiujemy je w całości (wraz z prisma CLI z devDependencies — potrzebne do
+# `prisma migrate deploy` na starcie). To napompuje image (~500 MB) ale dev
+# environment ma być prosty, nie zoptymalizowany pod cold-start production.
+COPY --from=build /app/node_modules node_modules
+COPY --from=build /app/apps/api/node_modules apps/api/node_modules
+WORKDIR /app/apps/api
+EXPOSE 3000
+ENTRYPOINT ["dumb-init", "--"]
+# `migrate deploy` jest idempotentny — wywołuje tylko nieaplikowane migracje.
+# Główny use-case: świeży `docker compose up` na czystym Postgres (z volume).
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/src/main"]

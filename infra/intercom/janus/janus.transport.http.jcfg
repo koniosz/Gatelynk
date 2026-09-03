@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Janus HTTP transport — kanał sterowania dla NestJS Edge (JanusMediaBridge).
+# Projekt: docs/intercom-akuvox-call.md. Wklej do
+# /opt/homebrew/etc/janus/janus.transport.http.jcfg.
+#
+# JanusMediaBridge (apps/edge/src/devices/intercom/janus-media-bridge.ts) używa
+# tego transportu (long-poll) — env JANUS_HTTP_URL = http://127.0.0.1:8088/janus.
+# Admin API (8089) tylko na 127.0.0.1, z admin_secret. NIC nie wystawiamy na LAN.
+# ─────────────────────────────────────────────────────────────────────────────
+
+general: {
+	json = "indented"
+	base_path = "/janus"
+
+	# Zwykłe API (sesje, attach, message, trickle) — long-poll. Bindujemy TYLKO
+	# na loopback: jedyny klient to lokalny NestJS Edge.
+	http = true
+	port = 8088
+	# UWAGA: bind po IP używa `ip`, NIE `interface` (interface = nazwa typu lo0/en0;
+	# na macOS "127.0.0.1" jako interface → Error binding / webserver nie wstaje).
+	ip = "127.0.0.1"
+
+	# HTTPS niepotrzebne lokalnie (loopback). Zostaw wyłączone.
+	https = false
+}
+
+# ── Admin/Monitor API ────────────────────────────────────────────────────────
+admin: {
+	admin_http = true
+	admin_port = 8089
+	admin_ip = "127.0.0.1"
+	# admin_secret MUSI być ustawione — chroni Admin API. env Edge:
+	#   JANUS_API_SECRET (transport-level apisecret dla zwykłego API)
+	#   — admin_secret to OSOBNY sekret tylko dla 8089 (monitoring/list sessions).
+	admin_secret = "CHANGE_ME_admin_secret"
+}
+
+# ── CORS / ACL ───────────────────────────────────────────────────────────────
+cors: {
+	# Brak przeglądarki — Edge to server-side. CORS off, brak allowed origins.
+	enabled = false
+}
+
+certificates: {
+	# Nieużywane (https=false). Zostaw puste.
+}

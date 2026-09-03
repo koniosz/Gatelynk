@@ -1,0 +1,128 @@
+/* Gatelynk Design Tokens
+   Dark-first, premium residential. Purple accent.
+   Both modes coexist via [data-theme] on the screen root. */
+
+:root,
+[data-theme="dark"] {
+  /* Surfaces — layered dark navy */
+  --bg-0: #06080F;          /* deepest, page bg outside frame */
+  --bg-1: #0B1020;          /* app background */
+  --bg-2: #131A2E;          /* card / sheet */
+  --bg-3: #1B2440;          /* elevated card */
+  --bg-4: #232E55;          /* hover / pressed */
+
+  /* Borders & dividers */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Text */
+  --text-primary: #F4F6FB;
+  --text-secondary: #B7C0D8;
+  --text-tertiary: #7C8AAA;
+  --text-disabled: #4F5A77;
+
+  /* Brand — soft violet, residential premium */
+  --accent-50:  #F1ECFF;
+  --accent-100: #E0D4FF;
+  --accent-200: #C5B0FF;
+  --accent-300: #A78BFA;   /* primary accent */
+  --accent-400: #8B6BF0;
+  --accent-500: #7050E0;
+  --accent-600: #5A3EBF;
+  --accent-700: #432B92;
+  --accent-glow: rgba(167, 139, 250, 0.35);
+
+  /* Semantic */
+  --success: #34D399;
+  --success-bg: rgba(52, 211, 153, 0.12);
+  --warning: #FBBF24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --danger: #F87171;
+  --danger-bg: rgba(248, 113, 113, 0.14);
+  --info: #60A5FA;
+  --info-bg: rgba(96, 165, 250, 0.14);
+
+  /* Activity icons */
+  --icon-orange: #F59E0B;
+  --icon-orange-bg: rgba(245, 158, 11, 0.18);
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 40px var(--accent-glow);
+}
+
+[data-theme="light"] {
+  --bg-0: #EEF1F8;
+  --bg-1: #F6F8FC;
+  --bg-2: #FFFFFF;
+  --bg-3: #FFFFFF;
+  --bg-4: #F0F2F8;
+
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-default: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.18);
+
+  --text-primary: #0B1020;
+  --text-secondary: #475069;
+  --text-tertiary: #6E7891;
+  --text-disabled: #B5BCCC;
+
+  --accent-300: #7050E0;
+  --accent-400: #5A3EBF;
+  --accent-glow: rgba(112, 80, 224, 0.22);
+
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.10);
+  --warning: #D97706;
+  --warning-bg: rgba(217, 119, 6, 0.10);
+  --danger: #DC2626;
+  --danger-bg: rgba(220, 38, 38, 0.10);
+  --info: #2563EB;
+  --info-bg: rgba(37, 99, 235, 0.10);
+
+  --icon-orange: #EA580C;
+  --icon-orange-bg: rgba(234, 88, 12, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.12);
+  --shadow-glow: 0 0 40px var(--accent-glow);
+}
+
+/* Typography */
+:root {
+  --font-sans: 'Geist', -apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-display: 'Geist', -apple-system, 'SF Pro Display', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-2xl: 24px;
+  --r-3xl: 32px;
+  --r-full: 999px;
+}
+
+* { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+.screen {
+  background: var(--bg-1);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  letter-spacing: -0.01em;
+}
+
+.scroll-area {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-area::-webkit-scrollbar { display: none; }

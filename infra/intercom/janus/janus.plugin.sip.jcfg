@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Janus SIP plugin (`janus.plugin.sip`) — terminacja SIP od Akuvoxa.
+# Projekt: docs/intercom-akuvox-call.md. Wklej do
+# /opt/homebrew/etc/janus/janus.plugin.sip.jcfg.
+#
+# Plugin sam mostkuje SIP↔WebRTC: po stronie LAN przyjmuje SIP INVITE od
+# Akuvoxa (audio G.711/G.722 + wideo H.264), po stronie WebRTC wystawia media do
+# iOS. NestJS Edge (JanusMediaBridge) steruje tym przez HTTP transport:
+# register → incomingcall → accept(jsep) → trickle → hangup.
+# ─────────────────────────────────────────────────────────────────────────────
+
+general: {
+	# Lokalny IP Edge (Mac Mini) na którym plugin nasłuchuje SIP. Akuvox dzwoni
+	# tu na port 5060. Ustaw realny LAN IP (np. 192.168.1.127) — NIE 0.0.0.0,
+	# bo plugin używa tego adresu w SDP/Contact.
+	local_ip = "192.168.1.127"
+
+	# Port SIP (UDP/TCP). Akuvox: Account → SIP server = ten IP, port 5060.
+	# (plugin SIP używa portu z `sip_port` per-handle; tu domyślny range RTP.)
+
+	# Zakres portów RTP dla nogi SIP (po stronie Akuvoxa). Rozłączny z
+	# media.rtp_port_range w janus.jcfg (tamten to noga WebRTC).
+	rtp_port_range = "10000-19999"
+
+	# Domyślny behaviour: NIE rejestruj się nigdzie auto — rejestrację konta
+	# robimy z kodu (JanusMediaBridge.sipRegister) na podstawie env Edge:
+	#   JANUS_SIP_IDENTITY / JANUS_SIP_PROXY / JANUS_SIP_REALM / JANUS_SIP_SECRET
+	# Gdy Akuvox dzwoni direct-IP (bez registrara) — register w trybie guest.
+
+	# Kodeki: H.264 passthrough (D4 — bez transcodingu). Plugin negocjuje to co
+	# wspólne między Akuvoxem a iOS. Upewnij się że Janus zbudowany z libsrtp
+	# i że Akuvox ma włączone PCMU/PCMA/G.722 + H.264 (Baseline/Main).
+
+	# Behind-NAT: gdy Janus jest za NAT-em względem Akuvoxa (zwykle NIE — oba w
+	# tym samym LAN), ustaw keepalive. W LAN zostaw default.
+	keepalive_interval = 30
+
+	# Limit jednoczesnych połączeń na plugin (dla nas 1-2 wystarczy).
+	# (brak twardego limitu — kontrolujemy po stronie IntercomCallService).
+}

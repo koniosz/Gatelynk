@@ -1,0 +1,64 @@
+# Faza 7.4 — E2E testy API na każdym PR.
+#
+# Postgres jako service container (wbudowany w GitHub Actions runner). Testy
+# resetują bazę przed każdym suite-em (`resetDatabase()` w db-setup.ts), więc
+# 1 instancja PG dla całego workflow wystarczy.
+#
+# `DATABASE_URL_TEST` ma frazę `_test` w nazwie — defensive guard w
+# `resetDatabase()` (TRUNCATE wymaga jej obecności).
+
+name: API e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gatelynk
+          POSTGRES_PASSWORD: gatelynk
+          POSTGRES_DB: gatelynk_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://gatelynk:gatelynk@localhost:5432/gatelynk_test
+      DATABASE_URL_TEST: postgresql://gatelynk:gatelynk@localhost:5432/gatelynk_test
+      JWT_SECRET: ci-test-secret-not-for-prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply Prisma migrations
+        run: pnpm --filter @gatelynk/api exec prisma migrate deploy
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @gatelynk/api exec prisma generate
+
+      - name: Run e2e tests
+        run: pnpm --filter @gatelynk/api run test:e2e

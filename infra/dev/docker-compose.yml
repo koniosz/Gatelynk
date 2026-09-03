@@ -1,0 +1,92 @@
+name: gatelynk-dev
+
+# Dev/staging stack na Mac Mini (Tailscale 100.90.244.90).
+# Edge zostaje w pm2 — nie chowamy go tutaj, bo potrzebuje hostnetwork
+# do bytów na LAN-ie (kamery 192.168.x).
+#
+# Użycie:
+#   cd infra/dev
+#   cp .env.example .env  # wypełnij sekrety
+#   docker compose up -d --build
+#
+# Po pierwszym `up` baza jest pusta — wgraj dump z lokalnego PG:
+#   pg_dump -U konradsz gatelynk > /tmp/gatelynk.sql
+#   scp /tmp/gatelynk.sql shc_development@100.90.244.90:/tmp/
+#   docker compose exec -T postgres psql -U gatelynk gatelynk < /tmp/gatelynk.sql
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gatelynk-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gatelynk}
+      POSTGRES_USER: ${POSTGRES_USER:-gatelynk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    ports:
+      # Bindujemy do 127.0.0.1 — DB nie powinno wystawać w Tailscale ani LAN.
+      # Jak chcesz lokalnie podpiąć Prisma Studio z MacBooka, używaj `ssh -L`.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gatelynk} -d ${POSTGRES_DB:-gatelynk}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      # Build context = root monorepo (pnpm workspaces musi widzieć wszystkie
+      # package.json). Compose plik leży w infra/dev/, root to ../..
+      context: ../..
+      dockerfile: infra/dev/Dockerfile.api
+    container_name: gatelynk-api
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gatelynk}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gatelynk}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      FRONTEND_URL: ${FRONTEND_URL:-http://100.90.244.90:3001}
+      PORT: 3000
+      # Joi schema w app.module rozróżnia dev/prod po NODE_ENV — na Mac Mini
+      # trzymamy `development` żeby JWT_SECRET min length był 16, nie 32.
+      NODE_ENV: ${NODE_ENV:-development}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      APN_KEY_ID: ${APN_KEY_ID:-}
+      APN_TEAM_ID: ${APN_TEAM_ID:-}
+      # APN_KEY_PATH wskazuje ŚCIEŻKĘ WEWNĄTRZ kontenera. Plik klucza .p8
+      # mountujemy z hosta przez `secrets/` — patrz volumes niżej.
+      APN_KEY_PATH: ${APN_KEY_PATH:-/secrets/AuthKey.p8}
+      APN_BUNDLE_ID: ${APN_BUNDLE_ID:-com.gatelynk.app}
+    ports:
+      # API musi być dostępne z Tailscale (Edge konektuje tam, iOS app też).
+      # 0.0.0.0 = wszystkie interfejsy hosta = tailscale0 + lo + en0.
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # APN p8 key na hostzie pod `infra/dev/secrets/AuthKey.p8`.
+      # Tylko-do-odczytu — kontener nie może go nadpisać.
+      - ./secrets:/secrets:ro
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/dev/Dockerfile.web
+      args:
+        # NEXT_PUBLIC_API_URL musi być URL-em po stronie BROWSERA, nie
+        # kontenera — bo to JS w przeglądarce woła API. Przy hicie z
+        # MacBooka via Tailscale: http://100.90.244.90:3000/api.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://100.90.244.90:3000/api}
+    container_name: gatelynk-web
+    ports:
+      - "3001:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: gatelynk-postgres-data

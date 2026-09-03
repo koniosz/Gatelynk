@@ -1,0 +1,13 @@
+{
+  "name": "gatelynk-sip-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SIP proxy/registrar bridging Akuvox E18 → Janus (per-unit intercom routing)",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js"
+  },
+  "dependencies": {
+    "sip": "0.0.6"
+  }
+}

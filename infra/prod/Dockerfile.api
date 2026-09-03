@@ -7,9 +7,11 @@
 #     microVMs nie mają /dev/net/tun) + HTTP proxy na :1055
 #   • używa `entrypoint-api.sh` który podnosi tailscaled przed `node`
 #
-# Fix Prisma 5.22 vs 7.5 z dev Dockerfile-a jest tutaj zachowany — patrz
-# komentarz w `infra/dev/Dockerfile.api` o usuwaniu duplikatu @prisma/client
-# i ręcznym `prisma generate` w build stage.
+# Faza 7.1 (2026-05-08) — naprawa drift-u Prismy 5.22 vs 7.5: usunięto
+# `@prisma/adapter-pg` z dependencies (production app i tak używa standardowego
+# PrismaClient bez adapter-a), `pnpm install` nie ściąga już duplikatu @7.5.
+# Dlatego workaround `rm -rf @prisma/client` z poprzednich wersji nie jest
+# już potrzebny.
 
 # ─── base ───────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS base
@@ -32,15 +34,21 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/device-drivers/package.json packages/device-drivers/
 RUN pnpm install --frozen-lockfile
 
-# Zob. komentarz w dev Dockerfile — duplikat @prisma/client@7.5 wygrywa peer
-# resolution, my chcemy hoisted 5.22.
-RUN rm -rf apps/api/node_modules/@prisma/client
-
 # ─── build ──────────────────────────────────────────────────────────────────
 FROM deps AS build
+# Faza B-3: rootowy tsconfig.base.json — wymagany przez `packages/device-drivers/tsconfig.json`
+# (extends `../../tsconfig.base.json`). Bez tego tsc fail z error TS5083.
+COPY tsconfig.base.json ./
 COPY apps/api apps/api/
 COPY packages packages/
 RUN cd apps/api && pnpm exec prisma generate
+# Faza B-3 (2026-05-14): API zaczęło używać `@gatelynk/device-drivers`.
+# Workspace dep musi mieć zbudowany `dist/` ZANIM API się zbuduje, bo
+# `package.json#main` wskazuje na `./dist/index.js` (Node wymaga JS w runtime).
+# Bezpośrednie `tsc` z root `node_modules/.bin/` — omijamy `pnpm run build`,
+# żeby uniknąć „node_modules missing" w monorepo (deps stage zrobił install
+# przed `COPY packages`).
+RUN cd packages/device-drivers && ../../node_modules/.bin/tsc
 RUN pnpm --filter @gatelynk/api run build
 
 # ─── runtime ────────────────────────────────────────────────────────────────

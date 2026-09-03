@@ -37,3 +37,12 @@ pnpm-debug.log*
 
 # Prisma
 prisma/migrations/**/migration_lock.toml
+
+# Claude Code — lokalne worktree agentów
+.claude/worktrees/
+
+# iOS — lokalny backup ikon
+apps/ios/.icon-backup/
+
+# Edge — dane runtime (sqlite, snapshoty, klatki)
+apps/edge/data/

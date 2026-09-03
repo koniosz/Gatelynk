@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Gatelynk — Zaproszenie</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0: #EEF1F8;
+    --bg-1: #F6F8FC;
+    --bg-2: #FFFFFF;
+    --bg-3: #FFFFFF;
+    --bg-4: #F0F2F8;
+    --border-subtle: rgba(15, 23, 42, 0.06);
+    --border-default: rgba(15, 23, 42, 0.10);
+    --border-strong: rgba(15, 23, 42, 0.18);
+    --text-primary: #0B1020;
+    --text-secondary: #475069;
+    --text-tertiary: #6E7891;
+    --text-disabled: #B5BCCC;
+    --accent-300: #A78BFA;
+    --accent-400: #8B6BF0;
+    --accent-500: #7050E0;
+    --accent-600: #5A3EBF;
+    --accent-glow: rgba(112, 80, 224, 0.22);
+    --success: #059669;
+    --success-bg: rgba(5, 150, 105, 0.10);
+    --warning: #D97706;
+    --warning-bg: rgba(217, 119, 6, 0.10);
+    --danger: #DC2626;
+    --danger-bg: rgba(220, 38, 38, 0.10);
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 20px; --r-2xl: 24px; --r-full: 999px;
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.12);
+    --shadow-glow: 0 0 40px var(--accent-glow);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: 'Geist', -apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+    background: var(--bg-0);
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    min-height: 100vh;
+  }
+  .stage {
+    min-height: 100vh;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 24px 16px 60px;
+    background:
+      radial-gradient(900px 600px at 80% -10%, rgba(167,139,250,0.18) 0%, rgba(167,139,250,0) 60%),
+      radial-gradient(700px 500px at 0% 80%, rgba(96,165,250,0.10) 0%, rgba(96,165,250,0) 70%),
+      linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+  }
+  .page {
+    width: 100%;
+    max-width: 420px;
+    display: flex; flex-direction: column;
+    gap: 14px;
+  }
+  /* Top brand bar */
+  .brand {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 4px;
+  }
+  .brand-mark {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
+  }
+  .brand-dot {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent-300), var(--accent-500));
+    box-shadow: 0 4px 14px var(--accent-glow);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 11px; letter-spacing: 0;
+  }
+  .secure-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--success-bg); color: var(--success);
+    border-radius: var(--r-full); padding: 5px 10px;
+    font-size: 11px; font-weight: 600;
+  }
+  /* Hero */
+  .hero {
+    position: relative;
+    border-radius: 24px;
+    overflow: hidden;
+    background: var(--bg-2);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-md);
+    padding: 22px 22px 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(60% 60% at 100% 0%, rgba(167,139,250,0.20) 0%, rgba(167,139,250,0) 60%),
+      radial-gradient(50% 60% at 0% 100%, rgba(96,165,250,0.12) 0%, rgba(96,165,250,0) 70%);
+    pointer-events: none;
+  }
+  .invite-row {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .host-avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: linear-gradient(135deg, #F0E6FF, #DCC8FF);
+    color: var(--accent-600); font-weight: 700; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(112,80,224,0.18);
+  }
+  .invite-meta { flex: 1; min-width: 0; }
+  .invite-host {
+    font-size: 12.5px; color: var(--text-tertiary); font-weight: 500;
+    margin: 0;
+  }
+  .invite-host strong { color: var(--text-secondary); font-weight: 600; }
+  .invite-greeting {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
+    margin: 2px 0 0;
+  }
+  .invite-card {
+    position: relative; z-index: 1;
+    background: var(--bg-4);
+    border-radius: 18px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 12px;
+  }
+  .invite-item .label {
+    font-size: 10.5px; color: var(--text-tertiary);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .invite-item .value {
+    font-size: 14px; font-weight: 600; color: var(--text-primary);
+    line-height: 1.3;
+  }
+  .invite-item.full { grid-column: 1 / -1; }
+  .countdown {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    background: var(--success-bg);
+    border-radius: 14px;
+    color: var(--success);
+    font-size: 13px; font-weight: 600;
+  }
+  .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 0 rgba(5,150,105,0.5);
+    animation: pulse 1.8s ease-out infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(5,150,105,0.5); }
+    100% { box-shadow: 0 0 0 12px rgba(5,150,105,0); }
+  }
+
+  /* Section heading */
+  .section-h {
+    padding: 8px 6px 0;
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .section-h h2 {
+    margin: 0; font-size: 13px; font-weight: 600;
+    color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .section-h .hint {
+    font-size: 11.5px; color: var(--text-tertiary); font-weight: 500;
+  }
+
+  /* Access list */
+  .access-list {
+    background: var(--bg-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 18px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .access-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: var(--bg-2);
+    cursor: pointer;
+    color: var(--text-primary);
+    font: inherit;
+    transition: background 160ms;
+  }
+  .access-row + .access-row {
+    border-top: 1px solid var(--border-subtle);
+  }
+  .access-row:active { background: var(--bg-4); }
+  .access-row:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  .access-icon {
+    width: 44px; height: 44px; border-radius: 14px;
+    background: linear-gradient(135deg, #F0E6FF, #E2D2FF);
+    color: var(--accent-500);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .access-icon.fire {
+    background: linear-gradient(135deg, #FFE2E0, #FFCFCC);
+    color: var(--danger);
+  }
+  .access-text { flex: 1; min-width: 0; }
+  .access-title {
+    font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  .access-sub {
+    font-size: 12px; color: var(--text-tertiary);
+    margin-top: 2px;
+  }
+  .access-cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: linear-gradient(135deg, var(--accent-300), var(--accent-400));
+    color: #fff; font-weight: 600; font-size: 13px;
+    padding: 8px 14px; border-radius: var(--r-full);
+    box-shadow: 0 4px 14px var(--accent-glow);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .access-cta.fire {
+    background: linear-gradient(135deg, #F87171, var(--danger));
+    box-shadow: 0 4px 14px rgba(220,38,38,0.22);
+  }
+  .access-cta.opening {
+    background: var(--bg-4);
+    color: var(--text-secondary);
+    box-shadow: none;
+  }
+  .access-cta.done {
+    background: var(--success-bg);
+    color: var(--success);
+    box-shadow: none;
+  }
+  .access-cta .spinner {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* PIN fallback */
+  .pin-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .pin-head {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pin-icon {
+    width: 36px; height: 36px; border-radius: 12px;
+    background: var(--warning-bg);
+    color: var(--warning);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .pin-title {
+    font-size: 14px; font-weight: 600;
+  }
+  .pin-desc {
+    font-size: 12px; color: var(--text-tertiary);
+    margin-top: 1px;
+  }
+  .pin-body {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    background: var(--bg-4);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .pin-digits {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 26px; font-weight: 700; letter-spacing: 0.32em;
+    color: var(--text-primary);
+    user-select: all;
+  }
+  .pin-digits.hidden {
+    letter-spacing: 0.16em;
+  }
+  .pin-actions { display: flex; gap: 6px; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 12px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-2);
+    color: var(--text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 160ms, color 160ms;
+  }
+  .icon-btn:active { background: var(--bg-4); }
+  .icon-btn.success { color: var(--success); border-color: rgba(5,150,105,0.30); background: var(--success-bg); }
+  .pin-foot {
+    font-size: 11.5px; color: var(--text-tertiary);
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* Map / location card */
+  .loc-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .map {
+    position: relative;
+    height: 140px;
+    background:
+      linear-gradient(135deg, #EEF1F8 0%, #E2E8F2 100%);
+    overflow: hidden;
+  }
+  .map-grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(15,23,42,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,23,42,0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+  }
+  .map-road {
+    position: absolute;
+    background: rgba(255,255,255,0.85);
+    box-shadow: 0 0 0 1px rgba(15,23,42,0.05);
+  }
+  .map-block {
+    position: absolute;
+    background: rgba(167,139,250,0.16);
+    border: 1px solid rgba(112,80,224,0.20);
+    border-radius: 4px;
+  }
+  .map-pin {
+    position: absolute; left: 50%; top: 52%;
+    transform: translate(-50%, -100%);
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .map-pin::before {
+    content: ""; position: absolute; bottom: -10px; left: 50%;
+    transform: translateX(-50%);
+    width: 22px; height: 8px;
+    background: radial-gradient(ellipse at center, rgba(112,80,224,0.30) 0%, rgba(112,80,224,0) 70%);
+  }
+  .map-pin-inner {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-300), var(--accent-500));
+    border: 3px solid #fff;
+    box-shadow: 0 6px 16px rgba(112,80,224,0.30);
+  }
+  .map-ripple {
+    position: absolute; left: 50%; top: 52%;
+    width: 12px; height: 12px;
+    transform: translate(-50%, -100%);
+    border-radius: 50%;
+    border: 2px solid var(--accent-400);
+    animation: ripple 2.2s ease-out infinite;
+  }
+  @keyframes ripple {
+    0% { width: 12px; height: 12px; opacity: 0.8; }
+    100% { width: 80px; height: 80px; opacity: 0; }
+  }
+  .loc-meta {
+    padding: 12px 16px 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .loc-text { flex: 1; min-width: 0; }
+  .loc-name {
+    font-size: 14px; font-weight: 600;
+  }
+  .loc-addr {
+    font-size: 12px; color: var(--text-tertiary); margin-top: 2px;
+  }
+  .ghost-btn {
+    background: var(--bg-2);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    border-radius: var(--r-full);
+    padding: 8px 14px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ghost-btn:active { background: var(--bg-4); }
+
+  /* House rules card */
+  .rules {
+    background: var(--bg-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 18px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 16px 4px;
+  }
+  .rules h3 {
+    margin: 0 0 8px;
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+  }
+  .rules ul {
+    list-style: none; margin: 0; padding: 0;
+  }
+  .rules li {
+    display: flex; gap: 10px; padding: 8px 0;
+    font-size: 12.5px; color: var(--text-secondary);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .rules li:first-child { border-top: none; }
+  .rules li svg { flex-shrink: 0; color: var(--accent-500); margin-top: 1px; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 8px 14px 4px;
+    font-size: 11px; color: var(--text-tertiary);
+    line-height: 1.5;
+  }
+  .footer a { color: var(--accent-500); text-decoration: none; font-weight: 600; }
+
+  /* Toast */
+  .toast {
+    position: fixed; left: 50%; bottom: 28px;
+    transform: translate(-50%, 20px);
+    background: var(--text-primary);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: var(--r-full);
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    opacity: 0; pointer-events: none;
+    transition: opacity 200ms, transform 200ms;
+    z-index: 100;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* Confirm sheet */
+  .scrim {
+    position: fixed; inset: 0;
+    background: rgba(11,16,32,0.42);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 200ms;
+    z-index: 200;
+  }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 50%; bottom: 0;
+    width: 100%; max-width: 460px;
+    transform: translate(-50%, 100%);
+    background: var(--bg-2);
+    border-radius: 28px 28px 0 0;
+    padding: 12px 22px calc(22px + env(safe-area-inset-bottom));
+    box-shadow: 0 -20px 60px rgba(15,23,42,0.18);
+    transition: transform 280ms cubic-bezier(.2,.8,.2,1);
+    z-index: 201;
+  }
+  .sheet.show { transform: translate(-50%, 0); }
+  .sheet-grip {
+    width: 40px; height: 4px;
+    background: var(--border-strong);
+    border-radius: 999px;
+    margin: 6px auto 16px;
+  }
+  .sheet h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .sheet p { margin: 0 0 16px; font-size: 13.5px; color: var(--text-secondary); line-height: 1.45; }
+  .sheet .row { display: flex; gap: 10px; }
+  .btn-primary {
+    flex: 1; border: none; border-radius: 14px;
+    padding: 14px; font-weight: 700; font-size: 15px;
+    background: linear-gradient(135deg, var(--accent-300), var(--accent-400));
+    color: #fff;
+    box-shadow: 0 8px 22px var(--accent-glow);
+    cursor: pointer;
+  }
+  .btn-primary.fire {
+    background: linear-gradient(135deg, #F87171, var(--danger));
+    box-shadow: 0 8px 22px rgba(220,38,38,0.25);
+  }
+  .btn-secondary {
+    flex: 1; border-radius: 14px;
+    padding: 14px; font-weight: 600; font-size: 15px;
+    background: var(--bg-4);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+  }
+  .sheet-note {
+    font-size: 11.5px; color: var(--text-tertiary);
+    text-align: center; margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="page">
+
+    <!-- Brand bar -->
+    <div class="brand">
+      <div class="brand-mark">
+        <div class="brand-dot">G</div>
+        <span>Gatelynk</span>
+      </div>
+      <div class="secure-chip">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        Bezpieczne zaproszenie
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="invite-row">
+        <div class="host-avatar">A</div>
+        <div class="invite-meta">
+          <p class="invite-host">Zaprasza Cię <strong>Anna Szychta</strong></p>
+          <p class="invite-greeting">Cześć, Marek 👋</p>
+        </div>
+      </div>
+
+      <div class="invite-card">
+        <div class="invite-item">
+          <div class="label">Adres</div>
+          <div class="value">Osiedle Słoneczne<br>ul. Niewinna 1, Wilanów</div>
+        </div>
+        <div class="invite-item">
+          <div class="label">Mieszkanie</div>
+          <div class="value">Klatka A · 4 p. · m. 21</div>
+        </div>
+        <div class="invite-item full">
+          <div class="label">Ważność dostępu</div>
+          <div class="value">Dziś, 11 maja · 18:00 → 23:00</div>
+        </div>
+      </div>
+
+      <div class="countdown">
+        <span class="pulse"></span>
+        <span>Dostęp aktywny — wygasa za <strong id="countdown">4 g. 12 min</strong></span>
+      </div>
+    </div>
+
+    <!-- Access -->
+    <div class="section-h">
+      <h2>Twoje wejścia</h2>
+      <span class="hint">Naciśnij, aby otworzyć</span>
+    </div>
+    <div class="access-list" id="access-list">
+
+      <button class="access-row" data-id="entry" data-name="Brama wjazdowa" data-sub="Wjazd główny · szlaban">
+        <div class="access-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16"/><path d="M4 18V8"/><path d="M20 18V8"/><path d="M4 8l4-3h8l4 3"/><path d="M8 12v6"/><path d="M12 12v6"/><path d="M16 12v6"/></svg>
+        </div>
+        <div class="access-text">
+          <div class="access-title">Brama wjazdowa</div>
+          <div class="access-sub">Wjazd główny · szlaban</div>
+        </div>
+        <span class="access-cta">Otwórz</span>
+      </button>
+
+      <button class="access-row" data-id="lobby" data-name="Drzwi do klatki" data-sub="Klatka A · wejście główne">
+        <div class="access-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="1"/><path d="M14 12h.01"/></svg>
+        </div>
+        <div class="access-text">
+          <div class="access-title">Drzwi do klatki</div>
+          <div class="access-sub">Klatka A · wejście główne</div>
+        </div>
+        <span class="access-cta">Otwórz</span>
+      </button>
+
+      <button class="access-row" data-id="elevator" data-name="Winda" data-sub="Klatka A · piętro 4">
+        <div class="access-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7l-2 3h4z"/><path d="M12 17l-2-3h4z"/></svg>
+        </div>
+        <div class="access-text">
+          <div class="access-title">Winda — 4 piętro</div>
+          <div class="access-sub">Klatka A · wezwie windę i wybierze piętro</div>
+        </div>
+        <span class="access-cta">Wezwij</span>
+      </button>
+
+      <button class="access-row" data-id="apt" data-name="Drzwi mieszkania" data-sub="m. 21 · Tedee">
+        <div class="access-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5L12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg>
+        </div>
+        <div class="access-text">
+          <div class="access-title">Drzwi mieszkania</div>
+          <div class="access-sub">m. 21 · Tedee</div>
+        </div>
+        <span class="access-cta">Otwórz</span>
+      </button>
+
+      <button class="access-row" data-id="fire" data-fire="1" data-name="Brama pożarowa" data-sub="Tylko w sytuacji awaryjnej">
+        <div class="access-icon fire">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 3 4 5 4 8a4 4 0 0 1-8 0c0-2 1-3 2-4"/><path d="M12 21a3 3 0 0 0 3-3c0-2-3-3-3-5"/></svg>
+        </div>
+        <div class="access-text">
+          <div class="access-title">Brama pożarowa</div>
+          <div class="access-sub">Tylko w sytuacji awaryjnej</div>
+        </div>
+        <span class="access-cta fire">Awaryjnie</span>
+      </button>
+
+    </div>
+
+    <!-- PIN fallback -->
+    <div class="section-h">
+      <h2>Awaryjny PIN</h2>
+      <span class="hint">Gdy brak zasięgu</span>
+    </div>
+    <div class="pin-card">
+      <div class="pin-head">
+        <div class="pin-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+        </div>
+        <div>
+          <div class="pin-title">Kod dostępu</div>
+          <div class="pin-desc">Wpisz na klawiaturze przy bramie lub drzwiach</div>
+        </div>
+      </div>
+      <div class="pin-body">
+        <div class="pin-digits hidden" id="pin-digits">• • • • • •</div>
+        <div class="pin-actions">
+          <button class="icon-btn" id="pin-reveal" aria-label="Pokaż PIN">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button class="icon-btn" id="pin-copy" aria-label="Kopiuj PIN">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="pin-foot">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        PIN ważny przez cały czas zaproszenia
+      </div>
+    </div>
+
+    <!-- Location -->
+    <div class="section-h">
+      <h2>Jak dojechać</h2>
+    </div>
+    <div class="loc-card">
+      <div class="map">
+        <div class="map-grid"></div>
+        <div class="map-road" style="left:0; right:0; top:54%; height:14px;"></div>
+        <div class="map-road" style="top:0; bottom:0; left:62%; width:10px;"></div>
+        <div class="map-block" style="left:8%; top:10%; width:34%; height:30%;"></div>
+        <div class="map-block" style="left:70%; top:6%; width:22%; height:38%;"></div>
+        <div class="map-block" style="left:6%; top:72%; width:46%; height:22%;"></div>
+        <div class="map-ripple"></div>
+        <div class="map-pin">
+          <div class="map-pin-inner"></div>
+        </div>
+      </div>
+      <div class="loc-meta">
+        <div class="loc-text">
+          <div class="loc-name">Osiedle Słoneczne</div>
+          <div class="loc-addr">ul. Niewinna 1, Wilanów · Klatka A</div>
+        </div>
+        <button class="ghost-btn" id="open-maps">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          Nawigacja
+        </button>
+      </div>
+    </div>
+
+    <!-- House rules -->
+    <div class="rules">
+      <h3>Dobrze wiedzieć</h3>
+      <ul>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Miejsce dla gości — sektor B, miejsce 7. Tablica rejestracyjna zostanie rozpoznana automatycznie.</span>
+        </li>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Po godz. 22:00 obowiązuje cisza nocna — proszę zachować ciszę przy klatce.</span>
+        </li>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>W razie problemu — napisz do Anny lub zadzwoń na ochronę: +48 22 555 11 22.</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="footer">
+      Link zaszyfrowany end-to-end · ID&nbsp;zaproszenia <strong>GTL-2A4F</strong><br>
+      Otrzymałeś go, bo Anna Szychta udostępniła Ci dostęp w Gatelynk.<br>
+      <a href="#" id="report">Zgłoś nadużycie</a>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm sheet (fire) -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-grip"></div>
+  <h3 id="sheet-title">Otworzyć bramę pożarową?</h3>
+  <p id="sheet-desc">Używaj tylko w sytuacji awaryjnej. Otwarcie zostanie zarejestrowane i wysłane do administracji osiedla oraz do Anny.</p>
+  <div class="row">
+    <button class="btn-secondary" id="sheet-cancel">Anuluj</button>
+    <button class="btn-primary fire" id="sheet-confirm">Tak, otwórz</button>
+  </div>
+  <div class="sheet-note">Reakcja w &lt; 2&nbsp;sek. od potwierdzenia</div>
+</div>
+
+<div class="toast" id="toast">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+  <span id="toast-text">Skopiowano</span>
+</div>
+
+<script>
+  // Countdown
+  (() => {
+    const end = Date.now() + (4 * 60 + 12) * 60 * 1000;
+    const el = document.getElementById('countdown');
+    const tick = () => {
+      const ms = Math.max(0, end - Date.now());
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      el.textContent = h > 0 ? `${h} g. ${m} min` : `${m} min`;
+    };
+    tick();
+    setInterval(tick, 30000);
+  })();
+
+  // PIN
+  const PIN = '482 309';
+  const pinDigits = document.getElementById('pin-digits');
+  const pinReveal = document.getElementById('pin-reveal');
+  const pinCopy = document.getElementById('pin-copy');
+  let revealed = false;
+  pinReveal.addEventListener('click', () => {
+    revealed = !revealed;
+    pinDigits.classList.toggle('hidden', !revealed);
+    pinDigits.textContent = revealed ? PIN : '• • • • • •';
+  });
+  pinCopy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(PIN.replace(/\s/g, '')); } catch {}
+    toast('PIN skopiowany');
+    pinCopy.classList.add('success');
+    setTimeout(() => pinCopy.classList.remove('success'), 1400);
+  });
+
+  // Toast
+  const toastEl = document.getElementById('toast');
+  const toastText = document.getElementById('toast-text');
+  let toastTimer;
+  function toast(msg) {
+    toastText.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2000);
+  }
+
+  // Access rows
+  const rows = document.querySelectorAll('.access-row');
+  rows.forEach(row => {
+    row.addEventListener('click', () => {
+      if (row.dataset.fire === '1') {
+        openSheet({
+          title: 'Otworzyć bramę pożarową?',
+          desc: 'Używaj tylko w sytuacji awaryjnej. Otwarcie zostanie zarejestrowane i wysłane do administracji osiedla oraz do Anny.',
+          fire: true,
+          onConfirm: () => simulateOpen(row),
+        });
+      } else {
+        simulateOpen(row);
+      }
+    });
+  });
+
+  function simulateOpen(row) {
+    const cta = row.querySelector('.access-cta');
+    if (cta.classList.contains('opening') || cta.classList.contains('done')) return;
+    const original = cta.textContent;
+    const wasFire = cta.classList.contains('fire');
+    cta.classList.remove('fire');
+    cta.classList.add('opening');
+    cta.innerHTML = '<span class="spinner"></span> Otwieram';
+    setTimeout(() => {
+      cta.classList.remove('opening');
+      cta.classList.add('done');
+      cta.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Otwarte';
+      toast(`${row.dataset.name} — otwarte`);
+      setTimeout(() => {
+        cta.classList.remove('done');
+        if (wasFire) cta.classList.add('fire');
+        cta.textContent = original;
+      }, 3500);
+    }, 1400);
+  }
+
+  // Sheet
+  const scrim = document.getElementById('scrim');
+  const sheet = document.getElementById('sheet');
+  const sheetTitle = document.getElementById('sheet-title');
+  const sheetDesc = document.getElementById('sheet-desc');
+  const sheetConfirm = document.getElementById('sheet-confirm');
+  const sheetCancel = document.getElementById('sheet-cancel');
+  let pendingConfirm = null;
+  function openSheet({ title, desc, fire, onConfirm }) {
+    sheetTitle.textContent = title;
+    sheetDesc.textContent = desc;
+    sheetConfirm.classList.toggle('fire', !!fire);
+    pendingConfirm = onConfirm;
+    scrim.classList.add('show');
+    sheet.classList.add('show');
+  }
+  function closeSheet() {
+    scrim.classList.remove('show');
+    sheet.classList.remove('show');
+    pendingConfirm = null;
+  }
+  scrim.addEventListener('click', closeSheet);
+  sheetCancel.addEventListener('click', closeSheet);
+  sheetConfirm.addEventListener('click', () => {
+    if (pendingConfirm) pendingConfirm();
+    closeSheet();
+  });
+
+  document.getElementById('open-maps').addEventListener('click', () => {
+    toast('Otwieram nawigację…');
+  });
+  document.getElementById('report').addEventListener('click', (e) => {
+    e.preventDefault();
+    toast('Dziękujemy — zgłoszenie przyjęte');
+  });
+</script>
+</body>
+</html>

@@ -97,28 +97,44 @@ Auth/AuthManager.swift              — login, logout, updateAvatar
 Models/Models.swift                 — wszystkie modele Decodable
 ```
 
-### Drugi target: GateLynkGlass ("GateLynk β", 2026-06-10)
+### Drugi target: GateLynkGlass ("GateLynk β", 2026-06-10 → PRODUKCJA 2026-07-07)
 
-Równoległa apka resident-only w designie **Glass Depth Premium**
-(`docs/design/glass-depth-2026-06-10/handoff_glass_depth/`) — instaluje się
-OBOK głównej (bundle `com.gatelynk.app.glass`), do porównania UX.
+Apka resident-only w designie **Glass Depth Premium**
+(`docs/design/glass-depth-2026-06-10/handoff_glass_depth/`). Decyzja
+właściciela 2026-07-07: **osobna apka produkcyjna w App Store** (bundle
+`com.gatelynk.app.glass`) obok głównej — NIE tylko porównanie UX.
 
 - Źródła: `apps/ios/GateLynkGlass/` (GlassApp + Theme/ + Views/ + Views/Sheets/),
-  własny Info.plist (`CFBundleDisplayName=GateLynk β`, `UILaunchScreen={}`)
-  i Assets.xcassets (AppIcon kopiowany, `BuildingPhoto` = zdjęcie hero z handoffu).
+  własny Info.plist (`CFBundleDisplayName=GateLynk` — docelowa nazwa App Store
+  od 2026-07-16, wcześniej „GateLynk β”; mic + photo-add usage,
+  `UIBackgroundModes=voip,audio`) i Assets.xcassets (AppIcon = ta sama ikona
+  co główna, `BuildingPhoto` = zdjęcie hero z handoffu).
 - Współdzielone z targetem GateLynk (te same FileReference, drugi PBXBuildFile):
   `APIClient`, `KeychainHelper`, `Models`, `AuthManager`, `EdgeAssistantClient`,
-  `AppDelegate`. UI w 100% osobne — prefiks `Glass*`.
+  `AppDelegate` + od 2026-07-07 także `VoIPManager`, `CallManager`,
+  `IntercomCallView` (rozmowy domofonowe). UI w 100% osobne — prefiks `Glass*`.
+- **WebRTC**: target Glass linkuje pakiet SPM `stasel/WebRTC` (drugi
+  XCSwiftPackageProductDependency `AA…DD10` + BuildFile `FF18` w Frameworks).
+  `canImport(WebRTC)` jest więc prawdziwe w OBU targetach — `AppDelegate.setupVoIP`
+  działa też w β. Gamma (γ) dalej bez WebRTC/VoIP.
+- **Push WŁĄCZONY w β** (2026-07-07): `GateLynkGlass/GateLynkGlass.entitlements`
+  z `aps-environment=development`, `CODE_SIGN_ENTITLEMENTS` w obu configach.
+  Wymaga App ID `com.gatelynk.app.glass` z Push Notifications w Apple Developer
+  portal (klucz APNs .p8 jest per-team — ten sam co główna apka).
 - **UUID w pbxproj:** target Glass używa serii `AA000000000000000000DD<XX>`
-  (infra: target/fazy/grupy/configi), `EE<XX>` (FileReference, ostatni zajęty
-  `EE14`) i `FF<XX>` (BuildFile, zajęte `FF01–FF12` + `FF20–FF25` shared).
-  Stare serie `BB/CC` należą do targetu GateLynk — nowy plik w Glass target
-  to `EE15`/`FF13`+, nowy w starym targecie dalej `BB24`/`CC24`+.
-- **Push wyłączony w β** — target nie ma `CODE_SIGN_ENTITLEMENTS` (brak
-  `aps-environment`), żeby automatic signing nie wymagał drugiego App ID
-  z push capability. `registerForRemoteNotifications` faila cicho.
-- Świadome odstępstwa od prototypu HTML (brak backendu): panel zamka Tedee,
-  przycisk "Zapłać BLIK", kod skrytki paczkomatu, Dynamic Island geofencing.
+  (infra: target/fazy/grupy/configi/SPM, ostatni zajęty `DD10`), `EE<XX>`
+  (FileReference, ostatni zajęty `EE17`) i `FF<XX>` (BuildFile, zajęte
+  `FF01–FF18` + `FF20–FF25` shared). Stare serie `BB/CC` należą do targetu
+  GateLynk — nowy plik w Glass target to `EE18`/`FF19` (potem `FF26`)+,
+  nowy w starym targecie dalej `BB24`/`CC24`+.
+- Atrapy z prototypu HTML (panel zamka Tedee, „Zapłać BLIK", kod skrytki
+  paczkomatu, Dynamic Island geofencing, dodawanie pojazdu) — widoczne jako
+  **zapowiedzi z plakietką WKRÓTCE** (decyzja właściciela); jeden reużywalny
+  komponent `GlassComingSoon.swift` (enum `GlassUpcomingFeature` + sheet).
+- Wymogi App Store w β: link do polityki prywatności
+  (`https://gatelynk.pl/polityka-prywatnosci`) i **usuwanie konta**
+  (`DELETE /api/resident/me` — anonimizacja, patrz `ResidentService.deleteMyAccount`)
+  w sheecie „Więcej".
 
 ## Panel webowy (Next.js)
 
@@ -362,6 +378,156 @@ OBOK głównej (bundle `com.gatelynk.app.glass`), do porównania UX.
     `onModuleInit()`. Nest gwarantuje że dependency (StoreService) jest
     fully initialized zanim ten hook leci. Wystąpiło 2026-06-03 w
     `VisionDetectService.bootstrapAiEngineConfig()` (Faza 8.g).
+19. **Domofon: głuche rozmowy wychodzące = kaskada 4 błędów (debug 2026-07-29).**
+    Objaw: rozmowa apka→stacja „odbiera się", ale cisza w obie strony; wszystkie
+    rozmowy od ~15.07 trwały 1–13 s i kończyły się ANSWERED_HANGUP. Znalezione
+    i naprawione TEGO SAMEGO wieczoru (każdy błąd osobno wystarczał na ciszę):
+    1. **`decline` zamiast `hangup` dla wychodzących** — `JanusMediaBridge.hangup`
+       wysyłał `decline` gdy `st.accepted=false`, ale `accepted` jest ustawiane
+       tylko dla PRZYCHODZĄCYCH. Plugin SIP w stanie incall odrzuca decline
+       („Wrong state: not invited"), BYE nie wychodzi, **uchwyt zostaje w incall
+       NA ZAWSZE** i każda kolejna rozmowa odbija się od „already in a call".
+       Fix: `st.accepted || st.outboundUri → 'hangup'`.
+    2. **Answer gubiony przy 183 Session Progress** — jsep answer może przyjść
+       w evencie `progress` (nie tylko `accepted`); brak case = zgubiony answer.
+    3. **Wyścig offera w tunelu** — CMD INTERCOM_SIGNAL(offer) potrafi wyprzedzić
+       CMD INTERCOM_CALL_STATION; handleSdp bez outboundUri po cichu NIC nie
+       robił (zero loga!). Fix: `pendingOffers` bufor konsumowany po
+       startOutbound.
+    4. **ROOT CAUSE ciszy: kierunki mediów w answerze (RFC 3264)** — apka
+       oferuje video `recvonly`, Akuvox odpowiada SIP-owo `sendrecv`, a plugin
+       Janusa przepisywał to żywcem do answera WebRTC. libWebRTC (iOS) odrzuca
+       CAŁY answer („Incompatible send direction") → setRemoteDescription pada
+       → ICE nigdy nie startuje. Fix: `fixAnswerDirections` w JanusMediaBridge
+       (video sendrecv→sendonly gdy oferta recvonly; audio bez zmian).
+    **Procedury z tego debugu:**
+    - Po KAŻDYM restarcie Edge sprawdź w logu `SIP registered: edge`. Jeśli
+      zamiast tego jest `Two seconds passed and still no NUA` (error 499) —
+      wątek Sofia-SIP w Janusie nie wstał dla nowego uchwytu: **restart Janusa,
+      POTEM Edge** (kolejność obowiązkowa). Objaw martwego NUA: `handleSdp →
+      SIP call` w logu Edge, ale w logu Janusa brak „edge is calling"/INVITE.
+    - Sygnalizację E2E widać w logach Edge: `CMD signal od apki kind=…` (app→),
+      `SIP accepted/progress: jsep=…`, `EVT INTERCOM_SIGNAL → Cloud kind=…` (→app).
+    - Diagnostyka Janusa bez restartu: admin API `127.0.0.1:8089/admin`
+      (set_log_level, handle_info z parami ICE). Logi: /tmp/janus.out.log.
+    - Bufor sygnałów Cloud (signalBuffer) jest in-memory na 1 instancję API —
+      SSE drenuje destrukcyjnie; pusty bufor po rozmowie = apka ODEBRAŁA sygnały.
+    - Decydujący dowód dał iOS: uruchomienie Glass z Xcode i linie `[Call] …`
+      (setRemoteDescription error był widoczny TYLKO tam). Przy „cisza mimo że
+      sygnalizacja działa" — od razu proś o logi z Xcode, zamiast zgadywać.
+    - **„Działa na WiFi, cisza na LTE" = sprawdź `turn_*` w janus.jcfg.** Na
+      komórce apka używa WYŁĄCZNIE relay (polityka .relay — carrier CGNAT), a
+      para relay↔relay wymaga alokacji TURN po OBU stronach. TURN Janusa
+      (coturn 91.99.212.240:3478 udp, długożyciowy cred HMAC `2097208599:janus`)
+      był zakomentowany w janus.jcfg od 19.06 — po każdej edycji tego pliku
+      zweryfikuj `grep turn_ janus.jcfg` i boot-log Janusa: `TURN server to
+      use: 91.99.212.240:3478 (udp)`. Cred weryfikuje się przeciw sekretowi:
+      `HMAC-SHA1(TURN_STATIC_SECRET, user)` base64 (secret w Fly secrets).
+      Naprawione + potwierdzone na LTE 2026-07-29.
+20. **„Internal server error" przy otwieraniu przekaźnika = najpierw sprawdź
+    TLS, nie hasło (debug 2026-08-05, VN).** Dwie nowe kasety R29C dawały
+    podgląd, ale przekaźnik zwracał 500. W `edge.err.log` dwa RÓŻNE objawy,
+    mylnie sugerujące dwa różne problemy:
+    `write EPROTO … ssl_choose_client_version:unsupported protocol` oraz
+    `timeout of 8000ms exceeded`. Przyczyna wspólna: firmware tych kaset
+    negocjuje **wyłącznie TLSv1.0 + DHE-RSA-AES256-SHA**, a Node 22 /
+    OpenSSL 3 odrzuca to na trzech niezależnych poziomach (minVersion
+    TLSv1.2, SECLEVEL=1 wycinający SHA1/DH, wymóg RFC 5746 secure
+    renegotiation). Do HTTP nigdy nie dochodziło.
+    - **PUŁAPKA DIAGNOSTYCZNA:** `curl` z tego samego Maca dostaje 200, bo
+      macOS linkuje LibreSSL (pobłażliwy). „Z terminala działa, z Edge nie"
+      = to prawie na pewno różnica OpenSSL 3 vs LibreSSL, NIE sieć i NIE
+      hasło. Rozstrzyga `tls.connect` z Node, nie curl.
+    - Fix: wspólny `apps/edge/src/devices/lan-https-agent.ts`
+      (`minVersion:'TLSv1'`, `ciphers:'ALL:@SECLEVEL=0'`,
+      `SSL_OP_LEGACY_SERVER_CONNECT | SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION`,
+      `keepAlive`). Samo `@SECLEVEL=0` NIE wystarcza — bez `ALL` domyślna
+      lista szyfrów i tak nie zawiera DHE-RSA-AES256-SHA. Agent jest
+      wstecznie zgodny (nowe kamery dalej negocjują TLS 1.3) i używają go
+      wszystkie serwisy urządzeń — intercom, kamery, LPR, vision, snapshoty.
+    - Handshake DHE na słabym CPU kasety trwa 1–2 s i bywa zmienny, a
+      `requestWithDigest` robi dwa żądania → timeout 8 s podniesiony na 12 s.
+      Pojedynczy timeout NIE musi znaczyć awarii: te kasety potrafią się
+      chwilowo zatkać po nieudanych handshake'ach i wracają same.
+    - **Testuj bez otwierania bramy:** `DoorNum=99` na
+      `/fcgi/OpenDoor?action=OpenDoor` przechodzi tę samą ścieżkę transportu
+      i autoryzacji, ale zwraca błąd zamiast wyzwalać przekaźnik.
+    - Kody odpowiedzi mapowane teraz na komunikaty (`AKUVOX_RETCODE_HINTS`):
+      `-2 Error Param` = zły numer wyjścia, `-3 Not Enable` = **ten konkretny
+      przekaźnik** nie jest włączony (NIE całe API — patrz niżej), `-4` =
+      High Security Mode / hasło API.
+    - **DRUGA PRZYCZYNA W TYM SAMYM ZGŁOSZENIU: zły przekaźnik, a kaseta i tak
+      mówi OK.** Po naprawie TLS Wjazd zwracał `retcode=0 "OK"` i… brama się
+      nie ruszała. R29 ma dwa niezależne przekaźniki i **potwierdza wykonanie
+      także dla tego, do którego nic nie jest podłączone**. `DoorNum` liczymy
+      jako `relayIndex + 1`, więc `index: 1` w configu = przekaźnik B.
+      W VN napęd wisi na A → poprawny `index: 0`. W Villi Natura na B
+      (`index: 1`) i dlatego tam działało — **numeracja jest cechą okablowania
+      konkretnej instalacji, nie modelu**. Przy nowej kasecie NIE zakładaj
+      wartości z działającego obiektu; zapytaj instalatora o zaciski.
+      Diagnostyka: `retcode=0` bez reakcji bramy = prawie na pewno zły
+      `DoorNum`; strzał w drugi przekaźnik rozstrzyga w 5 sekund.
+    - Zapis configu przez `PATCH /devices/:id` na Edge jest chroniony PIN-em
+      (401 bez auth) — zmianę przekaźnika robi się w Edge UI, nie curl-em.
+21. **`orderBy: { number: 'asc' }` dla lokali sortuje TEKSTOWO.** Postgres
+    porównuje `number` znak po znaku, więc „10/1" wypada przed „2/1", a na
+    osiedlu domów (VN: `Niewinna 1/1` … `Niewinna 21/2`, ulica wpisana
+    w sam numer, kolumna `street` pusta) lista wygląda na losową. Nie widać
+    tego przy 9 lokalach — wychodzi dopiero od numeru 10.
+    - Sortujemy w aplikacji: `sortUnits()` / `compareNatural()` z
+      `apps/api/src/common/natural-sort.ts` (dzieli ciąg na fragmenty
+      cyfrowe i tekstowe, klucz: ulica → klatka → numer). Listy lokali mają
+      dziesiątki wierszy, więc koszt jest żaden.
+    - `orderBy` w zapytaniu ZOSTAJE jako stabilna baza — dzięki temu
+      kolejność jest deterministyczna, gdy dwa oznaczenia porównają się
+      jako równe.
+    - Kopia dla panelu: `apps/web/src/lib/natural-sort.ts` (dla list, które
+      front składa sam z kilku źródeł — np. picker w grupach kontaktowych).
+      **Zmieniasz jedną — zmień drugą.**
+    - 2026-08-09 poprawione w 12 miejscach naraz (BA, konsjerż, płatności,
+      units, integrator, katalog Akuvox). Szukając kolejnych:
+      `grep -rn "number: 'asc'" apps/api/src`. Kolejność z
+      `akuvox-directory` trafia wprost na wyświetlacz domofonu — tam zła
+      kolejność to nie kosmetyka, tylko gość, który nie znajduje lokalu.
+
+22. **`EDGE_HTTP_HOST_OVERRIDE` NIGDY na produkcji + podgląd kamer domofonów
+    (incydent 2026-08-11).** Sekret `EDGE_HTTP_HOST_OVERRIDE=100.90.244.90`
+    (relikt z czasów jednego budynku) przypisywał KAŻDEMU łączącemu się Edge
+    adres Villa Natury: podgląd kamer VN zwracał pusty obraz (Cloud pytał
+    ZŁY Edge o urządzenia VN), `touch()` nadpisywał `edge_devices.ipAddress`
+    w bazie (ręczna naprawa IP nie przetrwała reconnectu), a `syncAccessPoints`
+    stworzył w b11 duchowe access-pointy wskazujące urządzenia b9 — przycisk
+    „Wjazd" w VN otwierał bramę w Villa Naturze. Sekret usunięty; gateway
+    przyjmuje teraz z WS wyłącznie adres tailnetowy (100.64/10), w innym razie
+    bierze ostatni dobry adres z bazy (`EdgeService.getStoredIp`).
+    - Objaw „podgląd nie działa w apce" debuguj OD KOŃCA: najpierw
+      `curl http://localhost:4000/devices/<uuid>/snapshot?live=1` na Edge
+      (działa? → problem w Cloud→Edge), potem realny endpoint
+      `/resident/access-points/:id/snapshot` z podpisanym JWT na Fly.
+      404/obcy obraz = ZŁY Edge (IP), timeout = martwy adres.
+    - Snapshot Akuvox (`akuvoxHttpSnapshot`): port 8080 bywa HTTP albo HTTPS
+      zależnie od firmware; nowsze firmware serwuje tam web UI (Angular),
+      które odpowiada 200+HTML na KAŻDĄ ścieżkę — bez kontroli Content-Type/
+      magic-bytes podgląd dostaje strone HTML „jako jpeg". Sondy http/https
+      idą RÓWNOLEGLE (Promise.any) — sekwencyjnie nieudana pierwsza sonda
+      zjadała 5-sekundowy budżet proxy Clouda (E18 ma handshake legacy-TLS
+      1–2 s). Fallback RTSP wymaga WŁĄCZONEGO RTSP na stacji — „Wjazd"
+      w Villa Naturze (R29C .109) ma RTSP wyłączone i nowe firmware bez
+      picture.jpg → podgląd niemożliwy do czasu włączenia RTSP na kasecie.
+
+23. **Dwa Xcode na maszynie — CLI builds muszą używać 26.5 z ~/Downloads.**
+    `/Applications/Xcode.app` to STARY 16.4 (SDK iOS 18.5), a projekt używa
+    API z SDK 26 (`.task(name:)` itd.) i buduje się w GUI Xcode 26.5, który
+    leży w `~/Downloads/Xcode.app`. `xcodebuild` bez override bierze 16.4 →
+    obłędne błędy LINKERA (undefined `SwiftUI._TaskModifier2`,
+    `_swift_coroFrameAlloc`, `_TagTraitWritingModifier`) w plikach, których
+    nikt nie ruszał; incremental cache potrafi to maskować dniami i wybucha
+    dopiero po wyczyszczeniu `./build`. Przed xcodebuild ZAWSZE:
+    ```bash
+    export DEVELOPER_DIR="/Users/konradsz/Downloads/Xcode.app/Contents/Developer"
+    ```
+    Docelowo warto przenieść Xcode 26.5 do /Applications i `xcode-select` —
+    decyzja usera.
 
 ## Plan iteracyjny — 6 faz, każda samodzielnie deploy-owalna
 

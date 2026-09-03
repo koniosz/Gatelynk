@@ -1,14 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
-# Production Dockerfile for @gatelynk/web on Fly.io.
+# Multi-stage build for @gatelynk/web (Next.js 16, monorepo).
 #
-# Praktycznie identyczny z `infra/dev/Dockerfile.web`. Web nie potrzebuje
-# Tailscale — łączy się z API przez publiczny `https://api.gatelynk.com`.
-# Zostawiamy osobny plik prod/ zamiast `..` na dev Dockerfile, żeby zmiany
-# w dev nie potrafiły zepsuć produkcji niechcący.
-#
-# NEXT_PUBLIC_API_URL wstrzykujemy przez --build-arg w `fly deploy`, bo Next
-# zamraża go do JS-a w czasie buildu. Zmiana = nowy deploy.
+# Standalone output (`output: 'standalone'` w next.config.ts) tnie image-a
+# bo Next sam śledzi zależności runtime i kopiuje tylko to czego naprawdę
+# potrzebuje server.js. Dla monorepo dodatkowo `outputFileTracingRoot`
+# pokazuje na root repo, żeby trace objął workspace deps (@gatelynk/device-drivers).
 
 # ─── base ───────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS base
@@ -30,23 +27,24 @@ RUN pnpm install --frozen-lockfile
 
 # ─── build ──────────────────────────────────────────────────────────────────
 FROM deps AS build
-ARG NEXT_PUBLIC_API_URL=https://api.gatelynk.com/api
+# `NEXT_PUBLIC_*` zmienne MUSZĄ być znane w czasie buildu — Next inline'uje je
+# do JS-a jako string literal. Zmiana adresu API po budowie = nowy build.
+# Default tu (localhost:3000/api) jest tylko fallbackiem dla lokalnego buildu;
+# w docker compose przekazujemy pełny http://<host>:3000/api.
+ARG NEXT_PUBLIC_API_URL=http://localhost:3000/api
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
-# Faza B-3 (2026-05-14): rootowy tsconfig.base.json — używany przez `packages/device-drivers/tsconfig.json`.
-COPY tsconfig.base.json ./
 COPY apps/web apps/web/
 COPY packages packages/
-# `@gatelynk/device-drivers` ma `main: ./dist/index.js` (Faza B-3) — musi
-# być zbudowany ZANIM `next build` rezolwuje importy. Bezpośrednie `tsc` przez
-# root `node_modules/.bin/` (deps stage zrobił hoisted install).
-RUN cd packages/device-drivers && ../../node_modules/.bin/tsc
 RUN pnpm --filter @gatelynk/web run build
 
 # ─── runtime ────────────────────────────────────────────────────────────────
 FROM base AS runtime
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Standalone output zachowuje strukturę monorepo (apps/web, node_modules,
+# packages…). server.js leży pod apps/web/server.js. Próba wystartowania z
+# dowolnej innej ścieżki = ENOENT na node_modules.
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /app/apps/web/public ./apps/web/public

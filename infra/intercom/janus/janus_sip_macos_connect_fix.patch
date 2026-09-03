@@ -1,0 +1,61 @@
+From: GateLynk
+Subject: [PATCH] janus_sip: fix connect() EINVAL on macOS/BSD (correct socklen)
+
+PROBLEM (macOS/BSD only): janus_sip_connect_sockets() calls connect() with
+addrlen = sizeof(struct sockaddr_storage) (128 bytes). Linux ignores the extra
+length, but macOS/BSD require the EXACT length (sizeof(sockaddr_in)=16 for IPv4,
+sizeof(sockaddr_in6)=28 for IPv6) and return EINVAL (errno 22) otherwise.
+
+EFFECT: Janus can RECEIVE RTP from the SIP peer (door phone → app works) but
+CANNOT SEND RTP to it (app → door phone audio is dead). Log shows:
+  [SIP-edge] Couldn't connect audio RTP? (192.168.1.100:NNNNN)  -- 22 (Invalid argument)
+
+FIX: pass a family-appropriate socklen to all 4 connect() calls (audio/video
+RTP/RTCP). Verified on Akuvox E18C <-> Janus <-> iOS WebRTC: full 2-way audio.
+
+Apply (on the Janus source tree, e.g. ~/src/janus-gateway):
+  patch -p1 < janus_sip_macos_connect_fix.patch
+  export PATH=/opt/homebrew/bin:$PATH && make && make install
+  # then restart Janus
+
+Upstream: this is a genuine macOS portability bug — worth a PR to
+meetecho/janus-gateway. Re-apply after any Janus reinstall / `make clean`.
+
+--- a/src/plugins/janus_sip.c
++++ b/src/plugins/janus_sip.c
+@@ -8030,7 +8030,7 @@
+ 			struct sockaddr_in *addr = (struct sockaddr_in *)audio_server_addr;
+ 			addr->sin_port = htons(session->media.remote_audio_rtp_port);
+ 		}
+-		if(connect(session->media.audio_rtp_fd, (struct sockaddr *)audio_server_addr, sizeof(struct sockaddr_storage)) == -1) {
++		if(connect(session->media.audio_rtp_fd, (struct sockaddr *)audio_server_addr, audio_server_addr->ss_family==AF_INET6?sizeof(struct sockaddr_in6):sizeof(struct sockaddr_in)) == -1) {
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s] Couldn't connect audio RTP? (%s:%d)\n", session->account.username,
+ 				session->media.remote_audio_ip, session->media.remote_audio_rtp_port);
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s]   -- %d (%s)\n", session->account.username, errno, g_strerror(errno));
+@@ -8044,7 +8044,7 @@
+ 			struct sockaddr_in *addr = (struct sockaddr_in *)audio_server_addr;
+ 			addr->sin_port = htons(session->media.remote_audio_rtcp_port);
+ 		}
+-		if(connect(session->media.audio_rtcp_fd, (struct sockaddr *)audio_server_addr, sizeof(struct sockaddr_storage)) == -1) {
++		if(connect(session->media.audio_rtcp_fd, (struct sockaddr *)audio_server_addr, audio_server_addr->ss_family==AF_INET6?sizeof(struct sockaddr_in6):sizeof(struct sockaddr_in)) == -1) {
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s] Couldn't connect audio RTCP? (%s:%d)\n", session->account.username,
+ 				session->media.remote_audio_ip, session->media.remote_audio_rtcp_port);
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s]   -- %d (%s)\n", session->account.username, errno, g_strerror(errno));
+@@ -8058,7 +8058,7 @@
+ 			struct sockaddr_in *addr = (struct sockaddr_in *)video_server_addr;
+ 			addr->sin_port = htons(session->media.remote_video_rtp_port);
+ 		}
+-		if(connect(session->media.video_rtp_fd, (struct sockaddr *)video_server_addr, sizeof(struct sockaddr_storage)) == -1) {
++		if(connect(session->media.video_rtp_fd, (struct sockaddr *)video_server_addr, video_server_addr->ss_family==AF_INET6?sizeof(struct sockaddr_in6):sizeof(struct sockaddr_in)) == -1) {
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s] Couldn't connect video RTP? (%s:%d)\n", session->account.username,
+ 				session->media.remote_video_ip, session->media.remote_video_rtp_port);
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s]   -- %d (%s)\n", session->account.username, errno, g_strerror(errno));
+@@ -8072,7 +8072,7 @@
+ 			struct sockaddr_in *addr = (struct sockaddr_in *)video_server_addr;
+ 			addr->sin_port = htons(session->media.remote_video_rtcp_port);
+ 		}
+-		if(connect(session->media.video_rtcp_fd, (struct sockaddr *)video_server_addr, sizeof(struct sockaddr_storage)) == -1) {
++		if(connect(session->media.video_rtcp_fd, (struct sockaddr *)video_server_addr, video_server_addr->ss_family==AF_INET6?sizeof(struct sockaddr_in6):sizeof(struct sockaddr_in)) == -1) {
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s] Couldn't connect video RTCP? (%s:%d)\n", session->account.username,
+ 				session->media.remote_video_ip, session->media.remote_video_rtcp_port);
+ 			JANUS_LOG(LOG_ERR, "[SIP-%s]   -- %d (%s)\n", session->account.username, errno, g_strerror(errno));

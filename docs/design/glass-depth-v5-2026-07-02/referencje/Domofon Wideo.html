@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Gatelynk — Domofon wideo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  html, body { margin:0; padding:0; height:100%; background:#06070c; font-family:'Geist',system-ui,sans-serif; overflow:hidden; }
+  #stage { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(900px 700px at 50% 0%, #11131c 0%, #06070c 60%); }
+
+  .phone { width:393px; height:852px; border-radius:54px; background:#000; padding:12px;
+    box-shadow:0 60px 120px rgba(0,0,0,.7), 0 0 0 1.5px rgba(255,255,255,.06); position:relative; }
+  .pi { width:100%; height:100%; border-radius:42px; overflow:hidden; position:relative; background:#000; }
+  .island { position:absolute; top:22px; left:50%; transform:translateX(-50%);
+    width:124px; height:36px; border-radius:22px; background:#000; z-index:1000; }
+  .status { position:absolute; top:18px; left:0; right:0; height:32px; z-index:60;
+    display:flex; justify-content:space-between; align-items:center; padding:0 30px 0 32px;
+    color:#fff; font-weight:600; font-size:15px; pointer-events:none; text-shadow:0 1px 4px rgba(0,0,0,.5); }
+  .home-ind { position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+    width:140px; height:5px; border-radius:999px; background:#fff; opacity:.5; z-index:60; }
+
+  /* ---------- Live camera feed (full bleed) ---------- */
+  .feed { position:absolute; inset:0; overflow:hidden; }
+  .feed-img {
+    position:absolute; inset:-4%;
+    background:url('assets/building-photo.jpg') center 42% / cover no-repeat;
+    animation:feedDrift 20s ease-in-out infinite alternate;
+    transform-origin:center;
+  }
+  @keyframes feedDrift { 0%{ transform:scale(1.05) translate(0,0);} 100%{ transform:scale(1.12) translate(-1.5%,-1%);} }
+  /* low-light / camera grade */
+  .feed-grade { position:absolute; inset:0; background:
+    radial-gradient(120% 80% at 50% 30%, transparent 40%, rgba(0,0,0,.5) 100%),
+    linear-gradient(180deg, rgba(0,0,0,.55) 0%, transparent 22%, transparent 52%, rgba(4,5,10,.86) 100%); }
+  /* subtle moving scanline for "live" feel */
+  .feed-scan { position:absolute; left:0; right:0; height:140px; top:-140px;
+    background:linear-gradient(180deg, transparent, rgba(180,200,255,.05), transparent);
+    animation:scan 5.5s linear infinite; pointer-events:none; }
+  @keyframes scan { to { top:100%; } }
+  /* faint sensor grain */
+  .feed-grain { position:absolute; inset:0; opacity:.05; pointer-events:none; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  /* ---------- Top overlay ---------- */
+  .top { position:absolute; top:64px; left:0; right:0; z-index:40; padding:0 20px;
+    display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .live {
+    display:inline-flex; align-items:center; gap:7px;
+    background:rgba(255,59,48,.92); color:#fff; font-size:11px; font-weight:700; letter-spacing:.1em;
+    padding:5px 11px 5px 9px; border-radius:999px; box-shadow:0 6px 18px rgba(255,59,48,.4);
+  }
+  .live .rec { width:7px; height:7px; border-radius:50%; background:#fff; animation:blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+  .title-wrap { text-align:center; }
+  .title { font-size:27px; font-weight:600; letter-spacing:-.02em; color:#fff; text-shadow:0 2px 16px rgba(0,0,0,.55); }
+  .subt { margin-top:4px; font-size:13.5px; color:rgba(255,255,255,.78); font-weight:500;
+    display:inline-flex; align-items:center; gap:7px; text-shadow:0 1px 8px rgba(0,0,0,.5); }
+  .subt .dot { width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,.5); }
+  .timer { color:#7BE2A3; font-variant-numeric:tabular-nums; }
+
+  /* AI recognition chip */
+  .reco {
+    margin-top:6px; display:inline-flex; align-items:center; gap:9px;
+    background:rgba(20,24,38,.55); backdrop-filter:blur(20px) saturate(160%);
+    border:1px solid rgba(255,255,255,.16); border-radius:999px; padding:7px 14px 7px 8px;
+    box-shadow:0 8px 22px rgba(0,0,0,.3);
+    opacity:0; transform:translateY(-6px); animation:recoIn .6s ease .5s forwards;
+  }
+  @keyframes recoIn { to { opacity:1; transform:none; } }
+  .reco .ava { width:26px; height:26px; border-radius:50%;
+    background:linear-gradient(135deg,#C5B0FF,#5B7CFA); display:flex; align-items:center; justify-content:center; }
+  .reco .rt { font-size:12.5px; color:#fff; font-weight:600; }
+  .reco .rs { font-size:11px; color:rgba(255,255,255,.6); }
+
+  /* top-right quick toggles */
+  .corner { position:absolute; top:62px; right:18px; z-index:45; display:flex; flex-direction:column; gap:10px; }
+  .cbtn { width:40px; height:40px; border-radius:50%;
+    background:rgba(20,24,38,.5); backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.16);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff;
+    transition:background .2s, transform .15s; }
+  .cbtn:hover { background:rgba(40,46,66,.7); }
+  .cbtn:active { transform:scale(.9); }
+  .cbtn.active { background:rgba(139,107,240,.4); border-color:rgba(139,107,240,.7); }
+
+  /* ---------- Bottom controls ---------- */
+  .ctrls { position:absolute; left:0; right:0; bottom:0; z-index:40; padding:0 22px 30px; }
+
+  /* slide to open */
+  .slider { position:relative; height:66px; border-radius:20px; overflow:hidden; margin-bottom:16px;
+    background:rgba(20,24,38,.5); backdrop-filter:blur(24px) saturate(160%);
+    border:1px solid rgba(255,255,255,.2);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 12px 30px rgba(0,0,0,.4); user-select:none; }
+  .slider .fill { position:absolute; left:0; top:0; bottom:0; width:62px;
+    background:linear-gradient(90deg, rgba(139,107,240,.5), rgba(91,124,250,.4)); }
+  .slider.ok .fill { background:linear-gradient(90deg, rgba(61,214,140,.55), rgba(61,214,140,.35)); width:100% !important; }
+  .slider .lbl { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:9px;
+    font-size:15px; font-weight:600; color:#fff; pointer-events:none;
+    background:linear-gradient(90deg, rgba(255,255,255,.45), #fff 50%, rgba(255,255,255,.45));
+    background-size:220% 100%; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    animation:shine 3s linear infinite; }
+  @keyframes shine { from{ background-position:160% 0;} to{ background-position:-60% 0;} }
+  .slider.ok .lbl { animation:none; -webkit-text-fill-color:#fff; }
+  .slider { cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:none; transition:border-color .25s, transform .12s; }
+  .slider .fill { transition:none; }
+  .slider.holding { border-color:rgba(139,107,240,.6); transform:scale(.992); }
+  .slider.ok .lbl, .slider.holding .lbl { -webkit-text-fill-color:#fff; }
+
+  /* control row */
+  .row { display:flex; align-items:flex-end; justify-content:space-between; padding:0 6px; }
+  .ctl { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; width:62px;
+    -webkit-tap-highlight-color:transparent; }
+  .ctl .orb { width:58px; height:58px; border-radius:50%;
+    background:rgba(28,32,48,.55); backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.16);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    transition:transform .22s cubic-bezier(.34,1.4,.64,1), background .2s; }
+  .ctl:hover .orb { transform:translateY(-3px); }
+  .ctl:active .orb { transform:scale(.92); }
+  .ctl.active .orb { background:rgba(139,107,240,.4); border-color:rgba(139,107,240,.65);
+    box-shadow:0 0 22px rgba(139,107,240,.35); }
+  .ctl.talk.active .orb { background:rgba(61,214,140,.42); border-color:rgba(61,214,140,.7);
+    box-shadow:0 0 24px rgba(61,214,140,.4); }
+  .ctl.end .orb { background:#FF3B30; border-color:transparent; box-shadow:0 8px 22px rgba(255,59,48,.45); }
+  .ctl.end:hover .orb { background:#ff5147; }
+  .ctl .cl { font-size:11px; color:rgba(255,255,255,.8); font-weight:500; }
+  .ctl.active .cl { color:#C5B0FF; }
+  .ctl.talk.active .cl { color:#7BE2A3; }
+
+  /* toast */
+  .toast { position:absolute; left:50%; bottom:120px; transform:translate(-50%,14px);
+    background:rgba(20,24,38,.85); backdrop-filter:blur(20px); border:1px solid rgba(61,214,140,.45);
+    color:#7BE2A3; padding:11px 18px; border-radius:13px; font-size:13.5px; font-weight:600; z-index:80;
+    opacity:0; pointer-events:none; transition:opacity .25s, transform .25s cubic-bezier(.34,1.4,.64,1);
+    display:flex; align-items:center; gap:9px; box-shadow:0 14px 34px rgba(0,0,0,.4); }
+  .toast.show { opacity:1; transform:translate(-50%,0); }
+
+  /* opened success veil */
+  .veil { position:absolute; inset:0; z-index:70; background:radial-gradient(circle at 50% 45%, rgba(61,214,140,.22), transparent 60%);
+    opacity:0; pointer-events:none; transition:opacity .5s; }
+  .veil.show { opacity:1; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="phone">
+    <div class="pi">
+      <div class="island"></div>
+      <div class="status">
+        <span>13:14</span>
+        <span style="display:flex;align-items:center;gap:5px;">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="#fff"><path d="M8.5 2.4c2.3 0 4.5.9 6.1 2.4l1.4-1.5C13.9 1.2 11.3.1 8.5.1 5.7.1 3.1 1.2 1 3.3l1.4 1.5C4 3.3 6.2 2.4 8.5 2.4z" opacity=".6"/><path d="M8.5 5.5c1.5 0 3 .6 4.1 1.6l1.4-1.5C12.5 4.2 10.5 3.5 8.5 3.5S4.5 4.2 3 5.6l1.4 1.5C5.5 6.1 7 5.5 8.5 5.5z" opacity=".85"/><path d="M8.5 8.6c.7 0 1.4.3 1.9.8l1.4-1.5C10.8 7 9.7 6.6 8.5 6.6S6.2 7 5.2 7.9l1.4 1.5c.5-.5 1.2-.8 1.9-.8z"/></svg>
+          <svg width="24" height="11" viewBox="0 0 24 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="2.5" stroke="#fff" opacity="0.5"/><rect x="2" y="2" width="14" height="7" rx="1" fill="#fff"/></svg>
+        </span>
+      </div>
+
+      <!-- Live feed -->
+      <div class="feed">
+        <div class="feed-img"></div>
+        <div class="feed-grade"></div>
+        <div class="feed-scan"></div>
+        <div class="feed-grain"></div>
+      </div>
+
+      <div class="veil" id="veil"></div>
+
+      <!-- Top overlay -->
+      <div class="top">
+        <span class="live"><span class="rec"></span>NA ŻYWO</span>
+        <div class="title-wrap">
+          <div class="title">Domofon</div>
+          <div class="subt"><span>Brama główna</span><span class="dot"></span><span class="timer" id="timer">00:08</span></div>
+        </div>
+        <div class="reco">
+          <div class="ava"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6"/></svg></div>
+          <div><div class="rt">Wykryto: osoba</div><div class="rs">Brak dopasowania · gość</div></div>
+        </div>
+      </div>
+
+      <!-- Corner actions -->
+      <div class="corner">
+        <div class="cbtn" id="snap" title="Zrób zdjęcie">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </div>
+      </div>
+
+      <!-- Bottom controls -->
+      <div class="ctrls">
+        <div class="slider" id="slider">
+          <div class="fill" id="fill"></div>
+          <div class="lbl" id="slbl">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.3-2.3"/></svg>
+            Przytrzymaj, aby otworzyć
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="ctl" id="mute">
+            <div class="orb">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Z"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+            </div>
+            <span class="cl">Wycisz</span>
+          </div>
+
+          <div class="ctl talk active" id="talk">
+            <div class="orb">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 12a7 7 0 0 1-14 0"/><path d="M12 19v2"/></svg>
+            </div>
+            <span class="cl">Mów</span>
+          </div>
+
+          <div class="ctl end" id="end">
+            <div class="orb">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9c5-3 13-3 18 0l-2.5 3.2c-.6.7-1.6.9-2.4.4l-2-1.2c-.4-.3-.6-.7-.6-1.2V8.6c-2.6-.6-4.4-.6-7 0v1.0c0 .5-.2.9-.6 1.2l-2 1.2c-.8.5-1.8.3-2.4-.4L3 9Z" transform="rotate(135 12 12)"/></svg>
+            </div>
+            <span class="cl">Rozłącz</span>
+          </div>
+
+          <div class="ctl active" id="spk">
+            <div class="orb">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+            </div>
+            <span class="cl">Głośnik</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="toast" id="toast">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <span id="ttext">OK</span>
+      </div>
+
+      <div class="home-ind"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const toast=document.getElementById('toast'), ttext=document.getElementById('ttext');
+  let tt; const say=(m,danger)=>{ ttext.textContent=m;
+    toast.style.borderColor = danger ? 'rgba(255,59,48,.5)' : 'rgba(61,214,140,.45)';
+    toast.style.color = danger ? '#FF8A80' : '#7BE2A3';
+    toast.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>toast.classList.remove('show'),2200); };
+
+  // call timer
+  let secs=8; const tEl=document.getElementById('timer');
+  const tick=setInterval(()=>{ secs++; const m=String(Math.floor(secs/60)).padStart(2,'0'); const s=String(secs%60).padStart(2,'0'); tEl.textContent=`${m}:${s}`; },1000);
+
+  // toggles
+  const toggle=(id,onMsg,offMsg)=>{ const el=document.getElementById(id);
+    el.addEventListener('click',()=>{ el.classList.toggle('active');
+      say(el.classList.contains('active')?onMsg:offMsg); }); };
+  toggle('mute','Mikrofon wyciszony','Mikrofon włączony');
+  toggle('talk','Mówisz — naciśnij ponownie, aby zwolnić','Mikrofon zwolniony');
+  toggle('spk','Głośnik włączony','Głośnik wyłączony');
+  document.getElementById('snap').addEventListener('click',e=>{ e.currentTarget.classList.add('active');
+    setTimeout(()=>e.currentTarget.classList.remove('active'),400); say('Zapisano zdjęcie z kamery'); });
+
+  document.getElementById('end').addEventListener('click',()=>{ clearInterval(tick); say('Połączenie zakończone',true);
+    document.querySelector('.subt').innerHTML='<span>Rozłączono</span>'; });
+
+  // hold to open
+  const slider=document.getElementById('slider'), fill=document.getElementById('fill'), slbl=document.getElementById('slbl');
+  const defLbl=slbl.innerHTML;
+  const DURATION=1100;
+  let raf=null, start=null, busy=false;
+  const frame=(ts)=>{ if(start===null) return;
+    const p=Math.min(1,(ts-start)/DURATION);
+    fill.style.width=(p*100)+'%';
+    if(p>=1){ open(); return; }
+    raf=requestAnimationFrame(frame); };
+  const press=(e)=>{ if(busy) return; e.preventDefault();
+    slider.classList.add('holding'); start=performance.now(); raf=requestAnimationFrame(frame); };
+  const release=()=>{ if(start===null||busy) return;
+    cancelAnimationFrame(raf); start=null; slider.classList.remove('holding');
+    fill.style.transition='width .25s'; fill.style.width='0%';
+    setTimeout(()=>fill.style.transition='none',260); };
+  const open=()=>{ busy=true; start=null; cancelAnimationFrame(raf);
+    slider.classList.remove('holding'); slider.classList.add('ok'); fill.style.width='100%';
+    slbl.innerHTML='✓&nbsp; Brama otwarta';
+    document.getElementById('veil').classList.add('show');
+    say('Brama główna otwarta');
+    setTimeout(()=>{ document.getElementById('veil').classList.remove('show');
+      slider.classList.remove('ok'); fill.style.transition='width .4s'; fill.style.width='0%';
+      setTimeout(()=>fill.style.transition='none',420); slbl.innerHTML=defLbl; busy=false; },3600); };
+  slider.addEventListener('mousedown',press); slider.addEventListener('touchstart',press,{passive:false});
+  addEventListener('mouseup',release); addEventListener('touchend',release);
+  slider.addEventListener('mouseleave',release);
+</script>
+</body>
+</html>

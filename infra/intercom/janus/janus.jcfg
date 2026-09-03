@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Janus Gateway — główny config (relevant sekcje) dla domofonu Akuvox ↔ iOS.
+# Projekt: docs/intercom-akuvox-call.md. Ten plik to SNIPPET — wklej sekcje do
+# /opt/homebrew/etc/janus/janus.jcfg (brew) lub /usr/local/etc/janus/janus.jcfg.
+#
+# Janus żyje na Edge (Mac Mini, LAN). Admin API tylko na 127.0.0.1 — NestJS Edge
+# łączy się lokalnie. NIE wystawiaj Admin API ani transportu na LAN/WAN.
+# ─────────────────────────────────────────────────────────────────────────────
+
+general: {
+	configs_folder = "/opt/homebrew/etc/janus"
+	plugins_folder = "/opt/homebrew/lib/janus/plugins"
+	transports_folder = "/opt/homebrew/lib/janus/transports"
+	# debug 4 = info; podbij do 5/6 przy diagnozie SIP/ICE.
+	debug_level = 4
+	# Server name w odpowiedziach (kosmetyka).
+	server_name = "gatelynk-edge-janus"
+}
+
+# ── Certyfikaty DTLS (WebRTC wymaga; self-signed OK dla media) ────────────────
+certificates: {
+	# Wygeneruj self-signed (patrz README) albo użyj certu z coturn-a.
+	cert_pem = "/opt/homebrew/etc/janus/certs/mycert.pem"
+	cert_key = "/opt/homebrew/etc/janus/certs/mycert.key"
+}
+
+# ── Media / ICE ──────────────────────────────────────────────────────────────
+media: {
+	# Zakres portów RTP/RTCP po stronie Janusa (musi być wolny na Mac Mini).
+	rtp_port_range = "20000-40000"
+	# DTLS-SRTP mtu.
+	dtls_mtu = 1200
+}
+
+nat: {
+	# STUN do odkrycia publicznego adresu Edge (gdy off-site). Użyj TURN-a z
+	# infra/intercom/coturn jako STUN-a też (port 3478) albo publicznego.
+	stun_server = "turn.gatelynk.com"
+	stun_port = 3478
+
+	# TURN — ten sam serwer co iOS. Dla use-auth-secret Janus może liczyć creds
+	# z REST API (turn_rest_api_*), albo podaj statyczne user/pass.
+	# turn_server = "turn.gatelynk.com"
+	# turn_port = 3478
+	# turn_type = "udp"
+	# turn_user = "gatelynk"
+	# turn_pwd = "<STATIC_PASSWORD>"
+	# Albo TURN REST API (use-auth-secret w coturn):
+	# turn_rest_api = "http://127.0.0.1:0"   # nieużywane gdy Cloud generuje creds
+	# turn_rest_api_key = "<STATIC_SECRET>"
+
+	# 1:1 NAT mapping — gdy Edge ma znany publiczny IP (rzadko w LAN za NAT).
+	# Zostaw zakomentowane; off-site idzie przez TURN relay.
+	# nat_1_1_mapping = "<EDGE_PUBLIC_IP>"
+
+	# Ignoruj interfejsy które nie powinny być kandydatami ICE (np. utun/VPN).
+	ice_ignore_list = "vmnet,utun"
+
+	# Pełny trickle ICE — apka (iOS) i Akuvox-leg wymieniają kandydatów na bieżąco.
+	full_trickle = true
+}
+
+# ── Plugins (włącz tylko SIP — reszta niepotrzebna) ──────────────────────────
+plugins: {
+	disable = "libjanus_videoroom.so,libjanus_streaming.so,libjanus_audiobridge.so,libjanus_textroom.so,libjanus_echotest.so,libjanus_recordplay.so,libjanus_voicemail.so"
+}
+
+# ── Transports: włącz HTTP (NestJS Edge poll-uje), wyłącz resztę ─────────────
+transports: {
+	disable = "libjanus_websockets.so,libjanus_pfunix.so,libjanus_mqtt.so,libjanus_nanomsg.so,libjanus_rabbitmq.so"
+}
