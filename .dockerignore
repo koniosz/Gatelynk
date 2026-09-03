@@ -1,0 +1,51 @@
+# Globalny .dockerignore dla całego monorepo.
+# Build context dla compose to root repo, więc te wzorce dotyczą każdego
+# Dockerfile'a kopiującego z monorepo.
+
+# ── node_modules — instalujemy je od zera w kontenerze ─────────────────────
+**/node_modules
+
+# ── build artefakty (wszystkie dist/) ──────────────────────────────────────
+# Wyjątek: edge ma `dist/` deployowany przez rsync, ale do Dockera (API/Web)
+# nie wnosimy lokalnych dist-ów — kontener buduje je od zera.
+**/dist
+**/.next
+**/.turbo
+**/build
+**/coverage
+**/tsconfig.tsbuildinfo
+**/tsconfig.build.tsbuildinfo
+
+# ── env i sekrety ──────────────────────────────────────────────────────────
+**/.env
+**/.env.local
+**/.env.*.local
+**/secrets
+infra/dev/secrets/*
+!infra/dev/secrets/.gitkeep
+
+# ── git i edytory ──────────────────────────────────────────────────────────
+.git
+.gitignore
+.github
+.vscode
+.idea
+**/*.swp
+**/.DS_Store
+
+# ── lokalne dane runtime (Edge SQLite, etc.) ───────────────────────────────
+apps/edge/data
+apps/edge/logs
+
+# ── iOS — nie trafia do Docker buildów ─────────────────────────────────────
+apps/ios
+
+# ── docs, README — niepotrzebne w obrazie runtime ──────────────────────────
+README.md
+**/README.md
+docs
+
+# ── testy ──────────────────────────────────────────────────────────────────
+**/*.spec.ts
+**/*.test.ts
+**/test
