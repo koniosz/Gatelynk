@@ -32,7 +32,7 @@ export default function DashboardPage() {
             <p className="text-xl font-bold text-gray-900 mt-1">{license.plan.name}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <p className="text-sm text-gray-500">Budynki</p>
+            <p className="text-sm text-gray-500">Obiekty</p>
             <p className="text-xl font-bold text-gray-900 mt-1">
               {buildings.length}
               {license.plan.maxBuildings && <span className="text-sm text-gray-400"> / {license.plan.maxBuildings}</span>}

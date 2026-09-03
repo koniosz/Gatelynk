@@ -1,0 +1,791 @@
+/*
+ * Tokeny + style strony zaproszenia gościa — FINALNY design GateLynk Glass.
+ * Port 1:1 z `docs/design/guest-pass-2026-07/handoff_guest_invite/Guest Invite.html`
+ * (dark navy + aurora + glassmorphism, akcent fiolet #C5B0FF→#5B7CFA).
+ *
+ * Świadomie **plain CSS** zamiast Tailwind — pixel-perfect wzorzec wymaga
+ * konkretnych gradientów, animacji (drift/pulse/spin) i niestandardowych
+ * radiusów. Klasy mają prefix `gli-` żeby uniknąć kolizji z resztą web-app.
+ *
+ * `prefers-reduced-motion: reduce` wyłącza aurorę i pulse zgodnie z README.
+ */
+
+:root {
+  --gli-accent-200: #C5B0FF;
+  --gli-accent-300: #A78BFA;
+  --gli-accent-400: #8B6BF0;
+  --gli-accent-500: #7050E0;
+  --gli-accent-grad: linear-gradient(135deg, #C5B0FF, #5B7CFA);
+  --gli-accent-glow: rgba(139, 107, 240, 0.45);
+
+  --gli-text-primary: #F4F6FB;
+  --gli-text-secondary: #C2CADF;
+  --gli-text-tertiary: #8B96B4;
+
+  --gli-success: #34D399;
+  --gli-success-fg: #7BE2A3;
+  --gli-success-bg: rgba(52, 211, 153, 0.14);
+  --gli-warning: #FBBF24;
+  --gli-warning-bg: rgba(251, 191, 36, 0.14);
+  --gli-danger: #FF6B6B;
+  --gli-danger-bg: rgba(255, 107, 107, 0.14);
+
+  --gli-glass-bd: rgba(255, 255, 255, 0.12);
+  --gli-glass-bd-strong: rgba(255, 255, 255, 0.20);
+  --gli-hair: rgba(255, 255, 255, 0.08);
+
+  --gli-r-md: 12px;
+  --gli-r-lg: 16px;
+  --gli-r-xl: 20px;
+  --gli-r-2xl: 24px;
+  --gli-r-full: 999px;
+}
+
+/* Dark tło także za overscroll-em (iOS rubber-band) gdy strona /i jest aktywna. */
+body:has(.gli-stage) {
+  background: #070a12;
+}
+
+/* ── Stage: aurora backdrop ──────────────────────────────────────────── */
+.gli-stage {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 22px 16px 60px;
+  overflow: hidden;
+  background:
+    radial-gradient(1000px 700px at 78% -12%, rgba(112, 80, 224, 0.42) 0%, rgba(112, 80, 224, 0) 58%),
+    radial-gradient(820px 620px at -10% 12%, rgba(59, 110, 220, 0.30) 0%, rgba(59, 110, 220, 0) 60%),
+    radial-gradient(900px 700px at 50% 118%, rgba(120, 70, 200, 0.30) 0%, rgba(120, 70, 200, 0) 62%),
+    linear-gradient(180deg, #0a0e1a 0%, #070a12 60%, #05070d 100%);
+  color: var(--gli-text-primary);
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+.gli-stage::before,
+.gli-stage::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(60px);
+  opacity: 0.5;
+  z-index: 0;
+}
+.gli-stage::before {
+  width: 460px;
+  height: 460px;
+  top: -120px;
+  right: -120px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.55), transparent 65%);
+  animation: gli-drift1 22s ease-in-out infinite alternate;
+}
+.gli-stage::after {
+  width: 420px;
+  height: 420px;
+  bottom: -140px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(91, 124, 250, 0.45), transparent 65%);
+  animation: gli-drift2 26s ease-in-out infinite alternate;
+}
+@keyframes gli-drift1 { to { transform: translate(-40px, 60px) scale(1.12); } }
+@keyframes gli-drift2 { to { transform: translate(50px, -50px) scale(1.15); } }
+@media (prefers-reduced-motion: reduce) {
+  .gli-stage::before,
+  .gli-stage::after { animation: none; }
+  .gli-pulse { animation: none; }
+}
+
+.gli-page {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Glass base (mixin przez klasy komponentów) ─────────────────────── */
+.gli-hero,
+.gli-access-list,
+.gli-pin-card,
+.gli-rules {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045));
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  border: 1px solid var(--gli-glass-bd);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 22px 48px rgba(0, 0, 0, 0.42);
+}
+
+/* ── Brand bar ───────────────────────────────────────────────────────── */
+.gli-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 2px;
+}
+.gli-brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+}
+.gli-brand-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--gli-accent-grad);
+  box-shadow: 0 6px 18px var(--gli-accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+}
+.gli-secure-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--gli-success-bg);
+  color: var(--gli-success-fg);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: var(--gli-r-full);
+  padding: 6px 11px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.gli-hero {
+  position: relative;
+  border-radius: var(--gli-r-2xl);
+  overflow: hidden;
+  padding: 20px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.gli-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 70% at 100% 0%, rgba(167, 139, 250, 0.28) 0%, rgba(167, 139, 250, 0) 60%),
+    radial-gradient(60% 70% at 0% 100%, rgba(91, 124, 250, 0.18) 0%, rgba(91, 124, 250, 0) 70%);
+}
+.gli-invite-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.gli-host-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--gli-accent-grad);
+  color: #fff;
+  font-weight: 700;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px var(--gli-accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.gli-invite-meta {
+  flex: 1;
+  min-width: 0;
+}
+.gli-invite-host {
+  font-size: 12.5px;
+  color: var(--gli-text-tertiary);
+  font-weight: 500;
+  margin: 0;
+}
+.gli-invite-host strong {
+  color: var(--gli-text-secondary);
+  font-weight: 600;
+}
+.gli-invite-greeting {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 3px 0 0;
+  color: #fff;
+}
+.gli-invite-card {
+  position: relative;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--gli-hair);
+  border-radius: var(--gli-r-lg);
+  padding: 15px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px 12px;
+}
+.gli-invite-item .gli-label {
+  font-size: 10px;
+  color: var(--gli-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.gli-invite-item .gli-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gli-text-primary);
+  line-height: 1.35;
+}
+.gli-invite-item.gli-full {
+  grid-column: 1 / -1;
+}
+.gli-invite-item.gli-full .gli-value {
+  color: var(--gli-accent-200);
+}
+
+/* Nawiguj — pełna szerokość, akcent, wewnątrz invite-card */
+.gli-nav-inline {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: none;
+  border-radius: var(--gli-r-md);
+  cursor: pointer;
+  font: inherit;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  background: var(--gli-accent-grad);
+  box-shadow: 0 8px 20px var(--gli-accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 120ms;
+}
+.gli-nav-inline:active { transform: scale(0.99); }
+
+/* Countdown */
+.gli-countdown {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--gli-success-bg);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: var(--gli-r-md);
+  color: var(--gli-success-fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+.gli-countdown strong { color: #fff; font-weight: 700; }
+.gli-countdown.gli-warn {
+  background: var(--gli-warning-bg);
+  border-color: rgba(251, 191, 36, 0.28);
+  color: var(--gli-warning);
+}
+.gli-countdown.gli-bad {
+  background: var(--gli-danger-bg);
+  border-color: rgba(255, 107, 107, 0.28);
+  color: var(--gli-danger);
+}
+.gli-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--gli-success);
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55), 0 0 10px rgba(52, 211, 153, 0.8);
+  animation: gli-pulse 1.8s ease-out infinite;
+}
+.gli-warn .gli-pulse { background: var(--gli-warning); animation: none; box-shadow: none; }
+.gli-bad .gli-pulse { background: var(--gli-danger); animation: none; box-shadow: none; }
+@keyframes gli-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5), 0 0 10px rgba(52, 211, 153, 0.8); }
+  100% { box-shadow: 0 0 0 12px rgba(52, 211, 153, 0), 0 0 10px rgba(52, 211, 153, 0.8); }
+}
+
+/* ── Section heading ─────────────────────────────────────────────────── */
+.gli-section-h {
+  padding: 10px 6px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.gli-section-h h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gli-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.gli-section-h .gli-hint {
+  font-size: 11.5px;
+  color: var(--gli-text-tertiary);
+  font-weight: 500;
+}
+
+/* ── Harmonogram cykliczny (ograniczenia dostępu) ────────────────────── */
+.gli-schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--gli-warning-bg);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: var(--gli-r-md);
+  color: var(--gli-warning);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.gli-schedule-row strong {
+  color: #fff;
+  font-weight: 650;
+}
+
+/* ── Access list ─────────────────────────────────────────────────────── */
+.gli-access-list {
+  border-radius: var(--gli-r-xl);
+  overflow: hidden;
+}
+.gli-access-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 15px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--gli-text-primary);
+  font: inherit;
+  transition: background 160ms;
+}
+.gli-access-row + .gli-access-row {
+  border-top: 1px solid var(--gli-hair);
+}
+.gli-access-row:hover { background: rgba(255, 255, 255, 0.05); }
+.gli-access-row:active { background: rgba(255, 255, 255, 0.09); }
+.gli-access-row:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.gli-access-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--gli-accent-grad);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.gli-access-icon.gli-fire {
+  background: linear-gradient(135deg, #FF8A8A, #E23B3B);
+}
+/* Drzwi mieszkania (zamek Nuki) — akcent bursztynowy, spójny z --gli-warning. */
+.gli-access-icon.gli-unit-door {
+  background: linear-gradient(135deg, #FCD34D, #D97706);
+  box-shadow: 0 8px 18px rgba(217, 119, 6, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.gli-access-text {
+  flex: 1;
+  min-width: 0;
+}
+.gli-access-title {
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.gli-access-sub {
+  font-size: 12px;
+  color: var(--gli-text-tertiary);
+  margin-top: 2px;
+}
+/* Licznik pozostałych otwarć — pod subtitle, tylko gdy backend zwraca limit. */
+.gli-access-uses {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gli-accent-200);
+  margin-top: 3px;
+}
+.gli-access-uses.gli-exhausted {
+  color: var(--gli-danger);
+}
+/* Wejście z wyczerpanym limitem — mocniej przygaszone niż zwykłe :disabled. */
+.gli-access-row.gli-exhausted {
+  opacity: 0.45;
+}
+.gli-access-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--gli-accent-grad);
+  color: #fff;
+  font-weight: 650;
+  font-size: 13px;
+  padding: 9px 15px;
+  border-radius: var(--gli-r-full);
+  box-shadow: 0 6px 16px var(--gli-accent-glow);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.gli-access-cta.gli-fire {
+  background: linear-gradient(135deg, #FF8A8A, #E23B3B);
+  box-shadow: 0 6px 16px rgba(226, 59, 59, 0.3);
+}
+.gli-access-cta.gli-opening {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--gli-text-secondary);
+  box-shadow: none;
+}
+.gli-access-cta.gli-done {
+  background: var(--gli-success-bg);
+  color: var(--gli-success-fg);
+  box-shadow: none;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.gli-access-cta.gli-failed {
+  background: var(--gli-danger-bg);
+  color: var(--gli-danger);
+  box-shadow: none;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+/* CTA drzwi mieszkania — bursztynowy gradient (ciemny tekst dla kontrastu). */
+.gli-access-cta.gli-unit-door {
+  background: linear-gradient(135deg, #FCD34D, #F59E0B);
+  color: #2b1d03;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35);
+}
+/* „Czekam na zatwierdzenie gospodarza…" — spinner + odliczanie do expiresAt. */
+.gli-access-cta.gli-pending {
+  background: var(--gli-warning-bg);
+  color: var(--gli-warning);
+  box-shadow: none;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+}
+/* Trwały (do reloadu) stan „Gospodarz odmówił". */
+.gli-access-cta.gli-denied {
+  background: var(--gli-danger-bg);
+  color: var(--gli-danger);
+  box-shadow: none;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+/* Trwały stan „Wykorzystane ✓" — limit otwarć dobity. */
+.gli-access-cta.gli-used-up {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--gli-text-secondary);
+  box-shadow: none;
+  border: 1px solid var(--gli-glass-bd);
+}
+/* Notka pod subtitle w trybie zatwierdzania (pełny tekst — CTA jest kompaktowe). */
+.gli-access-pending-note {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gli-warning);
+  margin-top: 3px;
+}
+.gli-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: gli-spin 700ms linear infinite;
+}
+@keyframes gli-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── PIN fallback ────────────────────────────────────────────────────── */
+.gli-pin-card {
+  border-radius: var(--gli-r-xl);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.gli-pin-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.gli-pin-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--gli-warning-bg);
+  color: var(--gli-warning);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.gli-pin-title {
+  font-size: 14.5px;
+  font-weight: 650;
+  color: #fff;
+}
+.gli-pin-desc {
+  font-size: 12px;
+  color: var(--gli-text-tertiary);
+  margin-top: 2px;
+}
+.gli-pin-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--gli-hair);
+  border-radius: var(--gli-r-md);
+  padding: 14px 16px;
+}
+.gli-pin-digits {
+  font-family: var(--font-geist-mono, 'Geist Mono'), ui-monospace, monospace;
+  /* clamp — na wąskich ekranach (375px) 27px + letter-spacing zawijało kropki */
+  font-size: clamp(19px, 5.8vw, 27px);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #fff;
+  user-select: all;
+  white-space: nowrap;
+}
+.gli-pin-digits.gli-hidden {
+  letter-spacing: 0.14em;
+  color: var(--gli-text-secondary);
+}
+.gli-pin-actions {
+  display: flex;
+  gap: 7px;
+}
+.gli-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--gli-glass-bd);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--gli-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 160ms, color 160ms, border-color 160ms;
+}
+.gli-icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.gli-icon-btn:active { background: rgba(255, 255, 255, 0.16); }
+.gli-icon-btn.gli-success {
+  color: var(--gli-success-fg);
+  border-color: rgba(52, 211, 153, 0.35);
+  background: var(--gli-success-bg);
+}
+.gli-pin-foot {
+  font-size: 11.5px;
+  color: var(--gli-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── House rules (Dobrze wiedzieć) ───────────────────────────────────── */
+.gli-rules {
+  border-radius: var(--gli-r-xl);
+  padding: 15px 16px 6px;
+}
+.gli-rules h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #fff;
+}
+.gli-rules ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.gli-rules li {
+  display: flex;
+  gap: 11px;
+  padding: 10px 0;
+  font-size: 12.5px;
+  color: var(--gli-text-secondary);
+  line-height: 1.45;
+  border-top: 1px solid var(--gli-hair);
+}
+.gli-rules li:first-child { border-top: none; }
+.gli-rules li .gli-chk {
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gli-success-bg);
+  color: var(--gli-success-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+.gli-footer {
+  text-align: center;
+  padding: 10px 14px 4px;
+  font-size: 11px;
+  color: var(--gli-text-tertiary);
+  line-height: 1.6;
+}
+.gli-footer strong { color: var(--gli-text-secondary); }
+.gli-footer a {
+  color: var(--gli-accent-200);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gli-footer a:hover { color: #E6DCFF; }
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+.gli-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translate(-50%, 20px);
+  background: rgba(20, 24, 38, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--gli-glass-bd);
+  color: #fff;
+  padding: 11px 17px;
+  border-radius: var(--gli-r-full);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms, transform 200ms;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.gli-toast .gli-tc { color: var(--gli-success-fg); display: flex; }
+.gli-toast.gli-fail .gli-tc { color: var(--gli-danger); }
+.gli-toast.gli-show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ── Confirm sheet ──────────────────────────────────────────────────── */
+.gli-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 16, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms;
+  z-index: 200;
+}
+.gli-scrim.gli-show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.gli-sheet {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  width: 100%;
+  max-width: 460px;
+  transform: translate(-50%, 100%);
+  background: linear-gradient(180deg, rgba(22, 27, 44, 0.96), rgba(15, 19, 32, 0.98));
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--gli-glass-bd);
+  border-bottom: none;
+  border-radius: 28px 28px 0 0;
+  padding: 12px 22px calc(24px + env(safe-area-inset-bottom));
+  box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.5);
+  transition: transform 300ms cubic-bezier(.32, .72, 0, 1);
+  z-index: 201;
+}
+.gli-sheet.gli-show {
+  transform: translate(-50%, 0);
+}
+.gli-sheet-grip {
+  width: 40px;
+  height: 5px;
+  background: var(--gli-glass-bd-strong);
+  border-radius: 999px;
+  margin: 6px auto 16px;
+}
+.gli-sheet h3 {
+  margin: 0 0 8px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+.gli-sheet p {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  color: var(--gli-text-secondary);
+  line-height: 1.5;
+}
+.gli-sheet .gli-row {
+  display: flex;
+  gap: 10px;
+}
+.gli-btn-primary {
+  flex: 1;
+  border: none;
+  border-radius: 15px;
+  padding: 15px;
+  font-weight: 700;
+  font-size: 15px;
+  background: var(--gli-accent-grad);
+  color: #fff;
+  box-shadow: 0 10px 26px var(--gli-accent-glow);
+  cursor: pointer;
+  font-family: inherit;
+}
+.gli-btn-primary.gli-fire {
+  background: linear-gradient(135deg, #FF8A8A, #E23B3B);
+  box-shadow: 0 10px 26px rgba(226, 59, 59, 0.35);
+}
+.gli-btn-secondary {
+  flex: 1;
+  border-radius: 15px;
+  padding: 15px;
+  font-weight: 600;
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--gli-text-secondary);
+  border: 1px solid var(--gli-glass-bd);
+  cursor: pointer;
+  font-family: inherit;
+}
+.gli-btn-secondary:active { background: rgba(255, 255, 255, 0.14); }
+.gli-sheet-note {
+  font-size: 11.5px;
+  color: var(--gli-text-tertiary);
+  text-align: center;
+  margin-top: 12px;
+}

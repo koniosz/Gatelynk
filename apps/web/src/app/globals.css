@@ -3,13 +3,92 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ─────────────────────────────────────────────────────────────────────
+     Panel Integratora — tokeny z handoff §3. Aktywne globalnie ale w sposób
+     non-breaking: istniejące Tailwind classy (bg-gray-200, text-blue-600)
+     wciąż działają obok. Nowe komponenty użyją `bg-surface`, `text-ink`
+     przez @theme mapping poniżej.
+     ─────────────────────────────────────────────────────────────────────  */
+  --bg:              #f4f6f9;
+  --bg-2:            #eaedf2;
+  --surface:         #ffffff;
+  --surface-2:       #f8f9fb;
+  --border:          #dde2ea;
+  --border-strong:   #c5ccd6;
+  --ink:             #0c1320;
+  --ink-2:           #2d3748;
+  --muted:           #5f6b7c;
+  --muted-2:         #94a0b1;
+
+  --blue:            #006fff;
+  --blue-600:        #0058cc;
+  --blue-50:         #e6f0ff;
+  --green:           #10ad62;
+  --green-50:        #d8f4e7;
+  --amber:           #b15e00;
+  --amber-50:        #fceac9;
+  --red:             #c52a2a;
+  --red-50:          #fbe0de;
+
+  /* Radius rhythm 4/6/8 */
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 8px;
+}
+
+[data-theme="dark"] {
+  --bg:              #0c1320;
+  --bg-2:            #111827;
+  --surface:         #161e2e;
+  --surface-2:       #1a2236;
+  --border:          #2d3748;
+  --border-strong:   #404e63;
+  --ink:             #f3f4f6;
+  --ink-2:           #d1d5db;
+  --muted:           #94a0b1;
+  --muted-2:         #6b7280;
+  --blue:            #2589ff;
+  --blue-600:        #5ba6ff;
+  --blue-50:         #14304d;
+  --green:           #34d089;
+  --green-50:        #0f3d24;
+  --amber:           #f6b441;
+  --amber-50:        #3d2a06;
+  --red:             #f47267;
+  --red-50:          #3d0f10;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-plex-sans, var(--font-geist-sans));
+  --font-mono: var(--font-plex-mono, var(--font-geist-mono));
+
+  /* Tokeny handoff → Tailwind utilities. Po `pnpm dev` można pisać:
+     bg-surface, text-ink, text-muted, border-border, bg-brand, text-success, … */
+  --color-bg:            var(--bg);
+  --color-surface:       var(--surface);
+  --color-surface-2:     var(--surface-2);
+  --color-border:        var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ink:           var(--ink);
+  --color-ink-2:         var(--ink-2);
+  --color-muted:         var(--muted);
+  --color-muted-2:       var(--muted-2);
+  --color-brand:         var(--blue);
+  --color-brand-600:     var(--blue-600);
+  --color-brand-50:      var(--blue-50);
+  --color-success:       var(--green);
+  --color-success-50:    var(--green-50);
+  --color-warn:          var(--amber);
+  --color-warn-50:       var(--amber-50);
+  --color-danger:        var(--red);
+  --color-danger-50:     var(--red-50);
+
+  --radius-r1: var(--r-1);
+  --radius-r2: var(--r-2);
+  --radius-r3: var(--r-3);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +102,12 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Toast pop-in (Guest Portal `/g/[token]`). Tailwind 4 nie ma dedykowanego
+   utility na keyframes, więc zostawiamy raw `@keyframes` w globals.css —
+   page.tsx odpala animację przez `animate-[fadeInUp_.25s_ease]`. */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
 }
