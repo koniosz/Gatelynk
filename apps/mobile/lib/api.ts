@@ -23,3 +23,17 @@ export async function clearToken() {
 export async function getToken() {
   return SecureStore.getItemAsync(TOKEN_KEY)
 }
+
+// ── Temporary in-memory store for building selection flow ─────────────────────
+// Holds credentials only during the login → select-building flow; cleared immediately after.
+let _pendingCredentials: { email: string; password: string } | null = null
+
+export function setPendingCredentials(email: string, password: string) {
+  _pendingCredentials = { email, password }
+}
+
+export function consumePendingCredentials() {
+  const creds = _pendingCredentials
+  _pendingCredentials = null
+  return creds
+}

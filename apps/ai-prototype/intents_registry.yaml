@@ -1,0 +1,635 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GateLynk AI Assistant — deklaratywny rejestr intentów.
+#
+# Zastępuje ręcznie pilnowaną kolejność if-ów w classify_regex() — kolejność
+# checków wynika z `priority` (NIŻSZY = sprawdzany WCZEŚNIEJ). Po zmianie
+# czegokolwiek tutaj: cd apps/ai-prototype && python3 eval_classifier.py
+#
+# Schemat wpisu (klucz = nazwa reguły; może być kilka reguł na 1 intent):
+#   intent:       nazwa intentu (default = klucz reguły); musi być
+#                 w VALID_INTENTS (intent_classifier.py)
+#   description:  PL opis — używany też jako opis toola dla LLM (Etap 3)
+#   priority:     int, niższy = wcześniej w kaskadzie
+#   matcher:      generic (default) | nazwa custom matchera z
+#                 intent_classifier._MATCHERS (logika która się nie
+#                 generalizuje: knowledge triggers, waste, vision objects…)
+#   patterns:     lista regexów — wystarczy JEDEN match (OR)
+#   patterns_all: lista regexów — muszą matchnąć WSZYSTKIE (AND)
+#   not_patterns: lista regexów — żaden NIE może matchnąć
+#   guard:        nazwa predykatu z intent_classifier._GUARDS
+#   params:       schema parametrów:
+#                   type:      enum | int | string
+#                   extractor: nazwa funkcji z intent_classifier._EXTRACTORS
+#                   required:  true → brak wartości = reguła nie matchuje
+#                   default:   default dla extractora (range_hours/limit)
+#                   max:       cap dla limit
+#                   values:    lista dozwolonych (enum) — dla tool-callingu
+#                   source:    nazwa słownika/setu w intent_classifier
+#                              (BRAND_KEYWORD_MAP → enum z .values())
+#   examples:     few-shot dla LLM fallback / tool-calling (Etap 3)
+#   tool:         false → intent pomijany przy generowaniu tools (Etap 3)
+#
+# Wszystkie regexy matchowane case-insensitive na lowercase(question).
+# ─────────────────────────────────────────────────────────────────────────────
+
+search_knowledge_base:
+  description: >
+    Wyszukiwanie w bazie wiedzy budynku (RAG bge-m3): uchwały, regulaminy,
+    HARMONOGRAMY (np. planowany/następny odbiór śmieci — przyszłość!),
+    kontakty do administracji/serwisantów, archiwum Messenger sąsiadów,
+    planowane wydarzenia i przerwy w dostawach mediów.
+  priority: 10
+  matcher: knowledge_base        # substring triggers + type hints (PL diakrytyki)
+  params:
+    query: { type: string, required: true }
+    type:  { type: enum, values: [MESSENGER_CHAT, UCHWALA, REGULAMIN, KONTAKT, INNE] }
+  examples:
+    - "Co mówi uchwała o psach?"
+    - "Kiedy jest planowany odbiór śmieci?"
+    - "Kiedy następny odbiór szkła?"
+    - "Numer telefonu do hydraulika"
+    - "Co dziś jest zaplanowane na osiedlu?"
+
+recent_activity_summary:
+  description: >
+    Multi-aggregate raport (LPR + vision) z ostatnich N godzin —
+    "co ciekawego", "podsumowanie", "raport", "co się działo".
+  priority: 15
+  matcher: activity_summary      # strong triggers vs słabe + sygnał czasowy
+  params:
+    range_hours: { type: int, default: 4, extractor: range_hours }
+  examples:
+    - "Co ciekawego działo się w ostatniej godzinie?"
+    - "Podsumuj ostatnie 4 godziny"
+    - "Raport z ostatnich 12 godzin"
+
+count_objects_today:
+  description: >
+    Licznik obiektów YOLO (person/dog/cat/bicycle/truck/…) z kamer
+    w oknie czasowym — "ile osób dziś", "były psy w godzinie".
+  priority: 20
+  matcher: count_objects         # vision class + question-word + car/plate guards
+  params:
+    object_class: { type: enum, source: VALID_VISION_OBJECTS, required: true }
+    range_hours:  { type: int, default: 24, extractor: range_hours }
+  examples:
+    - "Ile osób dziś przeszło przez bramę?"
+    - "Były jakieś psy w ostatniej godzinie?"
+    - "Ile aut widziała kamera dzisiaj?"
+
+# 2026-08-15 — Event Intelligence §5 AGGREGATION: "o której zwykle przyjeżdża
+# śmieciarka?" — rozkład godzin obserwacji śmieciarek z ostatnich 180 dni
+# (dedup po dzień+godzina, żeby wiele klatek jednej wizyty nie zawyżało).
+waste_typical_time:
+  description: >
+    O której godzinie ZWYKLE/ZAZWYCZAJ przyjeżdża śmieciarka — statystyka
+    godzin z obserwacji kamer (vision waste_category) z ostatnich 6 miesięcy.
+  priority: 17
+  patterns_all:
+    - 'o\s+kt[oó]rej|kiedy\s+zwykle|kiedy\s+zazwyczaj|typow\w*'
+    - '[sś]mieciar\w*|odbi[oó]r\w*|[sś]mieci\b|odpad\w*|wyw[oó]z\w*'
+    - 'zwykle|zazwyczaj|najcz[eę][sś]ciej|typow\w*'
+  params: {}
+  examples:
+    - "O której zwykle przyjeżdża śmieciarka?"
+    - "O której zazwyczaj jest odbiór śmieci?"
+
+# FAZA 8.h.29 (2026-07-03) — HISTORIA klas obiektów YOLO ("czy widziałeś
+# kota?", "kiedy ostatnio był pies?"). Priority 18 — PRZED count_objects (20),
+# bo phrasing "widziałeś/kiedy ostatnio" ma dostać ostatnie wystąpienie
+# (last-seen + count w długim oknie), a nie goły licznik 24h. Matcher ma
+# guardy: "ile"→count, brand→brand, plate→plate-intents, car bez kamery→LPR.
+# 2026-08-19 — pojazd opisany KOLOREM + TYPEM („czy widziałeś dziś biały
+# bus?"). Panel Wizji dostał wyszukiwanie semantyczne po kolumnach VLM
+# (vehicle_kind/vehicle_color) — to samo wnioskowanie w asystencie.
+# Potocznie „bus" = też van dostawczy → kind rozwijany na [bus, dostawczy].
+# Priority 16 — PRZED last_seen_object (18), które łapałoby „bus" jako klasę
+# COCO i IGNOROWAŁO kolor. Wymaga OBU: tokenu typu I koloru (patterns_all);
+# celowo BEZ generycznych aut („czerwone auto" zostaje w intentach LPR —
+# regresja golden testów). Guard no_brand: „biały bus DHL" → brand.
+search_vehicle_desc:
+  description: >
+    Pojazd opisany kolorem i typem (biały bus, czerwona ciężarówka, czarny
+    van) — atrybuty VLM z kamer (vehicle_kind + vehicle_color).
+    Odpowiedź = wystąpienia z godziną, kamerą i marką (jeśli rozpoznana).
+  priority: 16
+  guard: no_brand
+  patterns_all:
+    - '\b(?:bus\w*|autobus\w*|van\w*|dostawcz\w*|ci[eę][żz]ar[oó]wk\w*|tir\w*|maszyn\w*|kopark\w*|traktor\w*)'
+    - 'bia[lł]\w*|czarn\w*|czerwon\w*|niebiesk\w*|zielon\w*|[żz][oó][lł]t\w*|szar\w*|srebrn\w*|br[aą]zow\w*|granatow\w*|be[żz]ow\w*|pomara[nń]cz\w*|fioletow\w*|z[lł]ot\w*|bordow\w*'
+  params:
+    kind:        { type: enum, source: VLM_KIND_MAP, required: true, extractor: vlm_kind }
+    color:       { type: enum, source: VLM_COLORS, required: true, extractor: vlm_color }
+    range_hours: { type: int, default: 24, extractor: range_hours_rare }
+  examples:
+    - "Czy widziałeś dziś biały bus?"
+    - "Czy była czerwona ciężarówka?"
+    - "Kiedy ostatnio był czarny van?"
+
+last_seen_object:
+  description: >
+    OSTATNIE wystąpienie klasy obiektu YOLO (kot/pies/osoba/rower/…) z kamer —
+    "czy widziałeś kota?", "kiedy ostatnio był pies?". Odpowiedź = data+godzina
+    ostatniej detekcji + liczba klatek w oknie (default 30 dni). Pseudo-klasa
+    "animal" (zwierzę) = kot lub pies. NIE dla "ile X?" (→ count_objects_today).
+  priority: 18
+  matcher: object_sighting       # widzia*/kiedy ostatnio + klasa COCO, guardy wyżej
+  guard: no_plate
+  params:
+    object_class: { type: enum, source: VALID_VISION_OBJECTS, required: true }
+    range_hours:  { type: int, default: 168 }
+  examples:
+    - "Czy widziałeś kota?"
+    - "Kiedy ostatnio był pies?"
+    - "Czy widziałeś jakieś zwierzę?"
+
+# FAZA 8.h.30 (2026-07-03) — agregat KURIER. Zgłoszenie: „A jakiegoś innego
+# kuriera ?" po DHL spadało do courier_today (LPR today), którego SQL liczył
+# vehicle_kind='SERVICE' jako kuriera → „Opiekunka Pani Halinka" jako kurier.
+# Priority 23 — PRZED brand (28) i courier_today (70). Guard no_brand:
+# „kurier z DHL" dalej idzie w search_by_brand_today. Proste „Czy był dziś
+# kurier?" (bez jaki/inny/kiedy/ostatnio) celowo ZOSTAJE w courier_today
+# (regresja golden testów) — tam SQL też naprawiony (bez samego SERVICE).
+search_courier_recent:
+  description: >
+    Generyczne pytania o kuriera BEZ konkretnej marki — "czy był dziś jakiś
+    kurier?", "jaki kurier ostatnio przyjeżdżał?", "a jakiegoś innego
+    kuriera?". Agregat: vision brand_detected z marek kurierskich (DHL/DPD/
+    INPOST/FEDEX/GLS/UPS/POCZTA/POCZTEX/ALLEGRO/DACHSER) + LPR z tagiem
+    kurier/dostawa lub kind DELIVERY (nigdy samo SERVICE). Odpowiedź = lista
+    wystąpień per marka z datami, albo "żaden kurier w ostatnich N dniach".
+  priority: 23
+  guard: no_brand                # konkretna marka → search_by_brand_today (28)
+  patterns_all:
+    - 'kurier\w*|courier'
+    # jak\w* = jaki/jakiego/jakaś…; jac\w* = jacy/jacyś (inna odmiana rdzenia)
+    - 'kiedy|\bostatnio\b|widzia[lł]\w*|\binn\w*|jak\w*|jac\w*|przyje[żz]d[żz]a\w*'
+  not_patterns:
+    - '\b(?:ile|how many)\b'     # liczniki → courier_today / tag_count
+  params:
+    range_hours: { type: int, default: 168, extractor: range_hours_rare }
+  examples:
+    - "Czy był dziś jakiś kurier?"
+    - "Jaki kurier ostatnio przyjeżdżał?"
+    - "A jakiegoś innego kuriera?"
+
+# FAZA 8.h.32 (2026-07-05) — marki FABRYCZNE samochodów (Toyota/Mercedes/
+# BMW…). Zgłoszenie: „Ile Mercedesów widziałeś w ostatnich 12 godzinach?" /
+# „A czy widziałeś jakąś Toyotę?" wpadało w search_vehicles_today (okno TYLKO
+# dziś) → „nie zarejestrowano niczego" mimo wjazdów Toyoty z whitelisty.
+# Wykonanie: tagi lpr_plates (zawierają markę, 8.h.25) → tablice → lpr_reads
+# w oknie. NIGDY lpr_reads.vehicle_brand (Hikvision IDs — pułapka #7).
+# Priority 24 — przed waste(25)/brand(28)/search_vehicles(95). Guard no_plate:
+# pytanie z konkretną tablicą → plate-intents. not_patterns kurier/dostawa:
+# frazing kurierski zostaje w intentach kurierskich/brand (decyzja speca).
+# PRIVACY jak 8.h.23: template nie selectuje owner/tags; lokal (unit_label) OK.
+search_by_vehicle_make:
+  description: >
+    Pojazdy KONKRETNEJ MARKI FABRYCZNEJ (Toyota/Mercedes/BMW/Audi/…) —
+    tablice z białej listy (tagi zawierają markę) + ich wjazdy/wyjazdy
+    z odczytów LPR w oknie czasowym. "Ile Mercedesów widziałeś w 12
+    godzinach?", "Czy widziałeś jakąś Toyotę?". Gdy marki nie ma na białej
+    liście — odpowiedź mówi to wprost. NIE dla firm kurierskich/sklepów
+    (DHL/FRISCO → search_by_brand_today).
+  priority: 24
+  guard: no_plate
+  not_patterns:
+    - 'kurier\w*|courier|dostaw\w*|delivery'
+  params:
+    make:        { type: enum, source: VALID_CAR_MAKES, required: true, extractor: car_make }
+    # explicit okno ("w ostatnich 12 godzinach") wygrywa; "czy widziałeś" /
+    # "szukam" bez okna → 720h (konwencja rare-event 8.h.29).
+    range_hours: { type: int, default: 24, extractor: range_hours_rare }
+  examples:
+    - "Ile Mercedesów widziałeś w ostatnich 12 godzinach?"
+    - "A czy widziałeś jakąś Toyotę?"
+    - "Czy wjechało dziś jakieś BMW?"
+
+# 2026-08-15 — Event Intelligence §16: pojazdy uprzywilejowane (karetka/
+# policja/straż) rozpoznawane po napisach OCR (AMBULANS/POGOTOWIE/POLICJA/
+# STRAŻ na kadrze). Deterministyczne aliasy w SQL template; odpowiedź hedged
+# („pojazd z oznaczeniem…"), bo klasyfikacja pochodzi WYŁĄCZNIE z OCR.
+search_emergency_recent:
+  description: >
+    Pojazdy uprzywilejowane widziane przez kamery — karetka/pogotowie,
+    policja/radiowóz, straż pożarna. Szuka aliasów w napisach OCR
+    (text_raw po normalizacji). "Czy była dzisiaj karetka?",
+    "Czy widziałeś radiowóz?", "Kiedy ostatnio była straż pożarna?".
+  priority: 19
+  guard: no_plate
+  patterns:
+    - 'karetk\w*|ambulans\w*|pogotowi\w*(?!\s+gazow)'
+    - 'policj\w*|radiow[oó]z\w*'
+    - 'stra[żz]\w*\s*po[żz]arn\w*|stra[żz]ack\w*'
+  params:
+    kind:        { type: enum, values: [ambulans, policja, straz, any], extractor: emergency_kind }
+    range_hours: { type: int, default: 24, extractor: range_hours_rare }
+  examples:
+    - "Czy była dzisiaj karetka?"
+    - "Czy widziałeś radiowóz?"
+    - "Kiedy ostatnio była straż pożarna?"
+
+# 2026-08-15 — Event Intelligence §8: SCHEDULE_VS_OBSERVED. "Czy śmieci już
+# zabrali?" wymaga POŁĄCZENIA harmonogramu (KB waste_calendar) z obserwacjami
+# kamer z dzisiaj — sama historia (search_by_waste_today, 25) ani sam
+# harmonogram (KB, 10) nie odpowiadają na "czy dzisiejszy odbiór JUŻ był".
+# Wymagany sygnał dokonania: "już …" / "… już" / "dzisiejszy odbiór" — bez
+# niego pytania zostają w waste-historii (golden testy 8.h).
+waste_pickup_status:
+  description: >
+    Czy dzisiejszy odbiór śmieci JUŻ się odbył — porównuje harmonogram
+    z bazy wiedzy z obserwacjami kamer (śmieciarka/operator w kadrze dziś).
+    "Czy śmieci już zabrali?", "Czy śmieciarka już była?", "Czy dzisiejszy
+    odbiór już się odbył?".
+  priority: 21
+  patterns_all:
+    - 'odpad\w*|[sś]miec\w*|[sś]mieciar\w*|odbi[oó]r\w*|wyw[oó]z\w*|zmieszan\w*|papier\w*|szk[lł]\w*|\bbio\b|zielon\w*|tworzyw\w*|metal\w*'
+    # „już (dziś/dzisiaj) był/zabrali/…" — do 2 słów między „już" a czasownikiem
+    - 'ju[żz]\s+(?:\w+\s+){0,2}(?:by[lł]\w*|zabra\w*|odebra\w*|przyjecha\w*|jest|si[eę]\s+odby\w*)|(?:by[lł]\w*|zabra\w*|odebra\w*|przyjecha\w*)\s+ju[żz]|dzisiejszy\s+odbi[oó]r'
+  params:
+    category: { type: enum, source: VALID_WASTE_CATEGORIES, extractor: waste_category }
+  examples:
+    - "Czy śmieci już zabrali?"
+    - "Czy śmieciarka już dziś była?"
+    - "Czy dzisiejszy odbiór już się odbył?"
+
+search_by_waste_today:
+  description: >
+    HISTORIA odbiorów odpadów z kamer (vision_detections.waste_category):
+    "czy odebrali dziś szkło", "kiedy ostatnio była śmieciarka".
+    UWAGA: pytania o PRZYSZŁOŚĆ (planowany/następny odbiór) → search_knowledge_base.
+  priority: 25
+  matcher: waste                 # WASTE_KEYWORDS lookup (ZIELONE=BIO przed kolorami!)
+  params:
+    category:    { type: enum, source: VALID_WASTE_CATEGORIES }
+    # 8.h.29: matcher używa _rare_event_range_hours (floor 720h przy
+    # "ostatnio/widziałeś" bez explicit okna — odbiory są co 2-4 tygodnie).
+    range_hours: { type: int, default: 24, extractor: range_hours_rare }
+  examples:
+    - "Czy odebrali dziś szkło?"
+    - "Kiedy ostatnio była śmieciarka?"
+    - "Czy ostatnio widziałeś jakąś śmieciarkę?"
+    - "Czy zabrali dziś zmieszane?"
+
+# FAZA 8.h.29 (2026-07-03) — "Kiedy ostatnio była taksówka?". Pseudo-
+# kategoria TAXI po stronie vision: brand_detected IN (UBER, BOLT) OR
+# text_raw LIKE '%taxi%'/'%free now%'. Priority 26/27 — PRZED brandem (28),
+# bo "taksówka Bolt" ma dostać agregat taxi, nie pojedynczy brand; i PRZED
+# search_vehicles_today (95). UWAGA: goły "taxi" bez "kiedy/ostatnio/widzia*"
+# ("Czy było jakieś taxi?") celowo ZOSTAJE w search_vehicles_today (LPR
+# whitelist owner "Taxi Uber") — regresja golden testu.
+search_taxi_recent:
+  description: >
+    Kiedy ostatnio była taksówka (taksówka/taryfa) — agregat detekcji kamer:
+    marki UBER/BOLT + napis "taxi" w OCR (text_raw). Odpowiedź = ostatnie
+    wystąpienie + liczba detekcji w oknie (default 30 dni przy "ostatnio").
+  priority: 26
+  guard: no_plate
+  patterns:
+    - 'taks[oó]wk\w*'
+    - 'taryf\w*'
+  params:
+    range_hours: { type: int, default: 24, extractor: range_hours_rare }
+  examples:
+    - "Kiedy ostatnio była taksówka?"
+    - "Czy była jakaś taksówka?"
+
+search_taxi_recent_b:
+  intent: search_taxi_recent
+  description: "Wariant: słowo 'taxi' + phrasing o ostatnie wystąpienie."
+  priority: 27
+  guard: no_plate
+  patterns_all:
+    - '\btaxi\b'
+    - 'kiedy|\bostatnio\b|widzia[lł]\w*'
+  params:
+    range_hours: { type: int, default: 24, extractor: range_hours_rare }
+  examples:
+    - "Kiedy ostatnio było taxi?"
+
+# 2026-08-15 — wolne wyszukiwanie po napisach z OCR wizji ("czy widziałeś
+# dziś coś z napisem SOLID?"). Dotąd asystent znał TYLKO marki z
+# BRAND_KEYWORD_MAP — dowolny inny napis (Solid Security, Ochrona, nazwa
+# lokalnej firmy) wpadał w unknown, mimo że vision_detections.text_raw
+# trzyma każdy odczytany napis. Guard no_brand: znana marka ("napisem DHL")
+# dalej idzie w search_by_brand_today (kanoniczna nazwa + pewność OCR).
+search_by_text_today:
+  description: >
+    Detekcje DOWOLNEGO napisu odczytanego OCR-em przez kamery —
+    vision_detections.text_raw (LIKE, bez rozróżniania wielkości liter).
+    "Czy widziałeś dziś coś z napisem SOLID?" → lista wystąpień z godziną,
+    kamerą i tym, co było w kadrze. Dla marek znanych (DHL/FRISCO/…)
+    guard przepuszcza pytanie niżej do search_by_brand_today.
+  priority: 22                   # słowo „napis" jest jednoznaczne — przed
+                                 # courier(23)/taxi(27)/brand(28); guard
+                                 # no_brand oddaje znane marki do brand(28)
+  guard: no_brand
+  patterns:
+    - 'napis\w*|\blogo\b|logiem'
+  params:
+    query:       { type: string, required: true, extractor: ocr_text }
+    range_hours: { type: int, default: 24, extractor: range_hours_brand }
+  examples:
+    - "Czy widziałeś dzisiaj coś z napisem SOLID?"
+    - "Czy był ktoś z napisem Ochrona?"
+    - "Widziałeś auto z logo Tarczyński?"
+
+search_by_brand_today:
+  description: >
+    Detekcje konkretnej marki (kurier/usługa/sklep) przez kamery —
+    vision_detections.brand_detected z YOLO+EasyOCR. Brand keyword routuje
+    tu BEZWARUNKOWO (8.h.12): lpr_reads.vehicle_brand to numeryczne
+    Hikvision IDs, nie nazwy firm.
+  priority: 28                   # przed detections/courier (EVAL 2026-06-11),
+                                 # za waste ("papier" > brand semantycznie)
+  guard: no_plate                # pytanie z tablicą → plate-intents niżej
+  params:
+    brand:       { type: enum, source: BRAND_KEYWORD_MAP, required: true, extractor: brand }
+    range_hours: { type: int, default: 24, extractor: range_hours_brand }
+  examples:
+    - "Kiedy ostatnio był Uber?"
+    - "Czy widziałeś dziś DHL?"
+    - "Czy była dostawa z Frisco?"
+    - "Czy był Media Expert?"
+
+list_recent_detections:
+  description: >
+    Ostatnie detekcje YOLO z kamer — "co widziała kamera ostatnio",
+    "pokaż detekcje".
+  priority: 30
+  patterns_all:
+    - 'widzia[lł]\w*|widzieli|zobaczy[lł]\w*|wykry[lł]\w*'
+    - 'kamer\w*|monitoring'
+  params:
+    range_hours: { type: int, default: 1, extractor: range_hours }
+    limit:       { type: int, default: 10, max: 50, extractor: limit }
+  examples:
+    - "Co widziała kamera ostatnio?"
+    - "Co wykryła kamera w ostatniej godzinie?"
+
+list_recent_detections_b:
+  intent: list_recent_detections
+  description: "Wariant: explicit słowo 'detekcje'."
+  priority: 31
+  patterns:
+    - 'detekcj\w*'
+  params:
+    range_hours: { type: int, default: 1, extractor: range_hours }
+    limit:       { type: int, default: 10, max: 50, extractor: limit }
+  examples:
+    - "Pokaż 5 ostatnich detekcji"
+
+list_devices:
+  description: "Lista podłączonych urządzeń Edge (kamery, domofony, bramy)."
+  priority: 35
+  patterns_all:
+    # urz[aą]dze[nń]\w* — łapie też genitive "urządzeń" (EVAL 2026-06-11)
+    - 'urz[aą]dze[nń]\w*|device\w*|kamer\w*|domofon\w*|intercom'
+    - 'jakie|które|ktore|pokaż|list|connected|pod[lł][aą]czon\w*'
+  params: {}
+  examples:
+    - "Jakie urządzenia są podłączone?"
+    - "Pokaż listę urządzeń"
+
+count_errors_recent:
+  description: "Licznik błędów/warningów z event_log w oknie czasowym."
+  priority: 40
+  patterns_all:
+    - 'b[lł][aą]d\w*|b[lł][eę]d\w*|error\w*|warning\w*|zepsu\w*|nie\s*dzia[lł]a'
+    - '\bile\b'
+  params:
+    range_hours: { type: int, default: 1, extractor: range_hours }
+  examples:
+    - "Ile błędów dzisiaj?"
+
+list_errors_recent:
+  description: "Lista błędów/warningów z event_log w oknie czasowym."
+  priority: 41
+  patterns:
+    - 'b[lł][aą]d\w*|b[lł][eę]d\w*|error\w*|warning\w*|zepsu\w*|nie\s*dzia[lł]a'
+  params:
+    range_hours: { type: int, default: 1, extractor: range_hours }
+  examples:
+    - "Jakieś błędy w ostatniej godzinie?"
+    - "Czy coś się zepsuło?"
+
+list_unmatched_plates:
+  description: "Nieznane tablice (matched=0, spoza whitelisty) z ostatnich N godzin."
+  priority: 45
+  patterns:
+    - 'nieznan\w*|nieznane|unmatched|nie\s*ma\s*na\s*li[sś]cie|spoza\s*li[sś]ty'
+  params:
+    limit:       { type: int, default: 5, max: 20, extractor: limit }
+    range_hours: { type: int, default: 24, extractor: range_hours }
+  examples:
+    - "Pokaż 5 ostatnich nieznanych tablic"
+    - "Jakie auta spoza listy były dziś?"
+
+count_visits_by_plate:
+  description: "Ile razy tablica X była na osiedlu (cała historia LPR)."
+  priority: 50                   # przed history/last_seen — "ile razy" wygrywa
+  patterns:
+    - 'ile razy|how many times'
+  params:
+    plate: { type: string, required: true, extractor: plate }
+  examples:
+    - "Ile razy był samochód WD5005P?"
+
+# FAZA 8.h.23 (2026-06-12) — "do kogo należy pojazd X?".
+# PRIVACY (decyzja Konrada): NIE ujawniamy właściciela — odpowiedź podaje
+# TYLKO przypisany lokal (unit_label z whitelisty lpr_plates), np.
+# "Nie mogę podać danych właściciela, ale pojazd przypisany jest do lokalu
+# Niewinna 4/2". SQL template celowo nie selectuje kolumny `owner`.
+# Priority 50 — PRZED vehicle_history (51) i last_seen (52), bo pytanie
+# z tablicą inaczej wpadłoby w tamte catch-alle.
+vehicle_owner_by_plate:
+  description: "Do kogo należy / czyj jest pojazd o tablicy X (privacy: tylko lokal, nigdy właściciel)."
+  priority: 49
+  patterns:
+    - 'do\s+kogo\s+nale[żz]'
+    - '\bczyj[aeę]?\b'
+    - 'w[łl]a[śs]ciciel\w*'
+    - 'przypisan\w*'
+  params:
+    plate: { type: string, required: true, extractor: plate }
+  examples:
+    - "Do kogo należy WD5005P?"
+    - "Czyj jest pojazd WE12345?"
+    - "Kto jest właścicielem WA1234X?"
+
+# 2026-08-15 — Event Intelligence §9 (korelacja wjazd/wyjazd): "jak długo
+# była na osiedlu WD5005P?", "ile czasu stał?", "kiedy wyjechał?". Builder
+# paruje ostatni wjazd (forward) z pierwszym późniejszym wyjazdem (reverse)
+# i liczy czas pobytu; brak wyjazdu = uczciwe "nadal nie zarejestrowałem".
+visit_duration_by_plate:
+  description: >
+    Jak długo pojazd o tablicy X był na osiedlu — para wjazd→wyjazd
+    z odczytów LPR + czas pobytu. Także "kiedy wyjechał?".
+  priority: 48
+  patterns:
+    - 'jak\s+d[lł]ugo'
+    - 'ile\s+(?:czasu|by[lł]\w*|sta[lł]\w*)'
+    - 'kiedy\b.{0,16}wyjecha'      # "kiedy WD5005P wyjechał?" — tablica w środku
+  not_patterns:
+    - 'ile\s+razy'                 # → count_visits_by_plate (50)
+  params:
+    plate: { type: string, required: true, extractor: plate }
+  examples:
+    - "Jak długo była na osiedlu WD5005P?"
+    - "Ile czasu był WE12345 na osiedlu?"
+    - "Kiedy WD5005P wyjechał?"
+
+vehicle_history_by_plate:
+  description: "Pełna historia wjazdów/wyjazdów tablicy X."
+  priority: 51
+  patterns:
+    - 'historia|history|wszystkie|lista|pokaż'
+  params:
+    plate: { type: string, required: true, extractor: plate }
+  examples:
+    - "Pokaż historię tablicy WA1234X"
+
+last_seen_plate:
+  description: "Kiedy tablica X była ostatnio widziana (catch-all dla pytań z tablicą)."
+  priority: 52
+  params:
+    plate: { type: string, required: true, extractor: plate }
+  examples:
+    - "Kiedy ostatnio była tablica WE12345?"
+    - "WE12345"
+
+count_gate_openings_today:
+  description: "Ile razy dziś otworzyła się brama (gate_opened=1)."
+  priority: 60
+  patterns_all:
+    - '\b(?:ile|how many)\b'
+    - 'bram\w*|otw[aoó]r[zź]\w*|otwarcie|otwarci|gate\w*'
+  params:
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Ile dziś otworzyło się bram?"
+
+count_vehicles_by_tag_today:
+  description: >
+    Licznik aut z konkretnym tagiem (mieszkaniec/gość/serwis) dzisiaj.
+    Tag dostawa/kurier remapowany na courier_today (Edge ma vehicle_kind).
+  priority: 65
+  matcher: tag_count             # _match_tag + remap dostawa/kurier→courier
+  params:
+    tag:       { type: enum, source: VALID_TAGS, required: true }
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Ile aut z tagiem mieszkaniec wjechało dziś?"
+
+courier_today:
+  description: >
+    Czy był dziś kurier / jakakolwiek dostawa (vehicle_kind DELIVERY/SERVICE
+    lub tag kurier/dostawa). Pytania o KONKRETNĄ markę → search_by_brand_today.
+  priority: 70
+  matcher: courier_question      # dostaw/kurier + question-word, guardy: tag,
+                                 # search-keyword ("dostawa sushi"→search_vehicles)
+  params:
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Czy był dziś kurier?"
+    - "Była jakaś dostawa?"
+
+list_vehicles_by_color_today:
+  description: "Lista aut danego koloru z dzisiaj (jakie/które/pokaż — lista, nie count)."
+  priority: 75
+  patterns:
+    - 'jakie|które|ktore|pokaż|wymień|list'
+  params:
+    color:     { type: enum, source: VALID_COLORS, required: true, extractor: color }
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Jakie czerwone samochody były dziś?"
+    - "Pokaż białe samochody"
+
+count_vehicles_by_color_today:
+  description: "Licznik aut danego koloru dzisiaj."
+  priority: 80
+  patterns:
+    - '\b(?:ile|how many)\b'
+  params:
+    color:     { type: enum, source: VALID_COLORS, required: true, extractor: color }
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Ile białych aut dziś wjechało?"
+
+courier_today_b:
+  intent: courier_today
+  description: "Wariant: 'kurier' + dziś bez question-word."
+  priority: 85
+  patterns_all:
+    - 'kurier\w*|courier'
+    - '\b(dzi[sś]|today|dzisiaj)\b'
+  not_patterns:
+    - 'tag\w*'
+  params:
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Kurier dzisiaj"
+
+count_vehicles_today:
+  description: "Licznik wszystkich aut dzisiaj/w oknie czasowym ('ile aut dziś/wczoraj/w tym tygodniu')."
+  priority: 90
+  patterns_all:
+    - '\b(?:ile|how many)\b'
+    - 'aut\w*|samochod\w*|pojazd\w*|vehicles'
+    # §4: dowolne wyrażenie czasowe aktywuje licznik — nie tylko "dziś";
+    # 2026-08-24: także zakresy godzin („między 1 a 6", „po godzinie 22")
+    # i pory dnia („rano", „wieczorem", „w nocy").
+    - '\b(dzi[sś]|today|dzisiaj|wczoraj|przedwczoraj)\b|w\s+(?:tym|zesz[lł]\w*|ubieg[lł]\w*|poprzedni\w*)\s+tygodniu|od\s+poniedzia|ostatni\w*\s+\d+\s+dni|mi[eę]dzy|pomi[eę]dzy|godzin\w*|\brano\b|wieczor\w*|po\s+po[lł]udniu|w\s+nocy'
+  params:
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Ile aut dziś wjechało?"
+
+# 2026-08-24 — zgłoszenie BA VN: „jakie samochody pojawiły się dzisiaj między
+# 1 a 6 rano?" nie miało intentu-listy → regex miss → Bielik halucynował
+# color=white. Lista odczytów LPR w oknie czasowym (okno dokłada
+# compute_time_window — „między 1 a 6", „wczoraj", „rano" itd.).
+list_vehicles_recent:
+  description: >
+    Lista aut z rejestru wjazdów w oknie czasowym — "jakie samochody pojawiły
+    się dziś?", "pokaż auta z wczoraj". Odpowiedź = wiersze z godziną, tablicą
+    i kierunkiem. NIE dla "ile" (→ count_*), NIE dla koloru
+    (→ list_vehicles_by_color_today), NIE dla marek/brandów.
+  priority: 93
+  guard: no_brand
+  patterns_all:
+    - '\b(?:jaki\w*|kt[oó]r[ey]\w*|poka[żz]\w*|wypisz|wymie[nń]|list[aeę])\b'
+    - '\b(?:aut\w*|samoch\w*|pojazd\w*)'
+    - '\b(?:pojawi\w*|wjecha\w*|przyjecha\w*|wyjecha\w*|by[lł]\w*|przejecha\w*|zarejestrowan\w*|poka[żz]\w*|widzia\w*)'
+  not_patterns:
+    - '\bile\b'
+    - 'bia[lł]\w*|czarn\w*|czerwon\w*|niebiesk\w*|zielon\w*|[żz][oó][lł]t\w*|szar\w*|srebrn\w*|br[aą]zow\w*|granatow\w*|be[żz]ow\w*|pomara[nń]cz\w*|fioletow\w*|z[lł]ot\w*|bordow\w*'
+    - 'tag\w*|taxi|kurier\w*|dostaw\w*'
+  params:
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Jakie samochody pojawiły się dzisiaj między 1 a 6 rano?"
+    - "Pokaż auta z wczoraj"
+    - "Które pojazdy wjechały dziś rano?"
+
+search_vehicles_today:
+  description: >
+    Free-form keyword po LPR whitelist (owner/tags) — taxi, sushi, marki
+    fabryczne aut (Toyota/BMW). NIE dla brandów kurierskich (→ search_by_brand_today).
+  priority: 95
+  params:
+    keyword:   { type: string, required: true, extractor: search_keyword }
+    direction: { type: enum, values: [in, out], extractor: direction }
+  examples:
+    - "Czy było jakieś taxi?"
+    - "Czy była dostawa sushi?"
+
+unknown:
+  description: "Pytanie poza zakresem danych GateLynk (pogoda, small-talk, itp.)."
+  priority: 999
+  matcher: none                  # nigdy nie matchuje w regex loop — fallthrough
+  tool: false
+  params: {}
+  examples:
+    - "Jaka jest pogoda?"

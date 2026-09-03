@@ -1,0 +1,996 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GateLynk AI Assistant — katalog pytań referencyjnych (golden set).
+#
+# Każdy wpis:
+#   q:         pytanie użytkownika (PL, dokładnie tak jak przychodzi do /ask)
+#   intent:    oczekiwany intent (musi być w VALID_INTENTS)
+#   params:    OPCJONALNE — subset oczekiwanych parametrów. Porównywane są
+#              TYLKO klucze wymienione tutaj (katalog nie musi wymieniać
+#              wszystkich defaultów które classifier dokłada).
+#   absent:    OPCJONALNE — lista kluczy które NIE mogą wystąpić w parametrach
+#              (np. generic śmieciarka nie może dostać category).
+#   needs_llm: OPCJONALNE — true gdy pytanie NIE matchuje regexów i wymaga
+#              LLM fallbacku. Domyślnie pomijane; testowane tylko z flagą
+#              --llm w eval_classifier.py (wolne, wymaga Ollama w sieci).
+#   history:   OPCJONALNE — lista tur [{role: user|assistant, content: ...}].
+#              Gdy obecna, eval NAJPIERW przepuszcza q przez deterministyczny
+#              rewrite (conversation.deterministic_rewrite — carry-over
+#              marki/koloru/tablicy z historii, BEZ LLM), potem klasyfikuje.
+#              To dokładnie produkcyjna ścieżka /ask dla follow-upów.
+#
+# Uruchomienie: cd apps/ai-prototype && python3 eval_classifier.py
+#
+# Historia zgłoszeń pokryta wprost (CLAUDE.md 8.h.12–8.h.17):
+#   • "Kiedy ostatnio był Uber?"               → search_by_brand_today (8.h.12)
+#   • "Kiedy ostatnio było FRISCO?"            → search_by_brand_today (8.h.13)
+#   • "Czy był Media Expert?"                  → search_by_brand_today (8.h.13)
+#   • "Kiedy ostatnio była śmieciarka?"        → search_by_waste_today (HISTORIA)
+#   • "Kiedy jest planowany odbiór śmieci?"    → search_knowledge_base (8.h.14)
+#   • "Kiedy następny odbiór śmieci?"          → search_knowledge_base (8.h.14)
+#   • "Co dziś jest zaplanowane na osiedlu?"   → search_knowledge_base (8.h.17)
+#   • odmiany per-frakcja (szkło/papier/bio/zmieszane × ostatnio/planowany)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── count_vehicles_today ─────────────────────────────────────────────────────
+- q: "Ile aut dziś wjechało?"
+  intent: count_vehicles_today
+  params: { direction: in }
+- q: "Ile samochodów było dzisiaj?"
+  intent: count_vehicles_today
+- q: "Ile pojazdów wyjechało dziś?"
+  intent: count_vehicles_today
+  params: { direction: out }
+- q: "How many vehicles today?"
+  intent: count_vehicles_today
+- q: "Ile aut przyjechało dzisiaj?"
+  intent: count_vehicles_today
+
+# ── count_vehicles_by_color_today ────────────────────────────────────────────
+- q: "Ile białych aut dziś wjechało?"
+  intent: count_vehicles_by_color_today
+  params: { color: white, direction: in }
+- q: "Ile czarnych samochodów było dzisiaj?"
+  intent: count_vehicles_by_color_today
+  params: { color: black }
+- q: "Ile czerwonych aut wyjechało dziś?"
+  intent: count_vehicles_by_color_today
+  params: { color: red, direction: out }
+- q: "Ile niebieskich aut było dziś?"
+  intent: count_vehicles_by_color_today
+  params: { color: blue }
+- q: "Ile srebrnych samochodów wjechało?"
+  intent: count_vehicles_by_color_today
+  params: { color: silver, direction: in }
+- q: "Ile szarych aut dziś?"
+  intent: count_vehicles_by_color_today
+  params: { color: gray }
+- q: "Ile żółtych samochodów dzisiaj?"
+  intent: count_vehicles_by_color_today
+  params: { color: yellow }
+- q: "Ile pomarańczowych aut było dziś?"
+  intent: count_vehicles_by_color_today
+  params: { color: orange }
+
+# ── count_vehicles_by_tag_today (+ remap dostawa/kurier → courier_today) ────
+- q: "Ile aut z tagiem mieszkaniec wjechało dziś?"
+  intent: count_vehicles_by_tag_today
+  params: { tag: mieszkaniec, direction: in }
+- q: "Ile aut z tagiem serwis było dzisiaj?"
+  intent: count_vehicles_by_tag_today
+  params: { tag: serwis }
+- q: "Ile aut z tagiem gość dziś?"
+  intent: count_vehicles_by_tag_today
+  params: { tag: gosc }
+- q: "Ile aut z tagiem dostawa wjechało dzisiaj?"
+  intent: courier_today
+  params: { direction: in }
+- q: "Ile aut z tagiem kurier było dziś?"
+  intent: courier_today
+
+# ── courier_today ────────────────────────────────────────────────────────────
+- q: "Czy był dziś kurier?"
+  intent: courier_today
+- q: "Była jakaś dostawa?"
+  intent: courier_today
+- q: "Kurier?"
+  intent: courier_today
+- q: "Czy kurier wjechał dziś?"
+  intent: courier_today
+  params: { direction: in }
+- q: "Czy przyjechała jakaś dostawa dzisiaj?"
+  intent: courier_today
+- q: "Ile dostawczaków przyjechało od rana?"
+  intent: courier_today
+
+# ── vehicle_history_by_plate ─────────────────────────────────────────────────
+- q: "Pokaż historię tablicy WA1234X"
+  intent: vehicle_history_by_plate
+  params: { plate: WA1234X }
+- q: "Historia WE12345"
+  intent: vehicle_history_by_plate
+  params: { plate: WE12345 }
+- q: "Pokaż wszystkie wjazdy WD5405V"
+  intent: vehicle_history_by_plate
+  params: { plate: WD5405V }
+- q: "Lista przejazdów PO6MM84"
+  intent: vehicle_history_by_plate
+  params: { plate: PO6MM84 }
+
+# ── vehicle_owner_by_plate (FAZA 8.h.23 — privacy: tylko lokal) ─────────────
+- q: "Do kogo należy WD5005P?"
+  intent: vehicle_owner_by_plate
+  params: { plate: WD5005P }
+- q: "Do kogo należy pojazd WD5005P?"
+  intent: vehicle_owner_by_plate
+  params: { plate: WD5005P }
+- q: "Czyj jest pojazd WE12345?"
+  intent: vehicle_owner_by_plate
+  params: { plate: WE12345 }
+- q: "Kto jest właścicielem WA1234X?"
+  intent: vehicle_owner_by_plate
+  params: { plate: WA1234X }
+- q: "Do jakiego lokalu przypisany jest WL9397W?"
+  intent: vehicle_owner_by_plate
+  params: { plate: WL9397W }
+
+# ── last_seen_plate ──────────────────────────────────────────────────────────
+- q: "Kiedy ostatnio była tablica WE12345?"
+  intent: last_seen_plate
+  params: { plate: WE12345 }
+- q: "Kiedy był WD5005P?"
+  intent: last_seen_plate
+  params: { plate: WD5005P }
+- q: "WE12345"
+  intent: last_seen_plate
+  params: { plate: WE12345 }
+- q: "Ostatni raz HN1440G?"
+  intent: last_seen_plate
+  params: { plate: HN1440G }
+- q: "Kiedy ostatnio widziano BSE12FM?"
+  intent: last_seen_plate
+  params: { plate: BSE12FM }
+
+# ── count_gate_openings_today ────────────────────────────────────────────────
+- q: "Ile dziś otworzyło się bram?"
+  intent: count_gate_openings_today
+- q: "Ile otwarć bramy było dzisiaj?"
+  intent: count_gate_openings_today
+- q: "Ile otwarć bramy wjazdowej dziś?"
+  intent: count_gate_openings_today
+  params: { direction: in }
+- q: "Ile razy otworzyła się brama?"
+  intent: count_gate_openings_today
+
+# ── list_vehicles_by_color_today ─────────────────────────────────────────────
+- q: "Jakie czerwone samochody były dziś?"
+  intent: list_vehicles_by_color_today
+  params: { color: red }
+- q: "Pokaż białe samochody"
+  intent: list_vehicles_by_color_today
+  params: { color: white }
+- q: "Które czarne auta wjechały dzisiaj?"
+  intent: list_vehicles_by_color_today
+  params: { color: black, direction: in }
+- q: "Pokaż niebieskie auta z dzisiaj"
+  intent: list_vehicles_by_color_today
+  params: { color: blue }
+- q: "Wymień srebrne auta z dziś"
+  intent: list_vehicles_by_color_today
+  params: { color: silver }
+
+# ── count_visits_by_plate ────────────────────────────────────────────────────
+- q: "Ile razy był samochód WD5005P?"
+  intent: count_visits_by_plate
+  params: { plate: WD5005P }
+- q: "Ile razy przyjechał WZ3286J?"
+  intent: count_visits_by_plate
+  params: { plate: WZ3286J }
+- q: "How many times was WE12345 here?"
+  intent: count_visits_by_plate
+  params: { plate: WE12345 }
+
+# ── search_vehicles_today (LPR free-form keyword) ────────────────────────────
+- q: "Czy było jakieś taxi?"
+  intent: search_vehicles_today
+  params: { keyword: taxi }
+- q: "Czy było sushi?"
+  intent: search_vehicles_today
+  params: { keyword: sushi }
+- q: "Czy był ktoś z Kimi?"
+  intent: search_vehicles_today
+  params: { keyword: kimi }
+# Zgłoszenie-pochodne: "dostawa sushi" to pytanie o sushi, nie o kuriera
+# w ogóle (przykład z LLM_SYSTEM_PROMPT — regex musi być z nim spójny).
+- q: "Czy była dostawa sushi?"
+  intent: search_vehicles_today
+  params: { keyword: sushi }
+# 8.h.32: frazing kurierski + marka fabryczna → make-intent WYŁĄCZONY
+# (not_patterns kurier/dostawa) — zostaje LPR keyword search jak dawniej.
+- q: "Czy kurier przyjechał Mercedesem?"
+  intent: search_vehicles_today
+  params: { keyword: mercedes }
+
+# ── search_by_vehicle_make (FAZA 8.h.32 — marki fabryczne, transkrypt
+#    właściciela 2026-07-05: Mercedes 12h / Toyota rare-event / follow-upy) ───
+- q: "Ile Mercedesów widziałeś w ostatnich 12 godzinach ?"
+  intent: search_by_vehicle_make
+  params: { make: Mercedes, range_hours: 12 }
+- q: "A czy widziałeś jakąś Toyotę ?"
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 720 }
+# Postać po deterministycznym carry-over ("A wcześniej? W ciągu 24 godzin?"
+# po pytaniu o Toyotę — conversation._inject_make_from_history):
+- q: "Czy widziałeś w ciągu ostatnich 24 godzin samochód marki Toyota?"
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 24 }
+- q: "Ale konkretnie szukam samochodu marki Toyota"
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 720 }
+- q: "Czy wjechało dziś jakieś BMW?"
+  intent: search_by_vehicle_make
+  params: { make: BMW, range_hours: 24 }
+- q: "Kiedy ostatnio widziałeś jakiegoś Volkswagena?"
+  intent: search_by_vehicle_make
+  params: { make: Volkswagen, range_hours: 720 }
+# Stare goldeny przeniesione z search_vehicles_today — marka fabryczna
+# ma pierwszeństwo nad LPR keyword search (priority 24 < 95):
+- q: "Czy przyjechała Toyota?"
+  intent: search_by_vehicle_make
+  params: { make: Toyota }
+- q: "Czy był dziś Mercedes?"
+  intent: search_by_vehicle_make
+  params: { make: Mercedes, range_hours: 24 }
+- q: "Ile Audi wjechało w ostatnich 48 godzinach?"
+  intent: search_by_vehicle_make
+  params: { make: Audi, range_hours: 48 }
+# Pytanie z tablicą → plate-intents (guard no_plate), nie make:
+- q: "Kiedy ostatnio była Toyota WD5005P?"
+  intent: last_seen_plate
+  params: { plate: WD5005P }
+# FAZA 8.h.33 (2026-07-05) — prod log b9: „Jakie miały numery rejestracyjne ?"
+# (follow-up po liście pojazdów) → intent=unknown. Postaci po deterministycznym
+# carry-over (conversation._inject_plates_subject_from_history):
+- q: "Jakie numery rejestracyjne miały pojazdy marki Toyota w ciągu ostatnich 24 godzin?"
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 24 }
+- q: "Jakie numery rejestracyjne miały pojazdy marki Mercedes widziane ostatnio?"
+  intent: search_by_vehicle_make
+  params: { make: Mercedes, range_hours: 720 }
+- q: "Jakie numery rejestracyjne miały czerwone auta dziś?"
+  intent: list_vehicles_by_color_today
+  params: { color: red }
+
+# ── multi-turn follow-upy (history → deterministyczny carry-over) ────────────
+# Zgłoszenie prod b9 2026-07-05 19:34: po pytaniu o markę follow-up
+# „Jakie miały numery rejestracyjne ?" → intent=unknown. Fix 8.h.33:
+# conversation._inject_plates_subject_from_history. Wpisy z `history:`
+# testują CAŁY łańcuch deterministic_rewrite → classify_regex (bez LLM).
+- q: "Jakie miały numery rejestracyjne ?"
+  history:
+    - { role: user, content: "A czy widziałeś jakąś Toyotę ?" }
+    - { role: assistant, content: "Tak — Toyota (WW5975W): ostatni wyjazd 2026-07-04 19:17. Łącznie 25 przejazdów." }
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 720 }
+# Okno czasowe z pytania które wywołało odpowiedź (12h) musi przetrwać:
+- q: "Jakie miały numery rejestracyjne?"
+  history:
+    - { role: user, content: "Ile Mercedesów widziałeś w ostatnich 12 godzinach ?" }
+    - { role: assistant, content: "W ostatnich 12 godzinach nie zarejestrowałem pojazdów marki Mercedes." }
+  intent: search_by_vehicle_make
+  params: { make: Mercedes, range_hours: 12 }
+- q: "jakie tablice?"
+  history:
+    - { role: user, content: "A czy widziałeś jakąś Toyotę ?" }
+    - { role: assistant, content: "Tak, dziś zarejestrowałem 2 pojazdy marki Toyota." }
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 720 }
+- q: "podaj numery rejestracyjne"
+  history:
+    - { role: user, content: "Czy widziałeś Toyotę?" }
+    - { role: assistant, content: "Tak, widziałem." }
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 720 }
+# Kolor z historii → intent kolorowy (jego odpowiedź niesie tablice):
+- q: "Jakie miały tablice?"
+  history:
+    - { role: user, content: "Jakie czerwone auta były dziś?" }
+    - { role: assistant, content: "Dziś były 2 czerwone auta." }
+  intent: list_vehicles_by_color_today
+  params: { color: red }
+# Własny temat (nieznane tablice) — carry-over NIE może wstrzyknąć marki:
+- q: "Jakie nieznane tablice były dziś?"
+  history:
+    - { role: user, content: "Czy widziałeś Toyotę?" }
+    - { role: assistant, content: "Nie, dziś nie widziałem takiego pojazdu." }
+  intent: list_unmatched_plates
+# 8.h.23 — plate-injection: pytanie o pojazd bez tablicy + tablica w historii:
+- q: "Do kogo należy pojazd?"
+  history:
+    - { role: user, content: "Kiedy ostatnio widziano WD5005P?" }
+    - { role: assistant, content: "Ostatnio widziano WD5005P 11 czerwca o 18:11." }
+  intent: vehicle_owner_by_plate
+  params: { plate: WD5005P }
+# 8.h.32 — window-change follow-up zachowuje markę z historii:
+- q: "A wcześniej? W ciągu 24 godzin?"
+  history:
+    - { role: user, content: "A czy widziałeś jakąś Toyotę ?" }
+    - { role: assistant, content: "Dziś nie zarejestrowałem pojazdu marki Toyota." }
+  intent: search_by_vehicle_make
+  params: { make: Toyota, range_hours: 24 }
+
+# ── list_unmatched_plates ────────────────────────────────────────────────────
+- q: "Pokaż 5 ostatnich nieznanych tablic"
+  intent: list_unmatched_plates
+  params: { limit: 5 }
+- q: "Nieznane tablice z dzisiaj"
+  intent: list_unmatched_plates
+  params: { limit: 5, range_hours: 24 }
+- q: "Pokaż 10 ostatnich nieznanych"
+  intent: list_unmatched_plates
+  params: { limit: 10 }
+- q: "Jakie auta spoza listy były dziś?"
+  intent: list_unmatched_plates
+
+# ── list_errors_recent ───────────────────────────────────────────────────────
+- q: "Jakieś błędy w ostatniej godzinie?"
+  intent: list_errors_recent
+  params: { range_hours: 1 }
+- q: "Czy coś się zepsuło?"
+  intent: list_errors_recent
+  params: { range_hours: 1 }
+- q: "Pokaż errory z ostatnich 6 godzin"
+  intent: list_errors_recent
+  params: { range_hours: 6 }
+- q: "Coś nie działa dzisiaj?"
+  intent: list_errors_recent
+  params: { range_hours: 24 }
+
+# ── count_errors_recent ──────────────────────────────────────────────────────
+- q: "Ile błędów dzisiaj?"
+  intent: count_errors_recent
+  params: { range_hours: 24 }
+- q: "Ile błędów w ostatnich 12 godzinach?"
+  intent: count_errors_recent
+  params: { range_hours: 12 }
+- q: "Ile errorów było w ostatniej godzinie?"
+  intent: count_errors_recent
+  params: { range_hours: 1 }
+
+# ── list_devices ─────────────────────────────────────────────────────────────
+- q: "Jakie urządzenia są podłączone?"
+  intent: list_devices
+- q: "Pokaż listę urządzeń"
+  intent: list_devices
+- q: "Które kamery są podłączone?"
+  intent: list_devices
+
+# ── count_objects_today (YOLO vision) ────────────────────────────────────────
+- q: "Ile osób dziś przeszło przez bramę?"
+  intent: count_objects_today
+  params: { object_class: person, range_hours: 24 }
+- q: "Były jakieś psy w ostatniej godzinie?"
+  intent: count_objects_today
+  params: { object_class: dog, range_hours: 1 }
+- q: "Ile kotów widziała kamera dzisiaj?"
+  intent: count_objects_today
+  params: { object_class: cat, range_hours: 24 }
+- q: "Ile rowerów było dziś?"
+  intent: count_objects_today
+  params: { object_class: bicycle, range_hours: 24 }
+- q: "Czy był jakiś motocykl dzisiaj?"
+  intent: count_objects_today
+  params: { object_class: motorcycle, range_hours: 24 }
+- q: "Ile ciężarówek w ostatnich 4 godzinach?"
+  intent: count_objects_today
+  params: { object_class: truck, range_hours: 4 }
+- q: "Ile aut widziała kamera dzisiaj?"
+  intent: count_objects_today
+  params: { object_class: car, range_hours: 24 }
+- q: "Czy ktoś przechodził z plecakiem dziś?"
+  intent: count_objects_today
+  params: { object_class: backpack, range_hours: 24 }
+- q: "Był ktoś z paczką dzisiaj?"
+  intent: count_objects_today
+  params: { object_class: backpack, range_hours: 24 }
+
+# ── list_recent_detections ───────────────────────────────────────────────────
+- q: "Co widziała kamera ostatnio?"
+  intent: list_recent_detections
+  params: { range_hours: 1, limit: 10 }
+- q: "Pokaż 5 ostatnich detekcji"
+  intent: list_recent_detections
+  params: { limit: 5 }
+- q: "Co wykryła kamera w ostatniej godzinie?"
+  intent: list_recent_detections
+  params: { range_hours: 1 }
+- q: "Pokaż ostatnie detekcje"
+  intent: list_recent_detections
+  params: { limit: 10 }
+
+# ── search_by_text_today (wolne szukanie po napisach OCR, 2026-08-15) ───────
+# Zgłoszenie: „czy widziałeś dziś coś z napisem SOLID" szło w unknown —
+# asystent znał tylko marki z BRAND_KEYWORD_MAP. Znana marka w pytaniu
+# („napisem DHL") dalej MUSI iść w search_by_brand_today (guard no_brand).
+- q: "Czy widziałeś dzisiaj coś z napisem SOLID?"
+  intent: search_by_text_today
+  params: { query: "SOLID" }
+- q: "Czy był ktoś z napisem Ochrona?"
+  intent: search_by_text_today
+  params: { query: "Ochrona" }
+# Bez słowa „auto" — z nim pytanie przechwytuje starszy intent historii
+# klas obiektów (last_seen_object, 8.h.29); to zastany kompromis kaskady.
+- q: "Czy widziałeś w tym tygodniu coś z napisem Solid Security?"
+  intent: search_by_text_today
+  params: { query: "Solid Security" }
+- q: "Czy kamera widziała coś z logo Tarczyński?"
+  intent: search_by_text_today
+  params: { query: "Tarczyński" }
+# Znana marka w „napisem X" → guard no_brand oddaje pytanie do brand-intentu
+# (kanoniczna nazwa + pewność OCR), nie do wolnego szukania.
+- q: "Czy widziałeś dzisiaj coś z napisem FRISCO?"
+  intent: search_by_brand_today
+  params: { brand: FRISCO }
+
+# ── search_by_brand_today (vision brand OCR) ─────────────────────────────────
+# Historia zgłoszeń 8.h.12 / 8.h.13.
+# ZMIANA 8.h.30 (2026-07-03): „kiedy ostatnio był X" bez explicit okna →
+# 720h (30 dni), spójnie z waste/taxi/klasami YOLO (reguła rare-event).
+# Explicit okno (dziś/wczoraj/w tym tygodniu) dalej wygrywa.
+- q: "Kiedy ostatnio był Uber?"
+  intent: search_by_brand_today
+  params: { brand: UBER, range_hours: 720 }
+- q: "Kiedy ostatnio było FRISCO?"
+  intent: search_by_brand_today
+  params: { brand: FRISCO, range_hours: 720 }
+- q: "Czy był Media Expert?"
+  intent: search_by_brand_today
+  params: { brand: MEDIA_EXPERT }
+- q: "Czy widziałeś dziś DHL?"
+  intent: search_by_brand_today
+  params: { brand: DHL, range_hours: 24 }
+- q: "Pokaż wszystkie InPost dzisiaj"
+  intent: search_by_brand_today
+  params: { brand: INPOST, range_hours: 24 }
+# "kamera widziała X" nie może spadać do list_recent_detections gdy X to brand:
+- q: "Kiedy ostatnio kamera widziała DPD?"
+  intent: search_by_brand_today
+  params: { brand: DPD, range_hours: 720 }
+- q: "Czy był dziś Bolt?"
+  intent: search_by_brand_today
+  params: { brand: BOLT, range_hours: 24 }
+- q: "Kiedy ostatnio był Wolt?"
+  intent: search_by_brand_today
+  params: { brand: WOLT, range_hours: 720 }
+- q: "Czy była dziś Poczta?"
+  intent: search_by_brand_today
+  params: { brand: POCZTA, range_hours: 24 }
+- q: "Czy przyjechał dziś FedEx?"
+  intent: search_by_brand_today
+  params: { brand: FEDEX, range_hours: 24 }
+- q: "Czy był dziś GLS?"
+  intent: search_by_brand_today
+  params: { brand: GLS, range_hours: 24 }
+- q: "Czy widziałeś wczoraj UPS?"
+  intent: search_by_brand_today
+  params: { brand: UPS, range_hours: 48 }
+- q: "Kiedy ostatnio była IKEA?"
+  intent: search_by_brand_today
+  params: { brand: IKEA, range_hours: 720 }
+- q: "Czy była Castorama w tym tygodniu?"
+  intent: search_by_brand_today
+  params: { brand: CASTORAMA, range_hours: 168 }
+# Brand wygrywa nad courier-phrasing (8.h.12 — bezwarunkowy routing do vision):
+- q: "Kiedy ostatnio był kurier z Allegro?"
+  intent: search_by_brand_today
+  params: { brand: ALLEGRO, range_hours: 720 }
+- q: "Czy była dostawa DHL?"
+  intent: search_by_brand_today
+  params: { brand: DHL }
+- q: "Kiedy ostatnio był x-kom?"
+  intent: search_by_brand_today
+  params: { brand: X_KOM, range_hours: 720 }
+- q: "Czy był dziś Lidl?"
+  intent: search_by_brand_today
+  params: { brand: LIDL, range_hours: 24 }
+- q: "Kiedy ostatnio było Glovo?"
+  intent: search_by_brand_today
+  params: { brand: GLOVO, range_hours: 720 }
+- q: "Czy był dziś Maczfit?"
+  intent: search_by_brand_today
+  params: { brand: MACZFIT, range_hours: 24 }
+
+# ── search_by_waste_today (HISTORIA odbiorów — vision) ───────────────────────
+# ZMIANA 8.h.29 (2026-07-03): „kiedy ostatnio…" bez explicit okna dla odpadów
+# to teraz 720h (30 dni), nie 168h — frakcje odbierane są co 2-4 tygodnie
+# (papier ~miesięcznie wg harmonogramu), 7 dni dawało fałszywe „nie było".
+# Explicit okno (dziś/wczoraj/w tym tygodniu) dalej wygrywa.
+- q: "Czy odebrali dziś szkło?"
+  intent: search_by_waste_today
+  params: { category: GLASS, range_hours: 24 }
+- q: "Kiedy ostatnio odebrano papier?"
+  intent: search_by_waste_today
+  params: { category: PAPER, range_hours: 720 }
+- q: "Czy była dziś śmieciarka?"
+  intent: search_by_waste_today
+  params: { range_hours: 24 }
+  absent: [category]
+- q: "Kiedy ostatnio była śmieciarka?"
+  intent: search_by_waste_today
+  params: { range_hours: 720 }
+  absent: [category]
+- q: "Kiedy ostatnio był odbiór śmieci?"
+  intent: search_by_waste_today
+  params: { range_hours: 720 }
+  absent: [category]
+- q: "Czy zabrali dziś zmieszane?"
+  intent: search_by_waste_today
+  params: { category: MIXED, range_hours: 24 }
+- q: "Kiedy ostatnio odebrali bio?"
+  intent: search_by_waste_today
+  params: { category: BIO, range_hours: 720 }
+- q: "Czy odebrano dziś plastik?"
+  intent: search_by_waste_today
+  params: { category: PLASTIC, range_hours: 24 }
+- q: "Czy zabrali dziś metale i tworzywa?"
+  intent: search_by_waste_today
+  params: { category: PLASTIC }
+- q: "Czy była śmieciarka w tym tygodniu?"
+  intent: search_by_waste_today
+  params: { range_hours: 168 }
+  absent: [category]
+- q: "O której wczoraj przyjechała śmieciarka?"
+  intent: search_by_waste_today
+  params: { range_hours: 48 }
+  absent: [category]
+# Zgłoszenie 2026-07-03 (8.h.29) — narzędnik + literówka „śmieciarką" i
+# phrasing „czy widziałeś" padały na unknown. Długie okno (720h) bo user
+# pyta o OSTATNIE wystąpienie:
+- q: "czy ostatnio widziałeś jakąś śmieciarką ?"
+  intent: search_by_waste_today
+  params: { range_hours: 720 }
+  absent: [category]
+- q: "Czy widziałeś śmieciarkę?"
+  intent: search_by_waste_today
+  params: { range_hours: 720 }
+  absent: [category]
+- q: "Czy była śmieciarka?"
+  intent: search_by_waste_today
+  params: { range_hours: 720 }
+  absent: [category]
+- q: "Kiedy ostatnio widziałeś śmieciarkę?"
+  intent: search_by_waste_today
+  params: { range_hours: 720 }
+  absent: [category]
+- q: "Czy widziałeś dziś śmieciarkę?"
+  intent: search_by_waste_today
+  params: { range_hours: 24 }
+  absent: [category]
+
+# ── search_courier_recent (8.h.30 — agregat marek kurierskich) ───────────────
+# Zgłoszenie 2026-07-03 (konwersacja DHL→„A jakiegoś innego kuriera ?"):
+# follow-up po rewrite spadał do courier_today, którego SQL liczył
+# vehicle_kind='SERVICE' jako kuriera → „Opiekunka Pani Halinka" (SERVICE
+# z whitelisty) przedstawiona jako kurier. Pytania „jaki/inny/kiedy/
+# ostatnio + kurier" idą teraz w agregat: vision brand_detected z marek
+# kurierskich + LPR z tagiem kurier/dostawa lub kind DELIVERY (NIGDY samo
+# SERVICE). Proste „Czy był dziś kurier?" ZOSTAJE w courier_today (sekcja
+# wyżej) — tam SQL też naprawiony (bez SERVICE).
+- q: "Czy był dziś jakiś kurier?"
+  intent: search_courier_recent
+  params: { range_hours: 24 }
+- q: "A jakiegoś innego kuriera?"
+  intent: search_courier_recent
+  params: { range_hours: 720 }
+- q: "A jakiegoś innego kuriera ?"
+  intent: search_courier_recent
+  params: { range_hours: 720 }
+- q: "Jaki kurier ostatnio przyjeżdżał?"
+  intent: search_courier_recent
+  params: { range_hours: 720 }
+- q: "Kiedy ostatnio był kurier?"
+  intent: search_courier_recent
+  params: { range_hours: 720 }
+- q: "Czy przyjeżdżał kurier?"
+  intent: search_courier_recent
+  params: { range_hours: 168 }
+- q: "Czy widziałeś jakiegoś kuriera?"
+  intent: search_courier_recent
+  params: { range_hours: 720 }
+- q: "Jacy kurierzy byli w tym tygodniu?"
+  intent: search_courier_recent
+  params: { range_hours: 168 }
+# Brand keyword dalej wygrywa nad agregatem („kurier z DHL" → konkretna marka):
+- q: "Kiedy ostatnio był kurier z DHL?"
+  intent: search_by_brand_today
+  params: { brand: DHL, range_hours: 720 }
+
+# ── search_taxi_recent (8.h.29 — pseudo-kategoria TAXI, vision) ──────────────
+# Zgłoszenie 2026-07-03: „Kiedy ostatnio była taksówka" → unknown.
+# UWAGA: „Czy było jakieś taxi?" (goły token taxi, bez kiedy/ostatnio)
+# celowo ZOSTAJE w search_vehicles_today — patrz test wyżej w katalogu.
+- q: "Kiedy ostatnio była taksówka"
+  intent: search_taxi_recent
+  params: { range_hours: 720 }
+- q: "Kiedy ostatnio była taksówka?"
+  intent: search_taxi_recent
+  params: { range_hours: 720 }
+- q: "Czy była jakaś taksówka?"
+  intent: search_taxi_recent
+  params: { range_hours: 720 }
+- q: "Czy widziałeś dziś taksówkę?"
+  intent: search_taxi_recent
+  params: { range_hours: 24 }
+- q: "Kiedy ostatnio było taxi?"
+  intent: search_taxi_recent
+  params: { range_hours: 720 }
+- q: "Czy ostatnio była taryfa?"
+  intent: search_taxi_recent
+  params: { range_hours: 720 }
+
+# ── last_seen_object (8.h.29 — HISTORIA klas YOLO) ───────────────────────────
+# Zgłoszenie 2026-07-03: „czy widziałeś kota ?" — user chce OSTATNIE
+# wystąpienie (data+godzina), nie licznik 24h. „ile X" dalej → count_objects.
+- q: "czy widziałeś kota ?"
+  intent: last_seen_object
+  params: { object_class: cat, range_hours: 720 }
+- q: "Czy widziałeś psa?"
+  intent: last_seen_object
+  params: { object_class: dog, range_hours: 720 }
+- q: "Kiedy ostatnio był pies?"
+  intent: last_seen_object
+  params: { object_class: dog, range_hours: 720 }
+- q: "Czy widziałeś jakieś zwierzę?"
+  intent: last_seen_object
+  params: { object_class: animal, sql_class_a: cat, sql_class_b: dog, range_hours: 720 }
+- q: "Czy widziałeś dziś kota?"
+  intent: last_seen_object
+  params: { object_class: cat, range_hours: 24 }
+- q: "Kiedy ostatnio widziałeś pieszego?"
+  intent: last_seen_object
+  params: { object_class: person, range_hours: 720 }
+- q: "Czy widziałeś jakiegoś człowieka?"
+  intent: last_seen_object
+  params: { object_class: person, range_hours: 720 }
+- q: "Kiedy ostatnio widziałeś rower?"
+  intent: last_seen_object
+  params: { object_class: bicycle, range_hours: 720 }
+
+# ── search_knowledge_base (HARMONOGRAM/dokumenty — RAG) ──────────────────────
+- q: "Co mówi uchwała o psach?"
+  intent: search_knowledge_base
+  params: { type: UCHWALA }
+- q: "Co pisze regulamin o gościach?"
+  intent: search_knowledge_base
+  params: { type: REGULAMIN }
+- q: "Numer telefonu do hydraulika"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+- q: "Kto jest administratorem osiedla?"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+- q: "Jaki jest adres email zarządcy?"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+- q: "Co pisali sąsiedzi o hałasie?"
+  intent: search_knowledge_base
+  params: { type: MESSENGER_CHAT }
+- q: "Jak wygląda harmonogram odbioru odpadów?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+- q: "Kiedy odbierają plastik?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+# Historia 8.h.14 — planowany/następny odbiór = harmonogram (KB), nie vision:
+- q: "Kiedy jest planowany odbiór śmieci?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+- q: "Kiedy następny odbiór śmieci?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+- q: "Kiedy planowany odbiór zmieszanych?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+- q: "Kiedy następny odbiór szkła?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+- q: "Kiedy będzie odbiór papieru?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+- q: "Kiedy jest planowany odbiór bio?"
+  intent: search_knowledge_base
+  params: { type: INNE }
+# Historia 8.h.17 — day-summary question (Cloud zadaje dokładnie to pytanie):
+- q: "Co dziś jest zaplanowane na osiedlu?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Kiedy zabiorą śmieci?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Kiedy wywożą śmieci?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Paragraf 5 regulaminu"
+  intent: search_knowledge_base
+  params: { type: REGULAMIN }
+- q: "Co mówi § 12 uchwały?"
+  intent: search_knowledge_base
+  params: { type: UCHWALA }
+- q: "Jaki jest numer do administracji?"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+# Zgłoszenie 2026-07-03 (8.h.31) — rodzina „kontakt/serwis/naprawa/awaria".
+# „Czy masz namiar do kogoś kto może naprawić piec gazowy ?" padało na
+# unknown — substring-triggery nie znały „namiar/kto naprawi/awaria X".
+# Pytania stricte kontaktowe (namiar, specjaliści) dostają type=KONTAKT;
+# „kto naprawi / awaria X" celowo BEZ type (szeroki search — kontakt do
+# serwisu może być też w dokumencie typu INNE).
+- q: "Czy masz namiar do kogoś kto może naprawić piec gazowy ?"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+- q: "Namiar na hydraulika"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+- q: "Kto może naprawić piec gazowy?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "kto moze naprawic piec gazowy"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Kto naprawia domofony?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Kto naprawi bramę?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Kto zajmuje się windą?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Gdzie zgłosić awarię windy?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Awaria ogrzewania — do kogo dzwonić?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Usterka bramy - kto to naprawia?"
+  intent: search_knowledge_base
+  absent: [type]
+- q: "Potrzebuję hydraulika"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+- q: "Szukam elektryka"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+- q: "Kontakt do serwisanta klimatyzacji"
+  intent: search_knowledge_base
+  params: { type: KONTAKT }
+# Kolizje 8.h.31 — druga strona: akcje/liczniki/błędy NIE mogą wpaść w KB.
+# („Ile dziś otworzyło się bram?" / „Ile razy otworzyła się brama?" —
+# sekcja count_gate_openings_today; „Które kamery są podłączone?" —
+# list_devices; te goldeny już istnieją wyżej.)
+- q: "Domofon nie działa"
+  intent: list_errors_recent
+- q: "Brama nie działa od godziny"
+  intent: list_errors_recent
+
+# ── recent_activity_summary ──────────────────────────────────────────────────
+- q: "Co ciekawego działo się w ostatniej godzinie?"
+  intent: recent_activity_summary
+  params: { range_hours: 1 }
+- q: "Podsumuj ostatnie 4 godziny"
+  intent: recent_activity_summary
+  params: { range_hours: 4 }
+- q: "Raport z ostatnich 12 godzin"
+  intent: recent_activity_summary
+  params: { range_hours: 12 }
+- q: "Co się działo dzisiaj?"
+  intent: recent_activity_summary
+  params: { range_hours: 24 }
+- q: "Co tam słychać?"
+  intent: recent_activity_summary
+  params: { range_hours: 4 }
+- q: "Podsumowanie dnia"
+  intent: recent_activity_summary
+  params: { range_hours: 24 }
+
+# ── unknown (poza zakresem — nie wolno zgadywać intencji) ────────────────────
+- q: "Jaka jest pogoda?"
+  intent: unknown
+# 8.h.32 — pytania obsługiwane w CLOUD (cloud-local, Postgres). Edge NIE może
+# ich połknąć: „ile osób mieszka" wpadało kiedyś w count_objects (person z
+# kamer!) — guard `mieszka` w _match_count_objects_rule. Transkrypt 2026-07-05.
+- q: "Ilu mieszkańców ma to osiedle ?"
+  intent: unknown
+- q: "Ile osób mieszka na osiedlu?"
+  intent: unknown
+- q: "Ile wynosi czynsz dla mieszkańca ?"
+  intent: unknown
+- q: "Opowiedz mi dowcip"
+  intent: unknown
+- q: "Ile kosztuje subskrypcja Netflix?"
+  intent: unknown
+- q: "Która jest teraz godzina?"
+  intent: unknown
+- q: "Zaśpiewaj piosenkę"
+  intent: unknown
+
+# ── needs_llm — parafrazy poza zasięgiem regexów (tylko z flagą --llm) ───────
+- q: "Ile furgonetek przyjechało od rana?"
+  intent: count_objects_today
+  params: { object_class: truck }
+  needs_llm: true
+- q: "Czy ktoś dostarczył mi dzisiaj zakupy?"
+  intent: courier_today
+  needs_llm: true
+- q: "Pokaż czego szukają sąsiedzi w dokumentach wspólnoty"
+  intent: search_knowledge_base
+  needs_llm: true
+
+# ── waste_pickup_status (Event Intelligence §8, 2026-08-15) ──────────────────
+# SCHEDULE_VS_OBSERVED: sygnał dokonania („już…") odróżnia od historii
+# (search_by_waste_today) i harmonogramu (search_knowledge_base).
+- q: "Czy śmieci już zabrali?"
+  intent: waste_pickup_status
+  absent: [category]
+- q: "Czy śmieciarka już dziś była?"
+  intent: waste_pickup_status
+  absent: [category]
+- q: "Czy dzisiejszy odbiór już się odbył?"
+  intent: waste_pickup_status
+- q: "Czy zabrali już zmieszane?"
+  intent: waste_pickup_status
+  params: { category: MIXED }
+- q: "Czy odbiór papieru już był?"
+  intent: waste_pickup_status
+  params: { category: PAPER }
+
+# ── search_emergency_recent (Event Intelligence §16, 2026-08-15) ─────────────
+# Pojazdy uprzywilejowane po aliasach OCR — odpowiedź hedged („pojazd z
+# oznaczeniem…"), bo klasyfikacja pochodzi wyłącznie z napisów.
+- q: "Czy była dzisiaj karetka?"
+  intent: search_emergency_recent
+  params: { kind: ambulans }
+- q: "Czy widziałeś radiowóz?"
+  intent: search_emergency_recent
+  params: { kind: policja }
+- q: "Kiedy ostatnio była straż pożarna?"
+  intent: search_emergency_recent
+  params: { kind: straz, range_hours: 720 }
+- q: "Czy było dziś pogotowie?"
+  intent: search_emergency_recent
+  params: { kind: ambulans, range_hours: 24 }
+
+# ── search_by_text_today — kanonizacja OCR (§15, 2026-08-15) ─────────────────
+# Fuzzy po znormalizowanym text_raw: query_canon bez spacji/kropek,
+# cyfry-sobowtóry zamienione na litery.
+- q: "Czy widziałeś coś z napisem REM0NDIS?"
+  intent: search_by_text_today
+  params: { query: "REM0NDIS", query_canon: "remondis" }
+
+# ── Temporal engine (Event Intelligence §4, 2026-08-15) ──────────────────────
+# Explicit okna czasowe: wczoraj/przedwczoraj/pory dnia/tygodnie → since_ms/
+# until_ms (wartości ms zależą od "teraz" — asertujemy TYLKO window_label).
+- q: "Ile aut wjechało wczoraj?"
+  intent: count_vehicles_today
+  params: { direction: in, window_label: "wczoraj" }
+- q: "Czy wczoraj był kurier?"
+  intent: courier_today
+  params: { window_label: "wczoraj" }
+- q: "Czy przedwczoraj była śmieciarka?"
+  intent: search_by_waste_today
+  params: { window_label: "przedwczoraj" }
+- q: "Czy widziałeś DHL w zeszłym tygodniu?"
+  intent: search_by_brand_today
+  params: { brand: DHL, window_label: "w zeszłym tygodniu" }
+- q: "Ile osób było wczoraj wieczorem?"
+  intent: count_objects_today
+  params: { object_class: person, window_label: "wczoraj wieczorem" }
+- q: "Czy dziś rano był kurier?"
+  intent: courier_today
+  params: { window_label: "rano" }
+- q: "Co widziała kamera wczoraj w nocy?"
+  intent: list_recent_detections
+  params: { window_label: "wczoraj w nocy" }
+- q: "Ile aut wjechało w tym tygodniu?"
+  intent: count_vehicles_today
+  params: { direction: in, window_label: "w tym tygodniu" }
+
+# ── visit_duration_by_plate (Event Intelligence §9, 2026-08-15) ──────────────
+- q: "Jak długo była na osiedlu WD5005P?"
+  intent: visit_duration_by_plate
+  params: { plate: WD5005P }
+- q: "Ile czasu był WE12345 na osiedlu?"
+  intent: visit_duration_by_plate
+  params: { plate: WE12345 }
+- q: "Kiedy WD5005P wyjechał?"
+  intent: visit_duration_by_plate
+  params: { plate: WD5005P }
+
+# ── waste_typical_time (Event Intelligence §5 AGGREGATION, 2026-08-15) ───────
+- q: "O której zwykle przyjeżdża śmieciarka?"
+  intent: waste_typical_time
+- q: "O której zazwyczaj jest odbiór śmieci?"
+  intent: waste_typical_time
+
+# ── search_vehicle_desc (kolor + typ z VLM, 2026-08-19) ─────────────────────
+# To samo wnioskowanie co wyszukiwarka panelu Wizji: „bus" potocznie = też
+# van dostawczy. Generyczne „czerwone auto" celowo ZOSTAJE w intentach LPR.
+- q: "Czy widziałeś dziś biały bus?"
+  intent: search_vehicle_desc
+  params: { kind: bus, color: bialy, range_hours: 24 }
+- q: "Czy była czerwona ciężarówka?"
+  intent: search_vehicle_desc
+  params: { kind: ciezarowka, color: czerwony }
+- q: "Kiedy ostatnio był czarny van?"
+  intent: search_vehicle_desc
+  params: { kind: dostawczy, color: czarny, range_hours: 720 }
+- q: "Czy wjechał dziś żółty autobus?"
+  intent: search_vehicle_desc
+  params: { kind: bus, color: zolty }
+# Regresje: kolor bez typu → intenty LPR jak dotąd.
+- q: "Jakie czerwone samochody były dziś?"
+  intent: list_vehicles_by_color_today
+- q: "Ile białych aut dziś wjechało?"
+  intent: count_vehicles_by_color_today
+
+# ── Daty kalendarzowe w oknie czasowym (2026-08-20) ──────────────────────────
+# Zgłoszenie: „Podaj dokładne godziny dla frisco 17 sierpnia" → 0 wyników
+# (okno spadało do „dziś"). compute_time_window parsuje teraz „17 sierpnia" /
+# „17.08". Bez asercji window_label (wartość zależy od bieżącego roku).
+- q: "Podaj dokładne godziny dla FRISCO 17 sierpnia"
+  intent: search_by_brand_today
+  params: { brand: FRISCO }
+- q: "Czy było DHL 5 sierpnia?"
+  intent: search_by_brand_today
+  params: { brand: DHL }
+- q: "Czy widziałeś biały bus 17.08?"
+  intent: search_vehicle_desc
+  params: { kind: bus, color: bialy }
+
+# ── Zakresy godzin liczbowe + lista aut w oknie (2026-08-24) ─────────────────
+# Zgłoszenie BA VN (screenshot): „jakie samochody pojawiły się dzisiaj między
+# 1 a 6 rano?" → regex miss → Bielik halucynował color=white; „ile między
+# 1 i 6 rano" → pora dnia „rano" 5–12 zamiast 01–06. compute_time_window
+# parsuje teraz „między/od X a/i/do Y (godz.)", „po godzinie X", „przed
+# godziną X", z kwalifikatorem wieczornym (+12). Wartości ms zależą od
+# „teraz" — asertujemy window_label.
+- q: "Jakie samochody pojawiły się dzisiaj między 1 a 6 rano?"
+  intent: list_vehicles_recent
+  params: { window_label: "dziś między 01:00 a 06:00" }
+- q: "Ile aut wjechało między 1 a 6 rano?"
+  intent: count_vehicles_today
+  params: { direction: in, window_label: "dziś między 01:00 a 06:00" }
+- q: "Ile aut pojawiło się między godziną 1 i 6 rano?"
+  intent: count_vehicles_today
+  params: { window_label: "dziś między 01:00 a 06:00" }
+- q: "Ile aut było wczoraj między 22 a 23?"
+  intent: count_vehicles_today
+  params: { window_label: "wczoraj między 22:00 a 23:00" }
+- q: "Ile osób było między 17:30 a 19:00?"
+  intent: count_objects_today
+  params: { object_class: person, window_label: "dziś między 17:30 a 19:00" }
+- q: "Ile aut wjechało między 5 a 7 wieczorem?"
+  intent: count_vehicles_today
+  params: { direction: in, window_label: "dziś między 17:00 a 19:00" }
+- q: "Ile aut wjechało po godzinie 22?"
+  intent: count_vehicles_today
+  params: { direction: in, window_label: "dziś po 22:00" }
+- q: "Ile aut wjechało przed godziną 6 rano?"
+  intent: count_vehicles_today
+  params: { direction: in, window_label: "dziś przed 06:00" }
+# Cross-midnight — window_label zależy od pory uruchomienia (dziś/wczoraj),
+# asertujemy tylko intent.
+- q: "Ile aut było między 22 a 6?"
+  intent: count_vehicles_today
+- q: "Pokaż auta z wczoraj"
+  intent: list_vehicles_recent
+  params: { window_label: "wczoraj" }
+- q: "Które pojazdy wjechały dziś rano?"
+  intent: list_vehicles_recent
+  params: { direction: in, window_label: "rano" }
+# Regresje: „między 1 a 6 sierpnia" to daty, nie godziny; kolor dalej
+# do list_vehicles_by_color_today; „ile" dalej do count.
+- q: "Czy było DHL między 3 a 5 sierpnia?"
+  intent: search_by_brand_today
+  params: { brand: DHL }
+- q: "Jakie czerwone auta pojawiły się dziś?"
+  intent: list_vehicles_by_color_today

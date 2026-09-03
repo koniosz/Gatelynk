@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gatelynk.yolo</string>
+
+  <!-- 2026-07-04: prod = Mac Studio M4 Max (lynx1), conda env ~/miniforge3/envs/yolo.
+       Absolute paths only — launchd doesn't run a shell.
+       (Poprzednia wersja: MacBook M1 ai_mac + .venv — patrz git history.) -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/lynx1/miniforge3/envs/yolo/bin/uvicorn</string>
+    <string>app:app</string>
+    <string>--host</string>
+    <string>0.0.0.0</string>
+    <string>--port</string>
+    <string>11500</string>
+    <string>--log-level</string>
+    <string>info</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/lynx1/yolo-vision</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/lynx1/Library/Logs/yolo.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/lynx1/Library/Logs/yolo.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/lynx1/miniforge3/envs/yolo/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>DEVICE</key>
+    <string>auto</string>
+    <!-- 2026-07-05: yolov8s → yolo11l. M4 Max: 15.7ms/klatkę (vs 11.4ms v8s)
+         przy wyraźnie mniejszej liczbie false-positives (benchmark w raporcie
+         migracji: 7 vs 12 śmieciowych detekcji na 20 klatkach BEZ filtra). -->
+    <key>MODEL_PATH</key>
+    <string>yolo11l.pt</string>
+    <key>PORT</key>
+    <string>11500</string>
+
+    <!-- ── Jakość detekcji (2026-07-05, Problem: horse/train/umbrella) ── -->
+    <!-- Klasy sensowne dla osiedla; reszta wymaga conf >= UNUSUAL (0.80)
+         i jest flagowana "unusual": true. -->
+    <key>CLASS_WHITELIST</key>
+    <string>person,car,truck,bus,motorcycle,bicycle,cat,dog</string>
+    <key>CONF_THRESHOLD</key>
+    <string>0.40</string>
+    <key>UNUSUAL_CONF_THRESHOLD</key>
+    <string>0.80</string>
+    <!-- Per-klasa progi (opcjonalne), np. "truck:0.45,bus:0.45". -->
+    <key>CLASS_CONF_OVERRIDES</key>
+    <string></string>
+
+    <!-- ── Fall detection (2026-07-05 hardening) ── -->
+    <!-- yolo11m-pose: lepsze keypointy niż yolov8s-pose; POSE_DEVICE=cpu
+         przez znany bug Pose na MPS (ultralytics #4031). ~57ms/klatkę na
+         M4 CPU, liczone tylko gdy person w kadrze. -->
+    <key>POSE_MODEL_PATH</key>
+    <string>yolo11m-pose.pt</string>
+    <key>POSE_DEVICE</key>
+    <string>cpu</string>
+    <key>FALL_LIKELIHOOD_THRESHOLD</key>
+    <string>0.75</string>
+    <key>FALL_MIN_PERSON_CONF</key>
+    <string>0.50</string>
+    <key>FALL_MIN_BBOX_AREA_PCT</key>
+    <string>1.0</string>
+    <key>FALL_MIN_PERSIST</key>
+    <string>2</string>
+    <key>FALL_PERSIST_WINDOW_S</key>
+    <string>90</string>
+  </dict>
+
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>4096</integer>
+  </dict>
+</dict>
+</plist>
