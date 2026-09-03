@@ -13,8 +13,11 @@ import { LocalStrategy } from './strategies/local.strategy'
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
+      // `getOrThrow` — bez JWT_SECRET app NIE startuje. Cichy `config.get`
+      // zwracał undefined → JWT podpisywany pustym sekretem, co prowadziło do
+      // dziwnych "Unauthorized" w runtime zamiast czytelnego crashu na boot.
       useFactory: (config: ConfigService) => ({
-        secret: config.get('JWT_SECRET'),
+        secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '7d') },
       }),
     }),

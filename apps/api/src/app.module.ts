@@ -17,9 +17,18 @@ import { IntegratorModule } from './integrator/integrator.module'
 import { BuildingAdminModule } from './building-admin/building-admin.module'
 import { ConciergeModule } from './concierge/concierge.module'
 import { MailModule } from './mail/mail.module'
+import { MonitoringModule } from './monitoring/monitoring.module'
 import { ResidentModule } from './resident/resident.module'
 import { EdgeModule } from './edge/edge.module'
 import { LprReadsModule } from './lpr-reads/lpr-reads.module'
+import { GuestsModule } from './guests/guests.module'
+import { GuestPortalModule } from './guest-portal/guest-portal.module'
+import { InviteModule } from './invite/invite.module'
+import { AccessEventsModule } from './access-events/access-events.module'
+import { BuildingKnowledgeModule } from './building-knowledge/building-knowledge.module'
+import { AnomalyEventsModule } from './anomaly-events/anomaly-events.module'
+import { ResidentsImportModule } from './residents-import/residents-import.module'
+import { AkuvoxDirectoryModule } from './akuvox-directory/akuvox-directory.module'
 
 @Module({
   imports: [
@@ -53,6 +62,9 @@ import { LprReadsModule } from './lpr-reads/lpr-reads.module'
         // z .env nawet gdy klucz jest niewypełniony — Joi default optional()
         // odrzuca empty string i powoduje restart loop API w dev).
         RESEND_API_KEY: Joi.string().allow('').optional(),
+        // Bazowy URL portalu gościa (gatelynk.com w prod, localhost:3002 w dev).
+        // MailService doczepia `/g/<token>`. Default: `https://gatelynk.com`.
+        GUEST_PORTAL_BASE_URL: Joi.string().uri().allow('').optional(),
         // APN (iOS push) — opcjonalne, ten sam problem co wyżej.
         APN_KEY_ID: Joi.string().allow('').optional(),
         APN_TEAM_ID: Joi.string().allow('').optional(),
@@ -82,9 +94,22 @@ import { LprReadsModule } from './lpr-reads/lpr-reads.module'
     BuildingAdminModule,
     ConciergeModule,
     MailModule,
+    MonitoringModule,
     ResidentModule,
     EdgeModule,
     LprReadsModule,
+    GuestsModule,
+    GuestPortalModule,
+    InviteModule,
+    AccessEventsModule,
+    BuildingKnowledgeModule,
+    AnomalyEventsModule,
+    ResidentsImportModule,
+    // Akuvox Directory Sync v2 (2026-07-30) — docs/akuvox-directory-v2-analysis.md.
+    // Feature flags: AKUVOX_DIRECTORY_V2 / AKUVOX_MANUAL_IMPORT /
+    // AKUVOX_PROVISIONING_SYNC / AKUVOX_DIRECTORY_WRITE_API (defaulty w
+    // AkuvoxDirectoryConfigService); AKUVOX_CRED_KEY = klucz AES-256-GCM.
+    AkuvoxDirectoryModule,
   ],
   // AppController wystawia `/api/health` (Fly health check oczekuje 200 — bez
   // tego Fly proxy zwraca [PR01] na zewnątrz i sygnatura z `flyctl checks list`

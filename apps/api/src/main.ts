@@ -12,9 +12,20 @@ async function bootstrap() {
   app.setGlobalPrefix('api')
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }))
   app.enableCors({
+    // Wszystkie subdomeny `*.gatelynk.com` (panel admina, app.gatelynk.com dla
+    // guest portalu, ewentualne future) + localhost w dev + jawnie skonfigurowany
+    // FRONTEND_URL (legacy/escape hatch). Dopuszczamy też `*.fly.dev` żeby móc
+    // testować preview deployy bez ruszania CORS-a.
+    //
+    // Uwaga: bez tej regexpy `app.gatelynk.com` (Next.js z guest portalem) dostaje
+    // 404 na OPTIONS preflight i fetch z portalu kończy się „Brak połączenia".
     origin: (origin, cb) => {
-      // Allow localhost on any port in dev + configured FRONTEND_URL in prod
-      const allowed = [process.env.FRONTEND_URL, /^http:\/\/localhost:\d+$/]
+      const allowed: (string | RegExp | undefined)[] = [
+        process.env.FRONTEND_URL,
+        /^http:\/\/localhost:\d+$/,
+        /^https:\/\/([a-z0-9-]+\.)?gatelynk\.com$/,
+        /^https:\/\/[a-z0-9-]+\.fly\.dev$/,
+      ]
       const ok = !origin || allowed.some((p) => (p instanceof RegExp ? p.test(origin) : p === origin))
       cb(null, ok)
     },

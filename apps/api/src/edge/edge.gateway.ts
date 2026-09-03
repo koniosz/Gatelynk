@@ -10,6 +10,18 @@ import { GuestsValidationService } from '../guests/guests-validation.service'
 import { AnomalyEventsService } from '../anomaly-events/anomaly-events.service'
 import { guessDriverId, type DeviceType } from '@gatelynk/device-drivers'
 
+/**
+ * Czy adres należy do tailnetu (CGNAT 100.64.0.0/10 — Tailscale)?
+ * Tylko taki adres nadaje się do HTTP Cloud→Edge: publiczny adres osiedla
+ * (źródło WS przez NAT) nie ma wystawionego portu 4000 i jego zapisanie
+ * zatruwa `edge_devices.ipAddress`.
+ */
+function isTailnetIp(ip?: string): boolean {
+  if (!ip) return false
+  const m = ip.match(/^100\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
+  return m !== null && Number(m[1]) >= 64 && Number(m[1]) <= 127
+}
+
 interface ConnectedEdge {
   deviceId: string
   buildingId: number
@@ -52,6 +64,10 @@ export class EdgeGateway implements OnModuleInit {
     if (this.lprReads) return this.lprReads
     try {
       this.lprReads = this.moduleRef.get(LprReadsService, { strict: false })
+      // Rejestrujemy się w serwisie, żeby mógł prosić o miniatury przez tunel
+      // (kierunek odwrotny). Push zamiast pull — import w drugą stronę
+      // dałby cykl modułowy.
+      this.lprReads?.setEdgeGateway?.(this)
     } catch {
       // Service not wired yet (e.g. during boot) — just skip recording this event.
     }
@@ -73,6 +89,21 @@ export class EdgeGateway implements OnModuleInit {
     return this.guestsValidation
   }
 
+  // 2026-07-08 — AccessEventsService dla audytu odmów ograniczeń gościa
+  // (GUEST_ACCESS_DENIED z Edge). Lazy-resolve jak pozostałe.
+  private accessEventsSvc?: any
+  private getAccessEvents(): any | undefined {
+    if (this.accessEventsSvc) return this.accessEventsSvc
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { AccessEventsService } = require('../access-events/access-events.service')
+      this.accessEventsSvc = this.moduleRef.get(AccessEventsService, { strict: false })
+    } catch {
+      // Not wired during boot — skip; first event after boot retries.
+    }
+    return this.accessEventsSvc
+  }
+
   // Lazy-resolved jak inne service-y żeby AnomalyEventsModule mógł importować
   // PushModule (który nie zależy od EdgeModule) bez tworzenia cyklu.
   private anomalyEvents?: AnomalyEventsService
@@ -84,6 +115,23 @@ export class EdgeGateway implements OnModuleInit {
       // Not wired during boot — skip; first event after boot retries.
     }
     return this.anomalyEvents
+  }
+
+  // 2026-09-01 — SITUATION_ALERT (upadek potwierdzony przez VLM na Edge):
+  // push krytyczny do WSZYSTKICH mieszkańców budynku — na osiedlu bez
+  // obsługi sąsiedzi są najszybszą pomocą. Lazy-resolve PushService jak
+  // pozostałe serwisy z modułów importujących EdgeModule.
+  private pushSvc?: any
+  private getPush(): any | undefined {
+    if (this.pushSvc) return this.pushSvc
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { PushService } = require('../push/push.service')
+      this.pushSvc = this.moduleRef.get(PushService, { strict: false })
+    } catch {
+      // Not wired during boot — skip; kolejny alert spróbuje ponownie.
+    }
+    return this.pushSvc
   }
 
   // FAZA d (2026-06-02) — CourierVisitService. Edge zgłasza
@@ -101,6 +149,23 @@ export class EdgeGateway implements OnModuleInit {
       // Not wired during boot — skip; first event after boot retries.
     }
     return this.courierVisits
+  }
+
+  // Lazy-resolved jak inne service-y — IntercomCallService żyje w ResidentModule
+  // który importuje EdgeModule (dla EdgeService/EdgeGateway), więc bez lazy
+  // mielibyśmy cykl. Edge zgłasza INTERCOM_CALL_INVITE / INTERCOM_SIGNAL /
+  // INTERCOM_CALL_ENDED — patrz docs/intercom-akuvox-call.md.
+  private intercomCalls?: any
+  private getIntercomCalls(): any | undefined {
+    if (this.intercomCalls) return this.intercomCalls
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { IntercomCallService } = require('../resident/intercom-call.service')
+      this.intercomCalls = this.moduleRef.get(IntercomCallService, { strict: false })
+    } catch {
+      // Not wired during boot — skip; first event after boot retries.
+    }
+    return this.intercomCalls
   }
 
   onModuleInit() {
@@ -155,9 +220,31 @@ export class EdgeGateway implements OnModuleInit {
     // serwisów na colima/lima. Edge HTTP API (port 4000) jest osiągalny pod
     // `host.docker.internal`. Ustaw `EDGE_HTTP_HOST_OVERRIDE=host.docker.internal`
     // w `.env`, a sync access-points i statyczny fallback przejdą przez ten host.
-    // Na produkcji pozostawia się pustym → używamy realnego IP z WS upgrade.
+    //
+    // ⚠️ WYŁĄCZNIE dev. Na produkcji ten override przypisuje KAŻDEMU Edge'owi
+    // ten sam adres — 2026-08-11 sekret `EDGE_HTTP_HOST_OVERRIDE=100.90.244.90`
+    // (relikt z czasów jednego budynku) kierował HTTP wszystkich budynków na
+    // Edge Villa Natury: podgląd kamer VN zwracał pusty obraz, a sync stworzył
+    // w b11 punkty dostępu wskazujące urządzenia INNEGO obiektu (naciśnięcie
+    // „Wjazd" w VN otwierało bramę w Villa Naturze).
+    //
+    // Produkcyjna reguła: źródłowy adres WS przez NAT to PUBLICZNY adres
+    // osiedla — port 4000 nie jest tam wystawiony i nigdy nie wolno go zapisać
+    // (touch() nadpisałby edge_devices.ipAddress, zatruwając też fallback).
+    // Do HTTP nadaje się wyłącznie adres tailnetowy (100.64.0.0/10 — cloud
+    // sięga Edge'a własnym tailscaledem); w innym razie bierzemy ostatni dobry
+    // adres z bazy (ustawiany ręcznie przy instalacji obiektu).
     const override = (process.env.EDGE_HTTP_HOST_OVERRIDE ?? '').trim()
-    const remoteIp = override.length > 0 ? override : observedIp
+    let remoteIp = override.length > 0 ? override : (isTailnetIp(observedIp) ? observedIp : undefined)
+    if (!remoteIp) {
+      const stored = await this.edge.getStoredIp(deviceId)
+      if (stored) {
+        remoteIp = stored
+        this.logger.log(
+          `Edge ${deviceId}: WS z adresu nietailnetowego (${observedIp ?? 'unknown'}) — używam IP z bazy: ${stored}`,
+        )
+      }
+    }
 
     // Close existing connection for this device (reconnect scenario)
     const existing = this.connections.get(deviceId)
@@ -204,6 +291,14 @@ export class EdgeGateway implements OnModuleInit {
     // klawiatura Akuvox mogła ich autoryzować.
     this.pushResidentPinSync(buildingId, ws).catch((err) =>
       this.logger.warn(`RESIDENT_PIN_SYNC_ALL push failed [${deviceId}]: ${err.message}`),
+    )
+
+    // 2026-07-08 — GUEST PIN sync z ograniczeniami dostępu. Dotąd delty
+    // (PIN_UPSERT/DELETE) szły przez outbox-replay, ale pełen stan przy
+    // reconnect domyka drift (ograniczenia + snapshot użyć portalowych —
+    // Edge liczy limity offline jako lokalne PIN/LPR + portalUses z Cloud).
+    this.pushGuestPinSync(buildingId, ws).catch((err) =>
+      this.logger.warn(`PIN_SYNC_ALL push failed [${deviceId}]: ${err.message}`),
     )
 
     this.startPing(deviceId)
@@ -258,6 +353,12 @@ export class EdgeGateway implements OnModuleInit {
         break
 
       case 'EVT':
+        // Miniatury obsługujemy PRZED logowaniem — lecą często (galeria
+        // odczytów) i zaśmiecałyby log jedną linią na każde zdjęcie.
+        if (msg.event === 'LPR_SNAPSHOT_DATA') {
+          this.handleSnapshotData(msg.data ?? {})
+          break
+        }
         this.logger.log(`Event from ${deviceId}: ${msg.event}`)
         // Route LPR_READ events to the reads service (fire-and-forget; errors
         // are logged inside the service — never crash the WS handler).
@@ -280,6 +381,67 @@ export class EdgeGateway implements OnModuleInit {
             svc.validatePin(buildingId, pin).catch((err) =>
               this.logger.warn(`GUEST_PIN_USED handle failed [${deviceId}]: ${err.message}`),
             )
+          }
+        }
+        // 2026-07-08 — zliczanie limitowanych otwarć gościa. Edge raportuje
+        // każde FAKTYCZNE otwarcie (PIN/LPR) z dedup uuid — INSERT z
+        // ON CONFLICT DO NOTHING jest idempotentny przy retry z offline queue.
+        if (msg.event === 'GUEST_ACCESS_USED') {
+          const d = msg.data ?? {}
+          const guestId = Number(d.guestId ?? 0)
+          const source = d.source === 'LPR' ? 'LPR' : 'PIN'
+          const apId = Number.isFinite(Number(d.accessPointId)) && Number(d.accessPointId) > 0
+            ? Number(d.accessPointId)
+            : null
+          const useId = typeof d.useId === 'string' && d.useId.length <= 64 ? d.useId : null
+          if (guestId > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { PrismaService } = require('../prisma/prisma.service')
+            let prismaSvc: any
+            try {
+              prismaSvc = this.moduleRef.get(PrismaService, { strict: false })
+            } catch { prismaSvc = null }
+            if (prismaSvc) {
+              prismaSvc.$executeRaw`
+                INSERT INTO "guest_access_uses"
+                  ("buildingId", "guestId", "accessPointId", "source", "dedupKey", "ts")
+                VALUES (${buildingId}, ${guestId}, ${apId}, ${source}, ${useId},
+                        ${d.ts ? new Date(Number(d.ts)) : new Date()})
+                ON CONFLICT ("dedupKey") DO NOTHING
+              `.catch((e: Error) =>
+                this.logger.warn(`GUEST_ACCESS_USED persist failed [${deviceId}]: ${e.message}`),
+              )
+            }
+          }
+        }
+        // 2026-07-08 — odmowa ograniczeń gościa na Edge (OUT_OF_SCHEDULE /
+        // USES_EXHAUSTED / AP_NOT_ALLOWED) → audit w access_events, spójnie
+        // z Cloud-owymi odmowami portalu i PIN (EXPIRED/INACTIVE).
+        if (msg.event === 'GUEST_ACCESS_DENIED') {
+          const d = msg.data ?? {}
+          const guestId = Number(d.guestId ?? 0)
+          const reason = String(d.reason ?? '')
+          const source = d.source === 'LPR' ? 'LPR' : 'PIN'
+          const apId = Number.isFinite(Number(d.accessPointId)) && Number(d.accessPointId) > 0
+            ? Number(d.accessPointId)
+            : null
+          if (guestId > 0 && ['OUT_OF_SCHEDULE', 'USES_EXHAUSTED', 'AP_NOT_ALLOWED'].includes(reason)) {
+            const svcAe = this.getAccessEvents()
+            if (svcAe) {
+              svcAe.record({
+                buildingId,
+                type: source === 'LPR' ? 'LPR_MATCH' : 'PIN_USED',
+                accessPointId: apId,
+                gateOpened: false,
+                reason,
+                guestId,
+                plate: typeof d.plate === 'string' ? d.plate : null,
+                openedById: null,
+                openedByType: 'EDGE',
+              }).catch((e: Error) =>
+                this.logger.warn(`GUEST_ACCESS_DENIED audit failed [${deviceId}]: ${e.message}`),
+              )
+            }
           }
         }
         // 2026-05-24 — Fall detection Etap 3. Edge wysyła po wykryciu upadku
@@ -420,6 +582,25 @@ export class EdgeGateway implements OnModuleInit {
             }
           }
         }
+        // 2026-09-01 — potwierdzony przez VLM upadek → push krytyczny do
+        // wszystkich mieszkańców budynku. Edge wysyła TYLKO po pozytywnej
+        // bramce VLM (fałszywe alarmy zostają w feedzie Zdarzeń bez pusha).
+        if (msg.event === 'SITUATION_ALERT') {
+          const push = this.getPush()
+          const d = msg.data ?? {}
+          const title = String(d.title ?? '').slice(0, 120)
+          const body = String(d.body ?? '').slice(0, 400)
+          if (push && title && body) {
+            push.sendToBuilding(buildingId, title, body, {
+              type: 'situation-alert',
+              kind: String(d.kind ?? ''),
+              ts: Number(d.ts ?? Date.now()),
+            }).catch((e: Error) =>
+              this.logger.warn(`SITUATION_ALERT push failed [${deviceId}]: ${e.message}`),
+            )
+            this.logger.warn(`SITUATION_ALERT b${buildingId}: ${title}`)
+          }
+        }
         if (msg.event === 'ANOMALY_DETECTED') {
           const svc = this.getAnomalyEvents()
           if (svc) {
@@ -448,6 +629,76 @@ export class EdgeGateway implements OnModuleInit {
               )
             }
           }
+        }
+        // ── Domofon: SIP↔WebRTC call bridge (2026-06-13) ──────────────────
+        // Za flagą INTERCOM_CALL_ENABLED — gating w IntercomCallService.enabled.
+        // docs/intercom-akuvox-call.md.
+        if (msg.event === 'INTERCOM_CALL_INVITE') {
+          const svc = this.getIntercomCalls()
+          if (svc) {
+            const d = msg.data ?? {}
+            if (!d.sessionId) {
+              this.logger.warn(`INTERCOM_CALL_INVITE z ${deviceId} bez sessionId — ignoruję`)
+            } else {
+              svc.handleInvite(buildingId, {
+                sessionId: String(d.sessionId),
+                intercomDeviceId: typeof d.intercomDeviceId === 'string' ? d.intercomDeviceId : deviceId,
+                intercomName: typeof d.intercomName === 'string' ? d.intercomName : undefined,
+                unitId: typeof d.unitId === 'number' ? d.unitId : undefined,
+                unitLabel: typeof d.unitLabel === 'string' ? d.unitLabel : undefined,
+                residentIds: Array.isArray(d.residentIds)
+                  ? d.residentIds.filter((x: unknown): x is number => typeof x === 'number')
+                  : [],
+                snapshotUrl: typeof d.snapshotUrl === 'string' ? d.snapshotUrl : undefined,
+                // Hint przycisku panelu → konkretny lokal (routing D2). Edge
+                // mapuje SIP extension/relayIndex na unitId gdy domofon klatkowy.
+                buttonUnitId: typeof d.buttonUnitId === 'number' ? d.buttonUnitId : undefined,
+                // Numer wybrany z książki Akuvoxa (Remote Phonebook) → Cloud
+                // mapuje na units.number i routuje punktowo do tego lokalu.
+                dialedExtension: typeof d.dialedExtension === 'string' ? d.dialedExtension : undefined,
+              }).catch((err: Error) =>
+                this.logger.warn(`INTERCOM_CALL_INVITE handle failed [${deviceId}]: ${err.message}`),
+              )
+            }
+          }
+        }
+        if (msg.event === 'INTERCOM_SIGNAL') {
+          const svc = this.getIntercomCalls()
+          if (svc) {
+            const d = msg.data ?? {}
+            // Tylko sygnały Edge→app buforujemy (from:'edge') do SSE.
+            if (d.sessionId && (d.kind === 'offer' || d.kind === 'answer' || d.kind === 'ice')) {
+              svc.bufferSignalForApp({
+                sessionId: String(d.sessionId),
+                kind: d.kind,
+                sdp: typeof d.sdp === 'string' ? d.sdp : undefined,
+                candidate: d.candidate && typeof d.candidate === 'object' ? d.candidate : undefined,
+                from: 'edge',
+              })
+            }
+          }
+        }
+        if (msg.event === 'INTERCOM_CALL_ENDED') {
+          const svc = this.getIntercomCalls()
+          if (svc) {
+            const d = msg.data ?? {}
+            if (d.sessionId) {
+              svc.handleEnded(String(d.sessionId), String(d.endReason ?? 'ANSWERED_HANGUP'))
+                .catch((err: Error) =>
+                  this.logger.warn(`INTERCOM_CALL_ENDED handle failed [${deviceId}]: ${err.message}`),
+                )
+            }
+          }
+        }
+        // Multi-station (2026-07-05): Janus (1 handle SIP) odrzucił drugie,
+        // równoległe wywołanie z innej stacji (486 Busy → missed_call). Sesja
+        // nie powstaje (gość słyszy zajętość) — logujemy dla audytu instalatora.
+        if (msg.event === 'INTERCOM_STATION_BUSY') {
+          const d = msg.data ?? {}
+          this.logger.warn(
+            `INTERCOM_STATION_BUSY [b#${buildingId}] from=${d.fromUri ?? '?'} — ` +
+              `równoległe wywołanie odrzucone (most zajęty)`,
+          )
         }
         break
 
@@ -576,6 +827,7 @@ export class EdgeGateway implements OnModuleInit {
       'personalAccessKey',  // Tedee (gdyby kiedyś wszedł — dziś driver wyrejestrowany)
       'token',
       'apiKey',
+      'apiToken',           // Nuki Web API (SMART_LOCK, 2026-07-08) — token żyje tylko na Edge
       'secret',
     ])
     const sanitized: Record<string, any> = {}
@@ -601,6 +853,91 @@ export class EdgeGateway implements OnModuleInit {
   // logowany ale NIE blokuje sendingu — fallback to legacy behaviour (random id).
   // To jest defense-in-depth: lepiej wysłać bez persistencji niż w ogóle nie
   // wysłać.
+  // ── Miniatury odczytów LPR przez tunel ──────────────────────────────────────
+
+  /** Oczekujące żądania miniatur: requestId → rozstrzygnięcie obietnicy. */
+  private readonly pendingSnapshots = new Map<
+    string,
+    { resolve: (buf: Buffer | null) => void; timer: NodeJS.Timeout }
+  >()
+
+  /**
+   * Limit jednoczesnych żądań miniatur NA CAŁY system.
+   *
+   * ⚠️ Tunel przenosi także polecenia otwarcia bramy. Nawet przy zmniejszonych
+   * obrazach (~25 KB) galeria z kilkudziesięcioma miniaturami mogłaby zająć
+   * kanał na długo. Trzy równoczesne żądania to kompromis: panel ładuje się
+   * płynnie, a polecenie otwarcia nigdy nie czeka dłużej niż jedną miniaturę.
+   */
+  private snapshotInFlight = 0
+  private static readonly SNAPSHOT_MAX_INFLIGHT = 3
+
+  /**
+   * Pobiera miniaturę odczytu tablicy PRZEZ TUNEL — bez łączenia się do Edge.
+   *
+   * Edge stoi za NAT-em i łączy się wychodząco, więc droga „chmura → Edge"
+   * działa tylko przy dodatkowej sieci VPN. Gdy ta padnie, miniatury znikają
+   * po cichu (tak było przez 8 dni, 2026-08-07). Tunel istnieje zawsze, gdy
+   * Edge jest online — dlatego to on jest teraz drogą podstawową.
+   *
+   * Zwraca `null` gdy Edge offline, brak zdjęcia albo przekroczono czas —
+   * wołający ma wtedy fallback na starą drogę HTTP.
+   */
+  async requestLprSnapshot(
+    buildingId: number,
+    edgeReadId: number,
+    maxWidth = 480,
+    timeoutMs = 8000,
+  ): Promise<Buffer | null> {
+    if (this.snapshotInFlight >= EdgeGateway.SNAPSHOT_MAX_INFLIGHT) return null
+
+    // Edge tego budynku, który jest ONLINE — offline nie ma sensu pytać.
+    const entry = [...this.connections.entries()].find(
+      ([, c]) => c.buildingId === buildingId && c.ws.readyState === WebSocket.OPEN,
+    )
+    if (!entry) return null
+    const [deviceId, conn] = entry
+
+    const requestId = `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+    this.snapshotInFlight++
+
+    return new Promise<Buffer | null>((resolve) => {
+      const done = (buf: Buffer | null) => {
+        this.snapshotInFlight--
+        this.pendingSnapshots.delete(requestId)
+        resolve(buf)
+      }
+      const timer = setTimeout(() => done(null), timeoutMs)
+      this.pendingSnapshots.set(requestId, { resolve: done, timer })
+
+      try {
+        // Świadomie POMIJAMY outbox: miniatura ma sens tylko teraz. Zapisanie
+        // jej do kolejki oznaczałoby, że Edge po powrocie online wysyła zdjęcie,
+        // na które nikt już nie czeka.
+        conn.ws.send(JSON.stringify({
+          type: 'CMD', id: requestId, action: 'LPR_SNAPSHOT_GET',
+          payload: { requestId, edgeReadId, maxWidth },
+        }))
+      } catch {
+        clearTimeout(timer)
+        done(null)
+      }
+    })
+  }
+
+  /** Odbiór miniatury z Edge — dopina do oczekującego żądania. */
+  private handleSnapshotData(data: any) {
+    const requestId = String(data?.requestId ?? '')
+    const pending = this.pendingSnapshots.get(requestId)
+    if (!pending) return          // spóźniona odpowiedź — żądanie już wygasło
+    clearTimeout(pending.timer)
+    if (data?.ok && typeof data.base64 === 'string') {
+      pending.resolve(Buffer.from(data.base64, 'base64'))
+    } else {
+      pending.resolve(null)
+    }
+  }
+
   async sendCommand(
     deviceId: string,
     buildingId: number,
@@ -859,10 +1196,64 @@ export class EdgeGateway implements OnModuleInit {
       payload: { items: plateItems },
     }))
 
+    // Multi-station intercom bridge (2026-07-05) — rejestr stacji domofonowych
+    // płynie z Cloud (building_intercoms) do Edge (sqlite intercom_bridge).
+    // Edge używa go do: (a) mapowania SIP fromUri→edgeDeviceId+nazwa przy
+    // INVITE, (b) rozwiązania IP stacji przy outbound, (c) wiedzy które stacje
+    // mają aktywny most. Konfiguracja NIGDY nie jest ręczna na Edge — zawsze
+    // przez ten sync (reconnect) + live push z integrator service.
+    const intercoms = await prisma.$queryRaw<Array<{
+      id: number; name: string; edgeDeviceId: string | null;
+      ipAddress: string | null; bridgeEnabled: boolean;
+    }>>`
+      SELECT id, name, "edgeDeviceId", "ipAddress", "bridgeEnabled"
+        FROM "building_intercoms"
+       WHERE "buildingId" = ${buildingId}
+       ORDER BY id ASC
+    `.catch(() => [] as any[])
+    ws.send(JSON.stringify({
+      type: 'CMD',
+      id: `intercom-sync-${apId}`,
+      action: 'INTERCOM_SYNC_ALL',
+      payload: {
+        items: intercoms.map((i) => ({
+          intercomId: i.id,
+          buildingId,
+          name: i.name,
+          edgeDeviceId: i.edgeDeviceId,
+          ipAddress: i.ipAddress,
+          bridgeEnabled: i.bridgeEnabled === true,
+        })),
+      },
+    }))
+
+    // 2026-07-30 — BUILDING_CONFIG_UPDATE przy reconnect (wzorzec CAMERA_SYNC_ALL
+    // / 8.h.2). Edge zapisuje objectType+features do kv; pierwszy konsument:
+    // HikvisionLprService czyta features.exitGrace (przepustka wyjazdowa,
+    // docs/exit-grace-pass.md). Bez tego świeżo postawiony / przywrócony Edge
+    // nie znałby konfiguracji do czasu pierwszego PATCH-a w panelu.
+    const bld = await prisma.$queryRaw<Array<{
+      objectType: string | null; features: any;
+    }>>`
+      SELECT "objectType", features FROM "buildings" WHERE id = ${buildingId} LIMIT 1
+    `.catch(() => [] as any[])
+    if (bld[0]) {
+      ws.send(JSON.stringify({
+        type: 'CMD',
+        id: `bcfg-${apId}`,
+        action: 'BUILDING_CONFIG_UPDATE',
+        payload: {
+          buildingId,
+          objectType: bld[0].objectType,
+          features: bld[0].features ?? {},
+        },
+      }))
+    }
+
     this.logger.log(
-      `AP/SCHEDULE/LPR_LINK/CAMERA/PLATE_SYNC_ALL pushed to ${deviceId} ` +
+      `AP/SCHEDULE/LPR_LINK/CAMERA/PLATE/INTERCOM/BUILDING_CONFIG_SYNC pushed to ${deviceId} ` +
       `(${aps.length} APs, ${schedules.length} schedules, ${lprLinks.length} LPR links, ` +
-      `${cams.length} cameras, ${plateItems.length} plates)`,
+      `${cams.length} cameras, ${plateItems.length} plates, ${intercoms.length} intercoms)`,
     )
   }
 
@@ -917,11 +1308,11 @@ export class EdgeGateway implements OnModuleInit {
     `.catch(() => [] as any[])
 
     const guests = await prisma.$queryRaw<Array<{
-      name: string; vehiclePlate: string;
+      id: number; name: string; vehiclePlate: string;
       validFrom: Date | null; validTo: Date | null;
       inviterFirstName: string | null; inviterLastName: string | null;
     }>>`
-      SELECT g.name, g."vehiclePlate", g."validFrom", g."validTo",
+      SELECT g.id, g.name, g."vehiclePlate", g."validFrom", g."validTo",
              r."firstName" AS "inviterFirstName", r."lastName" AS "inviterLastName"
         FROM "guests" g
         LEFT JOIN "residents" r ON r.id = g."residentId"
@@ -971,6 +1362,9 @@ export class EdgeGateway implements OnModuleInit {
         plate: g.vehiclePlate,
         owner: `Gość ${g.name} (${inviter})`,
         kind: 'GUEST',
+        // 2026-07-08 — Edge sprawdza po guestId ograniczenia gościa
+        // (harmonogram/limit/allowlista AP z guest_pins) przy matchu tablicy.
+        guestId: g.id,
         ...(g.validFrom ? { validFrom: g.validFrom.toISOString() } : {}),
         ...(g.validTo ? { validUntil: g.validTo.toISOString() } : {}),
       })
@@ -1035,8 +1429,21 @@ export class EdgeGateway implements OnModuleInit {
    */
   private async pushResidentPinSync(buildingId: number, ws: WebSocket) {
     if (ws.readyState !== WebSocket.OPEN) return
-    const prisma = this.moduleRef.get<any>('PrismaService' as any, { strict: false })
-      ?? this.moduleRef.get(require('../prisma/prisma.service').PrismaService, { strict: false })
+    // Lazy resolve PrismaService — EdgeGateway nie ma go w constructor (jak
+    // pushAccessPointSync). UWAGA: moduleRef.get('PrismaService') po STRING
+    // tokenie rzuca "Nest could not find PrismaService element" nawet ze
+    // strict:false (provider jest zarejestrowany po klasie, nie po stringu) —
+    // a wyjątek leci przed `??` fallback, więc cała synchronizacja PIN-ów
+    // failowała na produkcji. Rozwiązujemy po klasie w try/catch.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PrismaService } = require('../prisma/prisma.service')
+    let prisma: any
+    try {
+      prisma = this.moduleRef.get(PrismaService, { strict: false })
+    } catch {
+      this.logger.warn('pushResidentPinSync: PrismaService not available')
+      return
+    }
     if (!prisma) {
       this.logger.warn('pushResidentPinSync: PrismaService not available')
       return
@@ -1057,5 +1464,83 @@ export class EdgeGateway implements OnModuleInit {
     }
     ws.send(JSON.stringify(msg))
     this.logger.log(`RESIDENT_PIN_SYNC_ALL pushed: ${rows.length} pins → building ${buildingId}`)
+  }
+
+  // ── GUEST PIN sync z ograniczeniami (2026-07-08) ─────────────────────────────
+  /**
+   * Pełny sync PIN-ów AKTYWNYCH gości do Edge po reconnect WS — z
+   * ograniczeniami dostępu (allowedAccessPoints/recurringSchedule) oraz
+   * snapshot-em użyć PORTALOWYCH per (gość, AP). Edge robi replace-all
+   * `guest_pins` i od tej chwili egzekwuje harmonogram/limity OFFLINE.
+   *
+   * portalUses zawiera TYLKO source='PORTAL' — użycia PIN/LPR Edge liczy sam
+   * (lokalne guest_uses); wysyłanie ich z powrotem zdublowałoby licznik.
+   */
+  private async pushGuestPinSync(buildingId: number, ws: WebSocket) {
+    if (ws.readyState !== WebSocket.OPEN) return
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PrismaService } = require('../prisma/prisma.service')
+    let prisma: any
+    try {
+      prisma = this.moduleRef.get(PrismaService, { strict: false })
+    } catch {
+      this.logger.warn('pushGuestPinSync: PrismaService not available')
+      return
+    }
+    if (!prisma) {
+      this.logger.warn('pushGuestPinSync: PrismaService not available')
+      return
+    }
+    const guests = await prisma.$queryRaw<Array<{
+      id: number; pin: string; name: string;
+      validFrom: Date | null; validTo: Date | null;
+      allowedAccessPoints: any; recurringSchedule: any;
+    }>>`
+      SELECT id, pin, name, "validFrom", "validTo",
+             "allowedAccessPoints", "recurringSchedule"
+        FROM "guests"
+       WHERE "buildingId" = ${buildingId}
+         AND status::text = 'ACTIVE'
+         AND ("validTo" IS NULL OR "validTo" > NOW())
+       ORDER BY id ASC
+    `.catch(() => [] as any[])
+
+    // Snapshot użyć portalowych per (guestId, apId) w jednym query.
+    const guestIds = guests.map((g: any) => g.id)
+    const usesByGuest = new Map<number, Record<string, number>>()
+    if (guestIds.length > 0) {
+      const uses = await prisma.$queryRawUnsafe(
+        `SELECT "guestId", "accessPointId", COUNT(*)::int AS count
+           FROM "guest_access_uses"
+          WHERE "guestId" = ANY($1) AND source = 'PORTAL' AND "accessPointId" IS NOT NULL
+          GROUP BY "guestId", "accessPointId"`,
+        guestIds,
+      ).catch(() => [] as any[]) as Array<{ guestId: number; accessPointId: number; count: number }>
+      for (const u of uses) {
+        const rec = usesByGuest.get(u.guestId) ?? {}
+        rec[String(u.accessPointId)] = Number(u.count)
+        usesByGuest.set(u.guestId, rec)
+      }
+    }
+
+    const items = guests.map((g: any) => ({
+      pin: g.pin,
+      guestId: g.id,
+      guestName: g.name,
+      ...(g.validFrom ? { validFrom: g.validFrom.toISOString() } : {}),
+      ...(g.validTo ? { validUntil: g.validTo.toISOString() } : {}),
+      ...(g.allowedAccessPoints ? { allowedAccessPoints: g.allowedAccessPoints } : {}),
+      ...(g.recurringSchedule ? { recurringSchedule: g.recurringSchedule } : {}),
+      ...(usesByGuest.has(g.id) ? { portalUses: usesByGuest.get(g.id) } : {}),
+    }))
+
+    ws.send(JSON.stringify({
+      type: 'CMD',
+      id: `gpin-${Math.random().toString(36).slice(2, 10)}`,
+      action: 'PIN_SYNC_ALL',
+      payload: { pins: items },
+      ts: Date.now(),
+    }))
+    this.logger.log(`PIN_SYNC_ALL pushed: ${items.length} guest pins → building ${buildingId}`)
   }
 }

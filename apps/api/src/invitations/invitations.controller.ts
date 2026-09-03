@@ -35,9 +35,25 @@ export class InvitationsController {
     return this.invitationsService.findAll(+buildingId)
   }
 
-  // Public endpoint - accept invitation via token from email
+  // ── PR-6 (2026-07-05) — publiczny accept-flow z ustawieniem hasła ────────
+  // Strona web `/accept-invitation?token=…` (apps/web) używa dwóch endpointów:
+  //   GET  /api/invitations/preview?token=…   → dane do nagłówka strony
+  //   POST /api/invitations/accept?token=…    → body { password } (nowy flow)
+  // Token (64 hex, TTL 7 dni, hash w DB) sam w sobie jest autoryzacją.
+
+  /** Public — podgląd zaproszenia (imię, budynek, lokal, ważność). */
+  @Get('preview')
+  preview(@Query('token') token: string) {
+    return this.invitationsService.preview(token)
+  }
+
+  /** Public — akceptacja. Z `password` w body ustawia hasło mieszkańca
+   *  (nowy flow PR-6); bez — legacy zmiana statusu (backward-compat). */
   @Post('accept')
-  accept(@Query('token') token: string) {
+  accept(@Query('token') token: string, @Body() body?: { password?: string }) {
+    if (body?.password !== undefined) {
+      return this.invitationsService.acceptWithPassword(token, body.password)
+    }
     return this.invitationsService.accept(token)
   }
 }

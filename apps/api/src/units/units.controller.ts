@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Request, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Request, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
-import { UnitsService, CreateUnitDto, CreateUnitTypeDto } from './units.service'
+import { UnitsService, CreateUnitDto, CreateUnitTypeDto, UpsertCommonAreaSettingsDto } from './units.service'
 
 @UseGuards(JwtAuthGuard)
 @Controller('buildings/:buildingId')
@@ -51,5 +51,15 @@ export class UnitsController {
   @Delete('units/:id')
   remove(@Param('buildingId') buildingId: string, @Param('id') id: string, @Request() req: any) {
     return this.unitsService.remove(+id, +buildingId, req.user.id)
+  }
+
+  @Put('units/:id/settings')
+  upsertCommonAreaSettings(
+    @Param('buildingId') buildingId: string,
+    @Param('id') id: string,
+    @Body() dto: UpsertCommonAreaSettingsDto,
+    @Request() req: any,
+  ) {
+    return this.unitsService.upsertCommonAreaSettings(+id, +buildingId, req.user.id, dto)
   }
 }

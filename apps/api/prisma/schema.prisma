@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Wymagane przez `@prisma/client@5.22` żeby zaakceptować `adapter` w
+  // konstruktorze (`new PrismaClient({ adapter })`). W 7.x driverAdapters
+  // jest GA i flag jest no-op — bezpieczne w obu wersjach.
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -13,7 +17,7 @@ model LicensePlan {
   id           Int          @id @default(autoincrement())
   code         String       @unique // starter | standard | pro
   name         String
-  maxUnits     Int?         // null = unlimited
+  maxUnits     Int? // null = unlimited
   maxBuildings Int?
   maxAdmins    Int
   licenseKeys  LicenseKey[]
@@ -22,15 +26,15 @@ model LicensePlan {
 }
 
 model LicenseKey {
-  id          String    @id @default(uuid())
-  key         String    @unique
-  planId      Int
-  plan        LicensePlan @relation(fields: [planId], references: [id])
-  status      LicenseKeyStatus @default(ACTIVE)
-  validUntil  DateTime?
-  createdAt   DateTime  @default(now())
+  id         String           @id @default(uuid())
+  key        String           @unique
+  planId     Int
+  plan       LicensePlan      @relation(fields: [planId], references: [id])
+  status     LicenseKeyStatus @default(ACTIVE)
+  validUntil DateTime?
+  createdAt  DateTime         @default(now())
 
-  activatedBy Int?
+  activatedBy Int?      @unique
   admin       Admin?    @relation(fields: [activatedBy], references: [id])
   activatedAt DateTime?
 
@@ -47,48 +51,710 @@ enum LicenseKeyStatus {
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
 
 model Admin {
-  id           Int          @id @default(autoincrement())
-  email        String       @unique
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
   passwordHash String
   name         String
-  createdAt    DateTime     @default(now())
+  createdAt    DateTime @default(now())
 
-  licenseKey   LicenseKey?
-  buildings    Building[]
+  licenseKey     LicenseKey?
+  buildings      Building[]
+  integrators    Integrator[]
+  buildingAdmins BuildingAdmin[]
+  concierges     Concierge[]
 
   @@map("admins")
+}
+
+// ─── INTEGRATORS ──────────────────────────────────────────────────────────────
+
+model Integrator {
+  id           Int      @id @default(autoincrement())
+  adminId      Int
+  admin        Admin    @relation(fields: [adminId], references: [id])
+  name         String
+  email        String   @unique
+  /// Wyświetlane w karcie integratora w Sidebarze. Opcjonalne — solo-integratorzy
+  /// mogą zostawić puste.
+  company      String?
+  passwordHash String
+  /// Preferencje powiadomień — Sesja 3 Panel Integratora.
+  /// Shape: { offlineAlerts, heartbeatDropAlerts, firmwareUpdates,
+  ///          emailChannel, pushChannel, weeklySummary } — bool flags.
+  /// JSON żeby uniknąć migracji przy każdej nowej preferencji.
+  notificationPrefs Json?
+  /// Sesja 6 — email change flow z weryfikacją.
+  /// Gdy user zażąda zmiany emaila, wpisujemy go tutaj + token + TTL 24h.
+  /// Po kliku w link weryfikacyjny → swap email + clear pending.
+  pendingEmail            String?
+  pendingEmailToken       String?  @unique
+  pendingEmailExpiresAt   DateTime?
+  /// Sesja 5 — audit log każdej operacji write integratora.
+  auditLogs    IntegratorAuditLog[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@map("integrators")
+}
+
+/// Sesja 5 Panel Integratora — audit log każdej operacji write.
+/// Pokazywany w Settings → Historia operacji. Pomaga w:
+///   • compliance (kto, kiedy, co zmienił)
+///   • diagnostyka w razie incydentu („integrator A zrestartował Edge X 5 min temu")
+///   • RODO (track-uje dostęp do urządzeń klienta)
+///
+/// Retention: na razie unlimited. Sesja 6+ doda cleanup cron > 90 dni.
+model IntegratorAuditLog {
+  id            BigInt   @id @default(autoincrement())
+  integratorId  Int
+  integrator    Integrator @relation(fields: [integratorId], references: [id], onDelete: Cascade)
+  /// Kategoria akcji — enum-like string. Przykłady:
+  ///   INTERCOM_CREATE, INTERCOM_UPDATE, INTERCOM_UNLINK
+  ///   LPR_CREATE, LPR_UPDATE, LPR_UNLINK
+  ///   EDGE_RELAY_TRIGGER, EDGE_RESTART, EDGE_DEEPLINK_GENERATE
+  ///   PROFILE_UPDATE, NOTIFICATION_PREFS_UPDATE
+  ///   LAN_SCAN, CONFIG_EXPORT
+  action        String
+  /// Typ zasobu którego dotyczy akcja — np. INTERCOM, LPR_CAMERA, EDGE, BUILDING.
+  /// Pomocne przy filtrowaniu UI ale opcjonalne.
+  targetType    String?
+  /// ID zasobu jako string (universal — Int dla buildingu, CUID dla Edge).
+  targetId      String?
+  /// Building scope — używane do filtrowania per-property audit views.
+  buildingId    Int?
+  /// Dodatkowy kontekst: IP klienta, user-agent, params akcji, error message.
+  meta          Json?
+  createdAt     DateTime @default(now())
+
+  @@index([integratorId, createdAt(sort: Desc)])
+  @@index([buildingId, createdAt(sort: Desc)])
+  @@map("integrator_audit_logs")
 }
 
 // ─── BUILDING ─────────────────────────────────────────────────────────────────
 
 model Building {
-  id        Int      @id @default(autoincrement())
-  adminId   Int
-  admin     Admin    @relation(fields: [adminId], references: [id])
-  name      String
-  address   String
-  nip       String?
-  regon     String?
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  adminId    Int
+  admin      Admin    @relation(fields: [adminId], references: [id])
+  objectType String   @default("BUILDING") // BUILDING | HOUSING_ESTATE | MIXED_USE | CAMPUS | PARKING
+  // 2026-06-02 (FAZA b): features per typ obiektu. Defaulty inicjalizowane per
+  // objectType przy create. Strukturę zostawiamy open (JSON), żeby nowe flagi
+  // można dodawać bez migracji. Patrz `apps/api/src/buildings/buildings.constants.ts`
+  // (`BuildingFeatures`, `DEFAULT_FEATURES`).
+  features   Json     @default("{}")
+  // 2026-06-02 (FAZA e) — Permissions Matrix per role.
+  // Shape: { ba: {feat_*:bool, ap_<id>:bool}, concierge: {...}, resident: {...} }
+  // Niezdefiniowany klucz = backend `hasPermission` zwraca `true` (defense:
+  // nie blokuj feature których integrator nie skonfigurował). Patrz
+  // `apps/api/src/buildings/feature-permissions.constants.ts`.
+  featurePermissions Json @default("{}")
+  name       String
+  address    String
+  nip        String?
+  regon      String?
+  createdAt  DateTime @default(now())
 
-  unitTypes UnitType[]
-  units     Unit[]
-  residents Resident[]
+  // Archiwizacja (soft delete)
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
+
+  // Parametry ogólne
+  numberOfFloors     Int?
+  numberOfHouses     Int?
+  hasElevator        Boolean @default(false)
+  hasCctv            Boolean @default(false)
+  hasLightingControl Boolean @default(false)
+  hasEdgeAI          Boolean @default(false)
+  hasEdge            Boolean @default(false)
+  hasPhotovoltaics   Boolean @default(false)
+
+  // Udogodnienia
+  hasPool        Boolean @default(false)
+  hasGym         Boolean @default(false)
+  hasSauna       Boolean @default(false)
+  hasPlayroom    Boolean @default(false)
+  hasBanquetHall Boolean @default(false)
+  hasLobby       Boolean @default(false)
+
+  // Domofon
+  hasIntercom          Boolean @default(false)
+  intercomManufacturer String?
+  intercomModel        String?
+  entranceCount        Int?
+
+  // System rozpoznawania tablic (LPR)
+  hasLprSystem    Boolean @default(false)
+  lprManufacturer String?
+  lprModel        String?
+
+  // Paczkomaty / obsługa paczek
+  packageHandling String? // LOCKER | CONCIERGE | NONE
+
+  // Branding (base64)
+  logoBase64            String?
+  backgroundImageBase64 String?
+
+  unitTypes                UnitType[]
+  units                    Unit[]
+  residents                Resident[]
+  stairwells               Stairwell[]
+  lprCameras               LprCamera[]
+  intercoms                BuildingIntercom[]
+  notifications            Notification[]
+  buildingAdminAssignments BuildingAdminAssignment[]
+  concierges               Concierge[]
+  parcels                  Parcel[]
+  reservations             Reservation[]
+  tickets                  Ticket[]
+  vehicles                 Vehicle[]
+  edgeDevices              EdgeDevice[]
+  accessPoints             AccessPoint[]
+  lprReads                 LprRead[]
+  guests                   Guest[]
+  guestEvents              GuestEvent[]
+  guestAccessUses          GuestAccessUse[]
+  guestApprovalRequests    GuestApprovalRequest[]
+  accessEvents             AccessEvent[]
+  edgeSyncOutbox           EdgeSyncOutboxEntry[]
+  edgeDeviceMirror         EdgeDeviceMirror[]
+  knowledgeDocs            BuildingKnowledgeDoc[]
+  anomalyEvents            AnomalyEvent[]
+  lprCameraApLinks         LprCameraAccessPointLink[]
+  courierVisits            CourierVisit[]
+  paymentSettings          PaymentSettings?
+  paymentComponents        PaymentComponent[]
+  paymentCharges           PaymentCharge[]
+  mt940Imports             Mt940Import[]
+  aiEngine                 AiEngineConfig?
+  assistantQueryLogs       AssistantQueryLog[]
+  // Domofon-połączenia (SIP↔WebRTC bridge, 2026-06-13) — patrz
+  // docs/intercom-akuvox-call.md. Za flagą INTERCOM_CALL_ENABLED.
+  intercomCallSessions     IntercomCallSession[]
+  // 2026-07-29 — grupy kontaktowe lokali (BA) dla ekranu domofonu Akuvox.
+  contactGroups            ContactGroup[]
+  // 2026-07-30 — Akuvox Directory Sync v2 (docs/akuvox-directory-v2-analysis.md).
+  akuvoxDevices            AkuvoxDevice[]
+  akuvoxImportTemplates    AkuvoxImportTemplate[]
+  // 2026-08-09 — zaproszenia domowników (mieszkaniec → domownik tego samego lokalu).
+  householdInvitations     HouseholdInvitation[]
 
   @@map("buildings")
+}
+
+// 2026-07-29 — Grupa kontaktowa lokali (BA panel): np. „Budynek 1",
+// „ulica Komfortowa". Lokal należy do maks. jednej grupy (Unit.contactGroupId).
+// Użycie: grupowanie kontaktów na ekranie domofonu Akuvox —
+//   • E18C UserData.tgz: atrybut Group w userdata.xml (natywne grupy),
+//   • R29 Remote Phonebook: format płaski → prefiks nazwy + sortowanie.
+model ContactGroup {
+  id         Int      @id @default(autoincrement())
+  buildingId Int
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  name       String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  units Unit[]
+
+  @@unique([buildingId, name])
+  @@map("contact_groups")
+}
+
+// Building knowledge base — repozytorium dokumentów dla LLM RAG.
+// Synced do Edge przez tunnel (KNOWLEDGE_UPSERT) gdzie jest chunkowany +
+// embedowany (bge-m3) dla semantic search.
+//   MESSENGER_CHAT — eksport JSON z Messengera (FB Data Download)
+//   UCHWALA        — uchwała zarządu (PDF/DOCX → parsed text)
+//   REGULAMIN      — regulamin osiedla
+//   KONTAKT        — kontakty serwisowe (CSV / manual entry)
+//   INNE           — generic notatka tekstowa
+enum BuildingKnowledgeType {
+  MESSENGER_CHAT
+  UCHWALA
+  REGULAMIN
+  KONTAKT
+  INNE
+}
+
+// Building knowledge base — repozytorium dokumentów per budynek dla LLM RAG.
+// Każdy doc syncuje się do Edge przez tunnel (KNOWLEDGE_UPSERT) gdzie jest
+// chunkowany + embedowany (bge-m3) dla semantic search.
+// Pliki binarne (PDF/DOCX/JSON) trafiają tylko na Edge filesystem
+// (~/gatelynk-edge/knowledge/<id>.<ext>). Cloud DB trzyma parsedText
+// + metadata.
+model BuildingKnowledgeDoc {
+  id          Int                   @id @default(autoincrement())
+  buildingId  Int
+  building    Building              @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  type        BuildingKnowledgeType
+  title       String
+  // Wyekstrahowany tekst (po parsowaniu PDF/DOCX/JSON). Synced do Edge dla RAG.
+  parsedText  String                @db.Text
+  // Metadata per-type w JSONB:
+  //   MESSENGER_CHAT: { participants, threadTitle, messageCount, dateRange }
+  //   UCHWALA: { number, date, topic }
+  //   REGULAMIN: { sections: [] }
+  //   KONTAKT: { role, phone, email, hours }
+  metadata    Json?
+  // Original file extension (.pdf/.docx/.json). null dla manual entry.
+  fileExt     String?
+  // Original file size in bytes.
+  fileSizeB   Int?
+  // Kto wgrał (BuildingAdmin.id z JWT.sub).
+  uploadedBy  Int
+  uploadedAt  DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  // Soft delete — Edge widzi DELETE i czyści swoje sqlite + filesystem.
+  isArchived  Boolean               @default(false)
+  archivedAt  DateTime?
+
+  @@index([buildingId, type, uploadedAt(sort: Desc)])
+  @@index([buildingId, isArchived])
+  @@map("building_knowledge_docs")
+}
+
+// ─── EDGE DEVICES ─────────────────────────────────────────────────────────────
+
+model EdgeDevice {
+  id         String   @id @default(cuid())
+  buildingId Int
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  // EDGE | EDGE_AI
+  type String  @default("EDGE")
+  name String?
+
+  // Activation
+  activationCode          String?   @unique
+  activationCodeExpiresAt DateTime?
+  isActivated             Boolean   @default(false)
+  activatedAt             DateTime?
+
+  // Runtime info (reported by device)
+  lastSeenAt  DateTime?
+  ipAddress   String?
+  version     String?
+  machineInfo Json?
+
+  createdAt DateTime @default(now())
+
+  outboxEntries EdgeSyncOutboxEntry[]
+  mirrorDevices EdgeDeviceMirror[]
+
+  @@map("edge_devices")
+}
+
+// Faza 7.6 — outbox dla Cloud→Edge messaging. Patrz komentarz w migracji
+// 20260508130000_add_edge_sync_outbox.
+model EdgeSyncOutboxEntry {
+  id            String   @id // 8-znakowy random, używany też jako WS message id
+  buildingId    Int
+  building      Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  edgeDeviceId  String?
+  edgeDevice    EdgeDevice? @relation(fields: [edgeDeviceId], references: [id], onDelete: Cascade)
+  action        String
+  payload       Json     @default("{}")
+  attempts      Int      @default(0)
+  lastAttemptAt DateTime?
+  lastError     String?
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  createdAt     DateTime @default(now())
+
+  @@map("edge_sync_outbox")
+}
+
+// ─── EDGE DEVICE MIRROR (Faza B-2 wizarda, 2026-05-13) ────────────────────────
+// Mirror urządzeń z Edge sqlite (apps/edge/src/devices/device-registry.service).
+// Edge wysyła DEVICE_UPSERT/DELETE/SYNC_ALL przez WS tunnel; Cloud upsertuje tu.
+//
+// **Source of truth = Edge sqlite.** Ta tabela jest tylko mirror-em — pozwala
+// Cloud panelowi BA/Integratora wyrenderować listę urządzeń bez gadania
+// z każdym Edge na żywo.
+//
+// `deviceUuid` to UUID urządzenia w Edge sqlite (DeviceRegistryService.saveDevice).
+// `edgeDeviceId` to cuid EdgeDevice (= Mac Mini) — który Edge to wystawił.
+//
+// Backfill (migration 20260513120100): istniejące BuildingIntercom + LprCamera
+// są przepisywane do mirror, żeby BA panel nie stracił widoczności do czasu
+// pełnego sync po reconnect Edge.
+model EdgeDeviceMirror {
+  id            Int         @id @default(autoincrement())
+  buildingId    Int
+  building      Building    @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  edgeDeviceId  String?     // cuid EdgeDevice (Cloud Mac Mini) — gdy znany
+  edgeDevice    EdgeDevice? @relation(fields: [edgeDeviceId], references: [id], onDelete: SetNull)
+
+  deviceUuid    String      // UUID urządzenia w Edge sqlite
+  type          String      // INTERCOM | CAMERA | LPR_CAMERA | ELEVATOR | LIGHTING | SWITCH | KNX_BRIDGE | KNX_OBJECT
+  driverId      String?     // z @gatelynk/device-drivers catalog (np. 'akuvox-smartplus')
+  config        Json        @default("{}") // pełna kopia configu z Edge sqlite
+  // Faza B-4 (2026-05-14) — nazwa wyświetlana w aplikacji mieszkańca / panelu BA.
+  // Init z `config.name` przy pierwszym DEVICE_UPSERT, potem nadpisywalna przez
+  // BA inline edit. Cloud nigdy nie nadpisuje gdy istniejąca wartość != null
+  // (COALESCE w upsert SQL).
+  displayLabel    String?
+  labelUpdatedBy  String?  // 'edge-init' | 'building-admin' | 'integrator'
+  labelUpdatedAt  DateTime?
+  lastSyncedAt  DateTime    @default(now()) @updatedAt
+  createdAt     DateTime    @default(now())
+
+  @@unique([buildingId, deviceUuid])
+  @@index([buildingId, type])
+  @@map("edge_device_mirror")
+}
+
+// ─── AI ENGINE (FAZA 8.g, 2026-06-03) ────────────────────────────────────────
+// First-class device per budynek — zewnętrzny YOLO/Vision service na MacBook
+// M1 (lub innej maszynie z GPU). Dotąd URL siedział w `process.env.YOLO_URL`
+// — niefajne dla integratora (każda zmiana = ręczne SSH na Edge + restart).
+// Teraz: edytowalna konfiguracja per budynek z panelu Integratora, syncowana
+// do Edge przez `AI_ENGINE_CONFIG_UPDATE` tunnel command + outbox replay.
+//
+// MVP założenie: 1 AI Engine per budynek (UNIQUE buildingId). W przyszłości
+// można rozszerzyć do N (load split / redundancja).
+//
+// Permissions cascade — `feat_ai_engine` master nad `feat_fall_detection`,
+// `feat_vision_dashboard`, `feat_brand_detection`, `feat_plate_ocr`. Patrz
+// `feature-permissions.constants.ts` (hasPermission).
+//
+// Test connection flow:
+//   1. BA/Integrator klika "Testuj połączenie" → POST /ai-engine/test
+//   2. Cloud → tunnel AI_ENGINE_TEST → Edge GET healthPath
+//   3. Edge → tunnel event AI_ENGINE_TEST_RESULT z {ok, ms, statusCode, error}
+//   4. EdgeGateway zapisuje wynik do `lastTest*` kolumn
+//   5. Frontend pollu-je GET /ai-engine i odświeża "Ostatni test: X temu, OK Yms"
+// FAZA 8.h.25 (2026-06-12) — log pytań do GateLynk AI + ocena integratora.
+// Tymczasowy panel: dataset do dostrojenia LLM (ocenione pary Q/A).
+model AssistantQueryLog {
+  id          Int       @id @default(autoincrement())
+  buildingId  Int
+  building    Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  role        String    // 'RESIDENT' | 'BUILDING_ADMIN'
+  userId      Int?
+  question    String
+  answer      String
+  intent      String?
+  totalMs     Int?
+  model       String?
+  smart       Boolean   @default(true)
+  ratingOk    Boolean?  // NULL = nieocenione, true = OK, false = NIE OK
+  ratedAt     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([buildingId, createdAt(sort: Desc)])
+  @@map("assistant_query_logs")
+}
+
+model AiEngineConfig {
+  id            Int      @id @default(autoincrement())
+  buildingId    Int      @unique
+  building      Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  url           String
+  healthPath    String   @default("/health")
+  model         String   @default("yolov8n")
+  enabled       Boolean  @default(true)
+
+  // Last test result (set by EdgeGateway on AI_ENGINE_TEST_RESULT event)
+  lastTestAt    DateTime?
+  lastTestOk    Boolean?
+  lastTestMs    Int?
+  lastTestErr   String?
+  lastTestCode  Int?
+
+  // FAZA 8.h.7 (2026-06-08) — LLM (Ollama) summarizer config.
+  // Generuje PL narratives dla notable frames przez VisionLlmSummarizerService.
+  // Niezależny enabled flag — można mieć YOLO ON + LLM OFF (oszczędność CPU
+  // na MacBooku gdy LLM 14B model jeździ wolno).
+  llmUrl          String?
+  llmModel        String   @default("qwen2.5:14b")
+  llmEnabled      Boolean  @default(true)
+  llmLastTestAt   DateTime?
+  llmLastTestOk   Boolean?
+  llmLastTestMs   Int?
+  llmLastTestErr  String?
+  llmLastTestCode Int?
+  // FAZA 8.h.8 (2026-06-08) — JSON array zainstalowanych modeli Ollama
+  // (cache z ostatniego LLM_TEST). UI pokazuje "✓ zainstalowane" vs
+  // "⚠ trzeba pobrać" dla wybranych presetów.
+  llmAvailableModels Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@index([buildingId])
+  @@map("ai_engines")
+}
+
+// ─── ACCESS POINTS ────────────────────────────────────────────────────────────
+
+model AccessPoint {
+  id         Int      @id @default(autoincrement())
+  buildingId Int
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  label String // "Wejście główne", "Garaż", "Furtka"
+  icon  String @default("door") // door | garage | gate | elevator | barrier
+
+  // Edge device reference (LEGACY — used as fallback by Edge when output binding is empty)
+  edgeDeviceId String? // EdgeDevice.id — który Edge obsługuje
+  deviceId     String // UUID urządzenia na Edge (intercom) — legacy field
+  relayIndex   Int // indeks przekaźnika — legacy field
+
+  // Refactor 2026-06-01: binding warstwy 3 (AccessPoint = device output binding).
+  // outputDeviceId/outputIndex pozwalają adminowi swobodnie zmieniać, który
+  // przekaźnik (np. Hikvision LPR I/O zamiast Akuvox doorIndex 0) otwiera
+  // dany punkt dostępu, bez modyfikowania kodu Edge.
+  //
+  // Backfill: outputDeviceId = deviceId, outputIndex = relayIndex (1:1 dla
+  // wszystkich AP sprzed migracji). Nowe AP muszą mieć obie kolumny wypełnione
+  // — Edge resolver wpada w fallback (legacy deviceId+relayIndex) gdy nullable.
+  outputDeviceId String? // UUID urządzenia (device_config.device_id na Edge)
+  outputIndex    Int? // 0/1 dla Akuvox doorIndex, 1..n dla Hikvision I/O
+  durationMs     Int     @default(800) // pulse duration ms (Hikvision needs explicit low)
+  scope          String  @default("RESIDENT") // PUBLIC | RESIDENT | ADMIN_ONLY
+
+  // 2026-06-02 (FAZA c) — semantyczna kategoria dla grupowania w UI i logiki
+  // rules (np. fire_escape ma inny domyślny scope). Wartości w
+  // `apps/api/src/access-points/access-points.constants.ts`.
+  category  String  @default("MAIN_ENTRY")
+
+  // 2026-07-08 (Nuki smart lock, category=UNIT_DOOR) — AP przypisany do LOKALU.
+  // unitId != NULL ⇒ AP widzi WYŁĄCZNIE mieszkaniec tego lokalu (aktywny pivot
+  // unit_residents) — filtr w resident endpoints (GET access-points + open).
+  // NULL = AP budynkowy (jak dotąd). Gość: UNIT_DOOR NIGDY nie wchodzi w tryb
+  // „bez ograniczeń" — tylko jawny wpis w Guest.allowedAccessPoints.
+  unitId Int?
+  unit   Unit? @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guestEvents   GuestEvent[]
+  accessEvents  AccessEvent[]
+  guestAccessUses GuestAccessUse[]
+  schedules     AccessPointSchedule[]
+  lprCameraLinks LprCameraAccessPointLink[]
+  guestOpenNonces GuestOpenNonce[]
+  guestApprovalRequests GuestApprovalRequest[]
+
+  @@unique([buildingId, deviceId, relayIndex])
+  @@index([buildingId, unitId])
+  @@map("access_points")
+}
+
+// 2026-06-02 (FAZA c) — many-to-many między LPR kamerą (mirror.deviceUuid)
+// a AccessPoint. Pozwala kamerze wjazdowej i wyjazdowej współdzielić tę samą
+// bramę (2 linki direction='IN'/'OUT' do tego samego AP) ALBO 1 kamerze otwierać
+// 2 różne bramy (rzadkie, ale dopuszczone).
+//
+// Edge `HikvisionLprService` przy match plate szuka po (cameraDeviceUuid)
+// w `lpr_camera_ap_links` (synced przez tunnel) — fallback do legacy
+// `config.linkedAccessPointId` gdy brak linków.
+model LprCameraAccessPointLink {
+  id                Int          @id @default(autoincrement())
+  cameraDeviceUuid  String       // device_uuid z edge_device_mirror (LPR_CAMERA)
+  accessPointId     Int
+  accessPoint       AccessPoint  @relation(fields: [accessPointId], references: [id], onDelete: Cascade)
+  // 'IN' (wjazdowa) | 'OUT' (wyjazdowa). Domyślnie IN — legacy backfill.
+  direction         String       @default("IN")
+  buildingId        Int
+  building          Building     @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+
+  @@unique([cameraDeviceUuid, accessPointId])
+  @@index([accessPointId])
+  @@index([buildingId])
+  @@map("lpr_camera_ap_links")
+}
+
+// ─── ACCESS POINT SCHEDULES (cron auto-open) ──────────────────────────────────
+//
+// Refactor 2026-06-01. Każdy AccessPoint może mieć N cron-owanych wyzwoleń.
+// Edge `ScheduleService` co minutę skanuje wszystkie enabled, parsuje cron
+// expression przez `cron-parser` i odpala `executor.fire(apId, {trigger:
+// 'SCHEDULE'})`. Drift > 2 min = nie wykonujemy retroaktywnie (przyjęte
+// jako akceptowalne — godzinowe eventy nie są krytyczne).
+//
+// `lastFiredAt` zapisywane po każdym fire żeby uniknąć podwójnego wystrzału
+// w jednej minucie (cron loop running co 60s + okno tolerancji 5s).
+model AccessPointSchedule {
+  id            Int         @id @default(autoincrement())
+  accessPointId Int
+  accessPoint   AccessPoint @relation(fields: [accessPointId], references: [id], onDelete: Cascade)
+  cronExpr      String // standardowy 5-pól cron, np. "0 18 * * *" — wieczór codziennie
+  label         String? // human-readable, np. "Otwarcie wieczorne"
+  enabled       Boolean     @default(true)
+  lastFiredAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accessPointId, enabled])
+  @@map("access_point_schedules")
+}
+
+// ─── STAIRWELLS ───────────────────────────────────────────────────────────────
+
+model Stairwell {
+  id         Int                @id @default(autoincrement())
+  buildingId Int
+  building   Building           @relation(fields: [buildingId], references: [id])
+  name       String
+  createdAt  DateTime           @default(now())
+  units      Unit[]
+  intercom   StairwellIntercom?
+
+  @@map("stairwells")
+}
+
+// ─── STAIRWELL INTERCOMS ──────────────────────────────────────────────────────
+
+model StairwellIntercom {
+  id           Int       @id @default(autoincrement())
+  stairwellId  Int       @unique
+  stairwell    Stairwell @relation(fields: [stairwellId], references: [id])
+  manufacturer String    @default("Akuvox")
+  model        String?
+  ipAddress    String?
+  login        String?
+  password     String?
+  relays       Json? // [{id:"1",label:"Wejście główne"},{id:"2",label:"Brama"}]
+  // Uniwersalny driver z katalogu @gatelynk/device-drivers (np. 'akuvox-smartplus',
+  // 'hikvision-intercom'). Gdy ustawiony — `config` zawiera pełen blob parametrów,
+  // a stare kolumny (ipAddress/login/...) są opcjonalnie synchronizowane jako mirror
+  // dla wstecznej kompatybilności.
+  driverId     String?
+  config       Json?
+  updatedAt    DateTime  @updatedAt
+
+  @@map("stairwell_intercoms")
+}
+
+// ─── BUILDING INTERCOMS ───────────────────────────────────────────────────────
+
+model BuildingIntercom {
+  id           Int      @id @default(autoincrement())
+  buildingId   Int
+  building     Building @relation(fields: [buildingId], references: [id])
+  name         String // np. "Wejście 1", "Brama główna"
+  model        String? // Akuvox model
+  ipAddress    String?
+  sipServer    String?
+  sipAccount   String?
+  sipPassword  String?
+  edgeDeviceId String? // UUID urządzenia w Edge store (link do fizycznego urządzenia w LAN)
+  // ── SIP↔WebRTC call bridge (2026-06-13) — docs/intercom-akuvox-call.md ──
+  // Konfiguracja mostu połączeń domofonowych. Wszystko opcjonalne; aktywne
+  // tylko gdy bridgeEnabled=true ORAZ env INTERCOM_CALL_ENABLED=true.
+  // sipServer/sipAccount/sipPassword (powyżej) = rejestracja Akuvox→Janus.
+  // turn* = ICE servers dla strony WebRTC (iOS + Janus). sipPassword/turnPassword
+  // są filtrowane przez EdgeGateway.sanitizeDeviceConfig przed zapisem mirror-a.
+  sipDomain     String? // domena/registrar SIP gdy inna niż IP Edge
+  turnUrl       String? // np. turn:turn.gatelynk.com:3478
+  turnUsername  String?
+  turnPassword  String?
+  bridgeEnabled Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 2026-07-30 — Akuvox Directory Sync v2: urządzenie katalogowe może linkować
+  // do istniejącego rekordu SIP/bridge (opcjonalnie).
+  akuvoxDevices AkuvoxDevice[]
+
+  @@map("building_intercoms")
+}
+
+// ─── LPR CAMERAS ──────────────────────────────────────────────────────────────
+
+model LprCamera {
+  id                   Int      @id @default(autoincrement())
+  buildingId           Int
+  building             Building @relation(fields: [buildingId], references: [id])
+  name                 String
+  manufacturer         String
+  model                String?
+  ipAddress            String?
+  login                String?
+  password             String?
+  edgeDeviceId         String? // UUID urządzenia w Edge store (link do fizycznej kamery w LAN)
+  // Gdzie przechowywana jest whitelist tablic i kto otwiera bramę.
+  //   'edge'   — Edge trzyma listę, otwiera przez domofon (default).
+  //   'camera' — Lista w kamerze, kamera sama otwiera przez swój przekaźnik.
+  //   'hybrid' — Oba; 30s cooldown na Edge żeby nie otworzyć bramy 2×.
+  whitelistMode        String   @default("edge")
+  // Tylko dla 'camera' / 'hybrid': 'isapi' (próba push przez ISAPI) lub 'manual_csv'.
+  cameraListSyncMethod String?
+  // Tylko dla 'edge' / 'hybrid': link do domofonu który otwiera bramę.
+  // Celowo bez relacji Prisma — pole trzymane jako UUID Edge device'u domofonu
+  // (edgeDeviceId z BuildingIntercom), bo to tego używa HikvisionLprService
+  // przy wywołaniu IntercomService.execute().
+  linkedIntercomEdgeId String?
+  linkedRelayIndex     Int?
+  // FAZA 8.h (2026-06-03) — rozdzielenie typu kamery:
+  //   'STANDARD' = zwykła kamera wizyjna (CCTV, vision AI). NIE bindujemy
+  //                jej do AccessPoint — sama z siebie nie otwiera bramy.
+  //   'LPR'      = kamera rozpoznawania tablic. Może być powiązana z AP
+  //                (linkedIntercom/linkedRelay lub multi-LPR przez
+  //                LprCameraAccessPointLink).
+  // Backfill: wszystkie pre-FAZA-8.h kamery → 'LPR' (założenie historyczne).
+  // Walidacja po stronie aplikacji (CAMERA_ROLES const + CHECK constraint).
+  role                 String   @default("LPR")
+  // FAZA 8.h (2026-06-03) — per-camera AI toggle. Filtruje listę w
+  // VisionDetectService.listCameras() przed cyklicznym snapshot+detect.
+  // Default ON: zachowuje backwards-compat dla istniejących kamer.
+  aiAnalysisEnabled    Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+
+  @@map("lpr_cameras")
+}
+
+// ─── LPR READS ────────────────────────────────────────────────────────────────
+// Audit trail of ANPR detections pushed from Edge over the WS tunnel.
+// Retention: 30 days (swept nightly). No plate images stored — privacy
+// requirement from the admin spec. See apps/edge/store.service.ts for the
+// local (Edge-side) copy.
+model LprRead {
+  id             Int      @id @default(autoincrement())
+  buildingId     Int
+  building       Building @relation(fields: [buildingId], references: [id])
+  cameraDeviceId String // Edge device UUID of the LPR camera
+  plate          String // normalised (uppercase alnum only)
+  matched        Boolean // true = plate was on whitelist at detection time
+  owner          String? // denormalised owner label captured at detection time
+  gateOpened     Boolean // whether Edge actually fired the gate relay
+  reason         String? // 'cooldown' | 'no_linked_intercom' | 'gate_error' | 'not_whitelisted' | null
+  confidence     Float? // optional, from camera payload
+  direction      String? // optional, from camera payload
+  edgeReadId     Int? // rowid on Edge side (for dedup if we ever backfill)
+  ts             DateTime // event time from Edge
+
+  accessEvents AccessEvent[]
+
+  @@index([buildingId, ts])
+  @@index([buildingId, plate, ts])
+  @@index([cameraDeviceId, ts])
+  @@index([plate])
+  @@map("lpr_reads")
 }
 
 // ─── UNIT TYPES ───────────────────────────────────────────────────────────────
 
 model UnitType {
-  id         Int       @id @default(autoincrement())
-  buildingId Int?      // null = system (global)
-  building   Building? @relation(fields: [buildingId], references: [id])
-  code       String
-  name       String
-  icon       String
-  isSystem   Boolean   @default(false)
-  units      Unit[]
+  id           Int       @id @default(autoincrement())
+  buildingId   Int? // null = system (global)
+  building     Building? @relation(fields: [buildingId], references: [id])
+  code         String
+  name         String
+  icon         String
+  isSystem     Boolean   @default(false)
+  isCommonArea Boolean   @default(false) // true = część wspólna (sauna, siłownia itp.)
+  units        Unit[]
 
   @@unique([buildingId, code])
   @@map("unit_types")
@@ -97,49 +763,210 @@ model UnitType {
 // ─── UNITS ────────────────────────────────────────────────────────────────────
 
 model Unit {
-  id          Int      @id @default(autoincrement())
+  id          Int        @id @default(autoincrement())
   buildingId  Int
-  building    Building @relation(fields: [buildingId], references: [id])
+  building    Building   @relation(fields: [buildingId], references: [id])
   unitTypeId  Int
-  unitType    UnitType @relation(fields: [unitTypeId], references: [id])
+  unitType    UnitType   @relation(fields: [unitTypeId], references: [id])
+  stairwellId Int?
+  stairwell   Stairwell? @relation(fields: [stairwellId], references: [id])
   number      String
+  // 2026-06-02 (FAZA d) — dla HOUSING_ESTATE adres domu: street="Kwiatowa",
+  // number="5". Dla bloku zostaje NULL (number="15A" wystarcza).
+  street      String?
+  // 'APARTMENT' (default — backwards compat) | 'HOUSE' | 'OFFICE' | 'SHOP' |
+  // 'STORAGE' | 'PARKING_SPOT'. Wartosc kontrolowana przez aplikacje, DB
+  // trzyma TEXT bez constraint-u zeby nowe typy nie wymagaly migracji.
+  houseType   String     @default("APARTMENT")
   floor       Int?
-  areaSqm     Decimal? @db.Decimal(8, 2)
+  areaSqm     Decimal?   @db.Decimal(8, 2)
   description String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime   @default(now())
+  // 2026-07-29 — grupa kontaktowa (ekran domofonu). SetNull: usunięcie grupy
+  // NIE kasuje lokali, wracają do „bez grupy".
+  contactGroupId Int?
+  contactGroup   ContactGroup? @relation(fields: [contactGroupId], references: [id], onDelete: SetNull)
 
-  unitResidents UnitResident[]
-  invitations   Invitation[]
+  unitResidents      UnitResident[]
+  invitations        Invitation[]
+  // 2026-08-09 — zaproszenia domowników do tego lokalu.
+  householdInvitations HouseholdInvitation[]
+  parcels            Parcel[]
+  commonAreaSettings CommonAreaSettings?
+  reservations       Reservation[]
+  paymentConfig      PaymentConfig?
+  paymentEntries     PaymentEntry[]
+  paymentComponents  PaymentComponent[]
+  paymentCharges     PaymentCharge[]
+  courierVisits      CourierVisit[]
+  // 2026-07-08 (Nuki) — zamki drzwi lokalu (AccessPoint.category=UNIT_DOOR)
+  accessPoints       AccessPoint[]
 
   @@unique([buildingId, number])
   @@map("units")
 }
 
+// 2026-06-02 (FAZA d) — Courier visit flow dla HOUSING_ESTATE.
+//
+// Kurier przy bramie wpisuje 4-cyfrowy kod na klawiaturze Akuvox:
+//   1. Edge sprawdza kolejno: guest_pins, resident_pins, courier_visits PENDING.
+//   2. Brak match-u + osiedle (features.delivery_to_door=true) → tworzymy
+//      `CourierVisit` z code=wpisany, status=PENDING, expiresAt=now+30min.
+//   3. Cloud broadcastuje push do mieszkancow ('wpusc kuriera kodem XXXX?').
+//   4. Mieszkaniec klika 'Wpusc' → POST accept → Cloud wysyla AP_TEST_FIRE
+//      do Edge → szlaban sie otwiera.
+//   5. 30-minutowy cron `@Interval` przestawia PENDING > expiresAt na EXPIRED.
+//
+// Status: PENDING | ACCEPTED | REJECTED | EXPIRED. Wszystkie kolumny opisane
+// w komentarzach inline.
+model CourierVisit {
+  id           Int       @id @default(autoincrement())
+  buildingId   Int
+  building     Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  // Kod kuriera (4-cyfrowy), single-use przez expiresAt.
+  code         String    @db.VarChar(4)
+  // Wybrana marka kuriera (DPD/DHL/InPost/Glovo/...). NULL gdy mieszkaniec
+  // jeszcze nie wybral — fallback "kurier" w UI.
+  courierBrand String?
+  // Dom docelowy. NULL gdy kurier nie wybral (push broadcast do wszystkich).
+  targetUnitId Int?
+  targetUnit   Unit?     @relation(fields: [targetUnitId], references: [id], onDelete: SetNull)
+  // PENDING -> push wyslany, czeka na decyzje
+  // ACCEPTED -> mieszkaniec wpuscil (AP_TEST_FIRE wyslane)
+  // REJECTED -> mieszkaniec odrzucil (brak fire)
+  // EXPIRED  -> cron po expiresAt
+  status       String    @default("PENDING")
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+  // residentId ktory zaakceptowal/odrzucil. NULL gdy EXPIRED.
+  resolvedBy   Int?
+  // Typowo +30 min od createdAt.
+  expiresAt    DateTime
+
+  @@index([buildingId, status])
+  @@index([code])
+  @@map("courier_visits")
+}
+
 // ─── RESIDENTS ────────────────────────────────────────────────────────────────
 
 model Resident {
-  id         Int      @id @default(autoincrement())
-  buildingId Int
-  building   Building @relation(fields: [buildingId], references: [id])
-  firstName  String
-  lastName   String
-  email      String
-  phone      String?
-  createdAt  DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  buildingId   Int
+  building     Building @relation(fields: [buildingId], references: [id])
+  firstName    String
+  lastName     String
+  email        String
+  phone        String?
+  passwordHash String?
+  avatarBase64 String? // base64 zdjęcia profilowego (resident uploads)
+  // 2026-06-02: stały PIN mieszkańca do klawiatury Akuvox przy bramie/domofonie.
+  // 4-6 cyfr, unique per building. Ustawiany przez mieszkańca w iOS Profile.
+  // Sync do Edge `resident_pins` przez tunnel `RESIDENT_PIN_UPSERT` — działa
+  // offline. Walidacja unique vs inny resident + vs active Guest.pin w bazie.
+  intercomPin  String?  @db.VarChar(6)
+  // 2026-05-24: Opt-in flag dla powiadomień o zagrożeniach (upadek osoby
+  // wykryty przez kamerę). Domyślnie OFF — mieszkaniec musi świadomie włączyć
+  // w iOS ProfileView. UI ostrzega że system bywa fałszywie pozytywny i nie
+  // jest substytutem 112. Przyszłość: rozbicie na per-type
+  // (FALL/FIRE/INTRUSION) gdy dodamy więcej kategorii.
+  notifyAnomalies Boolean @default(false)
+  // 2026-08-09 (Domownicy): audyt pochodzenia konta. NULL = konto założone
+  // przez administratora/import; wartość = id mieszkańca, który zaprosił tego
+  // domownika ze swojej aplikacji (HouseholdInvitation flow). Panel admina
+  // widzi domownika jak każdego mieszkańca (zwykły wiersz Resident + pivot
+  // unit_residents) — ta kolumna dokłada tylko „skąd się wziął".
+  // SetNull: usunięcie zapraszającego nie kasuje domownika.
+  invitedByResidentId Int?
+  invitedByResident   Resident?  @relation("ResidentInvitedBy", fields: [invitedByResidentId], references: [id], onDelete: SetNull)
+  invitedResidents    Resident[] @relation("ResidentInvitedBy")
+  createdAt    DateTime @default(now())
 
   unitResidents UnitResident[]
   invitations   Invitation[]
+  householdInvitationsSent     HouseholdInvitation[] @relation("HouseholdInvitationsSent")
+  householdInvitationsAccepted HouseholdInvitation[] @relation("HouseholdInvitationAccepted")
+  notifications Notification[]
+  reservations  Reservation[]
+  // 2026-08-17 — poranny brief push (7:30): default ON, mieszkaniec może
+  // wyłączyć (PATCH /resident/me/morning-brief). Patrz DailyBriefService.
+  morningBriefEnabled Boolean @default(true)
+
+  tickets       Ticket[]
+  vehicles      Vehicle[]
+  pushTokens    PushToken[]
+  guests        Guest[]
+  guestEvents   GuestEvent[]
+  accessEvents  AccessEvent[]
+  guestApprovalRequests GuestApprovalRequest[]
 
   @@unique([buildingId, email])
   @@map("residents")
 }
 
+model PushToken {
+  id          Int      @id @default(autoincrement())
+  residentId  Int
+  resident    Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  // 'production' (App Store / TestFlight) lub 'development' (Xcode dev build
+  // z entitlement aps-environment=development). Cloud trzyma 2 providery APNs
+  // i routuje push na właściwy endpoint per-token. Bez tej kolumny mismatch
+  // sandbox/prod dawał BadDeviceToken → automatyczne kasowanie tokenu.
+  environment String   @default("production")
+  // 2026-06-13 — kanał push. 'apns' = zwykłe alert/banner notyfikacje
+  // (UNUserNotificationCenter). 'voip' = PushKit token, osobny topic
+  // <bundleId>.voip, używany do budzenia apki na połączenie domofonowe
+  // (docs/intercom-akuvox-call.md). To samo urządzenie ma OSOBNE tokeny dla
+  // obu kanałów. Default 'apns' dla wstecznej kompatybilności.
+  kind        String   @default("apns")
+  // 2026-07-15 — bundle ID apki, która zarejestrowała token
+  // (com.gatelynk.app / .glass / .gamma). Topic APNs musi się zgadzać
+  // z bundlem tokenu, inaczej APNs odrzuca push. NULL = legacy token →
+  // fallback do env APN_BUNDLE_ID.
+  bundleId    String?
+  createdAt   DateTime @default(now())
+
+  @@map("push_tokens")
+}
+
+// ── Domofon — sesje połączeń (SIP↔WebRTC bridge, 2026-06-13) ──────────────────
+//
+// Pełen projekt: docs/intercom-akuvox-call.md. Cała funkcja za flagą
+// env INTERCOM_CALL_ENABLED (default false). `id` (uuid) jest jednocześnie
+// `sessionId` używanym w tunelu (INTERCOM_CALL_*), VoIP push payloadzie
+// i sygnalizacji WebRTC — jedno źródło prawdy dla całego flow.
+model IntercomCallSession {
+  id               String    @id @default(uuid())
+  buildingId       Int
+  building         Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  intercomDeviceId String?   // Edge device UUID domofonu (BuildingIntercom.edgeDeviceId)
+  intercomName     String?   // snapshot nazwy panelu (np. "Brama główna")
+  unitId           Int?      // do którego lokalu dzwoniono (gdy znany)
+  unitLabel        String?   // snapshot "Klatka A/15A"
+  answeredById     Int?      // resident który ODEBRAŁ (first-answer wins); NULL = MISSED
+  state            String    @default("INCOMING") // INCOMING|RINGING|ACTIVE|ENDED|MISSED
+  startedAt        DateTime  @default(now())
+  ringingAt        DateTime?
+  answeredAt       DateTime?
+  endedAt          DateTime?
+  // ANSWERED_HANGUP|CALLER_HANGUP|TIMEOUT|DECLINED|ERROR|NO_DEVICE
+  endReason        String?
+  meta             Json?     // ad-hoc: snapshotUrl, codecAudio/Video, turnUsed...
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([buildingId, startedAt(sort: Desc)])
+  @@index([state])
+  @@map("intercom_call_sessions")
+}
+
 model UnitResident {
-  id         Int      @id @default(autoincrement())
+  id         Int          @id @default(autoincrement())
   unitId     Int
-  unit       Unit     @relation(fields: [unitId], references: [id])
+  unit       Unit         @relation(fields: [unitId], references: [id])
   residentId Int
-  resident   Resident @relation(fields: [residentId], references: [id])
+  resident   Resident     @relation(fields: [residentId], references: [id])
   role       ResidentRole
   sinceDate  DateTime
   untilDate  DateTime?
@@ -173,4 +1000,915 @@ enum InvitationStatus {
   PENDING
   ACCEPTED
   EXPIRED
+}
+
+// ─── HOUSEHOLD INVITATIONS (Domownicy, 2026-08-09) ───────────────────────────
+//
+// Mieszkaniec zaprasza domownika (żona/mąż/dziecko) ZE SWOJEJ aplikacji iOS:
+// tworzy zaproszenie (imię + opcjonalna relacja), udostępnia link ShareLink-iem
+// (iMessage/WhatsApp), domownik na stronie web podaje własny e-mail + hasło
+// → powstaje pełnoprawny Resident + pivot unit_residents do TEGO SAMEGO lokalu.
+//
+// Decyzje projektowe:
+//   • Osobna tabela od `invitations` (admin flow) — tamten flow zakłada, że
+//     Resident JUŻ istnieje (admin go stworzył), tu Resident powstaje dopiero
+//     przy akceptacji, a e-mail zna wyłącznie domownik. Mieszanie obu
+//     semantyk w jednej tabeli dawałoby nullable-mgłę (residentId? email?).
+//   • `token` przechowywany JAWNIE (nie hash jak w admin invitations) —
+//     świadomy trade-off za wzorem `Guest.urlToken`: mieszkaniec musi móc
+//     ponownie udostępnić link z listy w aplikacji (ShareLink z poziomu
+//     „Domownicy"), a token jest krótkotrwały (7 dni), jednorazowy
+//     i unieważnialny z apki jednym tapnięciem.
+//   • Jednorazowość + wygaśnięcie egzekwowane w serwisie (PENDING→ACCEPTED
+//     w transakcji; lazy-expire przy każdym odczycie/akceptacji).
+//   • Limit aktywnych zaproszeń per lokal (5) chroni przed spamem — serwis.
+//   • Tryb dziecka NIE wchodzi w MVP. Zarezerwowane miejsce w designie:
+//     przyszła kolumna `Resident.householdProfile` ('ADULT' default | 'CHILD')
+//     + ewentualne ograniczenia feature-permissions per profil (np. dziecko
+//     bez zapraszania gości). `relationLabel` poniżej już dziś niesie
+//     etykietę „syn/córka", więc migracja będzie mogła zbackfillować profil.
+model HouseholdInvitation {
+  id                  Int      @id @default(autoincrement())
+  buildingId          Int
+  building            Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  unitId              Int
+  unit                Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  // Kto zaprosił — audyt dla administratora + warunek bezpieczeństwa:
+  // przy akceptacji zapraszający musi NADAL mieć aktywny pivot do lokalu.
+  invitedByResidentId Int
+  invitedBy           Resident @relation("HouseholdInvitationsSent", fields: [invitedByResidentId], references: [id], onDelete: Cascade)
+  // Imię (i opcjonalnie nazwisko) domownika wpisane przez zapraszającego —
+  // prefill na stronie akceptacji; domownik może poprawić.
+  inviteeName         String
+  // Opcjonalna relacja („żona", „syn") — czysto informacyjna etykieta w UI.
+  relationLabel       String?
+  token               String   @unique
+  status              HouseholdInvitationStatus @default(PENDING)
+  createdAt           DateTime @default(now())
+  expiresAt           DateTime
+  acceptedAt          DateTime?
+  // Który Resident powstał z tego zaproszenia (audyt; SetNull gdy konto
+  // domownika zostanie usunięte).
+  acceptedResidentId  Int?
+  acceptedResident    Resident? @relation("HouseholdInvitationAccepted", fields: [acceptedResidentId], references: [id], onDelete: SetNull)
+
+  @@index([unitId, status])
+  @@index([invitedByResidentId, status])
+  @@map("household_invitations")
+}
+
+enum HouseholdInvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
+// ─── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id         Int       @id @default(autoincrement())
+  buildingId Int
+  building   Building  @relation(fields: [buildingId], references: [id])
+  residentId Int?
+  resident   Resident? @relation(fields: [residentId], references: [id])
+  title      String
+  body       String
+  sentAt     DateTime  @default(now())
+
+  // FAZA polish (f) — historia broadcastów BA
+  senderBaId Int?
+  senderBa   BuildingAdmin? @relation("BaNotifications", fields: [senderBaId], references: [id], onDelete: SetNull)
+
+  @@index([buildingId, sentAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ─── BUILDING ADMINS ──────────────────────────────────────────────────────────
+
+model BuildingAdmin {
+  id           Int      @id @default(autoincrement())
+  adminId      Int
+  admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  buildings           BuildingAdminAssignment[]
+  // FAZA polish (f) — back-relation dla powiadomień wysłanych przez tego BA
+  sentNotifications   Notification[] @relation("BaNotifications")
+
+  @@map("building_admins")
+}
+
+model BuildingAdminAssignment {
+  buildingAdminId Int
+  buildingId      Int
+  buildingAdmin   BuildingAdmin @relation(fields: [buildingAdminId], references: [id], onDelete: Cascade)
+  building        Building      @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@id([buildingAdminId, buildingId])
+  @@map("building_admin_assignments")
+}
+
+/// Reset hasła przez link e-mail (2026-07-18). Generyczna per rola —
+/// dziś BUILDING_ADMIN, w przyszłości CONCIERGE/INTEGRATOR. Trzymamy TYLKO
+/// sha256(token); plaintext idzie wyłącznie w linku mailowym.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  role      String
+  userId    Int
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([role, userId])
+  @@map("password_reset_tokens")
+}
+
+// ─── CONCIERGES ───────────────────────────────────────────────────────────────
+
+model Concierge {
+  id           Int      @id @default(autoincrement())
+  adminId      Int
+  admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  buildingId   Int
+  building     Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  parcels Parcel[]
+
+  @@map("concierges")
+}
+
+// ─── PARCELS ───────────────────────────────────────────────────────────────────
+
+enum CourierType {
+  DHL
+  INPOST
+  ALLEGRO
+  OTHER
+}
+
+enum ParcelStatus {
+  RECEIVED
+  ISSUED
+}
+
+model Parcel {
+  id             Int          @id @default(autoincrement())
+  trackingNumber String
+  courier        CourierType
+  status         ParcelStatus @default(RECEIVED)
+  unitId         Int
+  unit           Unit         @relation(fields: [unitId], references: [id])
+  buildingId     Int
+  building       Building     @relation(fields: [buildingId], references: [id])
+  conciergeId    Int
+  concierge      Concierge    @relation(fields: [conciergeId], references: [id])
+  receivedAt     DateTime     @default(now())
+  issuedAt       DateTime?
+  issuedPhotoUrl String?
+  createdAt      DateTime     @default(now())
+
+  @@map("parcels")
+}
+
+// ─── COMMON AREAS & RESERVATIONS ──────────────────────────────────────────────
+
+model CommonAreaSettings {
+  id             Int      @id @default(autoincrement())
+  unitId         Int      @unique
+  unit           Unit     @relation(fields: [unitId], references: [id])
+  maxSlotMinutes Int      @default(60)
+  openTime       String   @default("08:00")
+  closeTime      String   @default("22:00")
+  isPaid         Boolean  @default(false)
+  pricePerHour   Decimal? @db.Decimal(8, 2)
+
+  @@map("common_area_settings")
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model Reservation {
+  id          Int               @id @default(autoincrement())
+  buildingId  Int
+  building    Building          @relation(fields: [buildingId], references: [id])
+  unitId      Int
+  unit        Unit              @relation(fields: [unitId], references: [id])
+  residentId  Int
+  resident    Resident          @relation(fields: [residentId], references: [id])
+  startAt     DateTime
+  endAt       DateTime
+  status      ReservationStatus @default(CONFIRMED)
+  isPaid      Boolean           @default(false)
+  pricePaid   Decimal?          @db.Decimal(8, 2)
+  note        String?
+  createdAt   DateTime          @default(now())
+  cancelledAt DateTime?
+
+  @@map("reservations")
+}
+
+// ─── TICKETS ──────────────────────────────────────────────────────────────────
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum TicketCategory {
+  ISSUE
+  FEEDBACK
+  QUESTION
+  OTHER
+}
+
+model Ticket {
+  id         Int            @id @default(autoincrement())
+  buildingId Int
+  building   Building       @relation(fields: [buildingId], references: [id])
+  residentId Int
+  resident   Resident       @relation(fields: [residentId], references: [id])
+  category   TicketCategory @default(OTHER)
+  // Faza 4 — adresat zgłoszenia: "ADMIN" (do administratora osiedla) lub
+  // "CONCIERGE" (do konsjerża budynku — np. paczka). Default dla
+  // backwards-compat z existing ticket-ami (dziś wszystkie idą do admina).
+  type       String         @default("ADMIN")
+  title      String
+  body       String
+  photo      String?
+  status     TicketStatus   @default(OPEN)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  replies    TicketReply[]
+
+  @@index([buildingId, type])
+  @@map("tickets")
+}
+
+model TicketReply {
+  id         Int      @id @default(autoincrement())
+  ticketId   Int
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  authorType String // "ADMIN" | "RESIDENT" | "CONCIERGE"
+  // Faza 4 — id konkretnego admina/concierge'a (NULL dla resident-replies,
+  // bo wynika z ticket.residentId). iOS join-uje po nim żeby pokazać
+  // imię/avatar autora odpowiedzi w bubble-u rozmowy.
+  authorId   Int?
+  body       String
+  // Zdjęcie w odpowiedzi (2026-08-13) — data:image/...;base64, jak
+  // tickets.photo. Każda strona rozmowy może dołączyć zdjęcie.
+  photo      String?
+  createdAt  DateTime @default(now())
+
+  @@map("ticket_replies")
+}
+
+// ─── VEHICLES ─────────────────────────────────────────────────────────────────
+
+enum VehicleKind {
+  RESIDENT // resident-owned car (default)
+  SERVICE // recurring service: cleaning, maintenance, utility
+  DELIVERY // food / parcel couriers (Glovo, InPost, DPD…)
+  EMERGENCY // ambulance, police, fire
+  PUBLIC // municipal / public-utility vehicles
+}
+
+// Cykl życia pojazdu we wspólnocie. PENDING = zarejestrowany przez mieszkańca,
+// czeka na decyzję admina; APPROVED = aktywny (synchronizowany do LPR);
+// REJECTED = admin odmówił z reason'em; BLOCKED = admin zablokował już aktywny
+// pojazd (np. po zmianie najemcy); EXPIRED = guest car po terminie validTo.
+// Tylko APPROVED pojazdy są wysyłane do allowlisty kamer LPR — pozostałe
+// statusy oznaczają że Edge musi tablicę usunąć (PLATE_DELETE).
+enum VehicleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  BLOCKED
+  EXPIRED
+}
+
+model Vehicle {
+  id              Int           @id @default(autoincrement())
+  buildingId      Int
+  building        Building      @relation(fields: [buildingId], references: [id])
+  // Nullable: building-wide service vehicles have no owning resident.
+  residentId      Int?
+  resident        Resident?     @relation(fields: [residentId], references: [id])
+  kind            VehicleKind   @default(RESIDENT)
+  make            String
+  model           String?
+  color           String
+  licensePlate    String
+  // Free-form service brand ("Glovo", "Poczta Polska", "MPO Odpady"…).
+  // Only meaningful when kind != RESIDENT; used for display + autocomplete.
+  serviceName     String?
+  // Free-form note visible to admin/concierge ("Wtorki/piątki 6-8").
+  notes           String?
+  // Opcjonalne zdjęcie pojazdu (2026-07-16) — base64 data URI, dodawane
+  // przez mieszkańca w iOS (max 800px JPEG po stronie klienta).
+  photo           String?
+  // Status approval flow — patrz enum VehicleStatus. Default APPROVED bo:
+  //  • istniejące pojazdy wstawione przed migracją powinny pozostać aktywne
+  //  • pojazdy tworzone przez admina (bezpośrednio) są od razu zatwierdzone
+  //  • tylko endpoint resident-a wymusza PENDING przy create
+  status          VehicleStatus @default(APPROVED)
+  // Czas obowiązywania uprawnienia. Null = bez ograniczeń.
+  // Używane głównie dla guest vehicles (Faza 2 — Goście) ale obsługujemy
+  // już teraz, żeby nie robić drugiej migracji.
+  validFrom       DateTime?
+  validTo         DateTime?
+  // Kto zatwierdził / odrzucił pojazd. Type może być "BUILDING_ADMIN" lub
+  // "INTEGRATOR" — admin tworzący trafia tu sam, integrator może też zatwier-
+  // dzić jeśli ma scope na ten budynek.
+  approvedById    Int?
+  approvedByType  String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  // 2026-08-21 — push o przejeździe WŁASNEGO pojazdu (opt-in, kadr z LPR).
+  notifyOnUse     Boolean   @default(false)
+  // Tagi opisowe wybierane ręcznie w panelu (chip multi-select). Słownik tagów
+  // żyje po stronie front-endu (apps/web/src/lib/vehicle-tags.ts) — backend
+  // trzyma to jako prosty TEXT[] bez normalizacji, żeby admin mógł też dorzucić
+  // własne („obsługa basenu", „sąsiad spod 12"). GIN index wspiera filtr po
+  // tagu na całej tabeli (np. „pokaż auta z tagiem Glovo").
+  tags            String[]      @default([])
+  // `createdAt` istnieje w DB od początku (kolumna dodana przy tworzeniu tabeli).
+  // W schemacie brakowało jej historycznie — lokalne `prisma generate` failuje
+  // przez konflikt 7.5/5.22 i typy nie były regenerowane, więc `orderBy: { createdAt }`
+  // w `buildings.service.ts` przechodził bez błędu. Na Fly generate działa
+  // czysto i wywalał build, dlatego tu deklarujemy pole.
+  createdAt       DateTime      @default(now())
+
+  accessEvents AccessEvent[]
+
+  @@unique([buildingId, licensePlate]) // Faza 7.5 — DB-level guard
+  @@index([buildingId, kind])
+  @@index([buildingId, status])
+  @@map("vehicles")
+}
+
+// ─── GUESTS (Faza 2 bety Villa Natura) ────────────────────────────────────────
+//
+// Mieszkaniec może zaprosić gościa na konkretne okno czasowe. Gość dostaje:
+//   • PIN (6 cyfr) — wpisuje na domofonie Akuvox aby otworzyć (Faza 2D)
+//   • opcjonalna tablica rejestracyjna — wpisana, idzie do allowlisty LPR
+//     z TTL = validTo (Edge musi sam ją usunąć po terminie albo Cloud cron)
+//
+// Goście mogą być pieszo (vehiclePlate = null) — wtedy działa tylko PIN.
+// Cron (Faza 2B/3) ustawi status EXPIRED gdy validTo < now.
+// Resident może w każdej chwili zrobić CANCELLED (np. gość już sobie poszedł).
+
+enum GuestStatus {
+  ACTIVE // walidny w oknie validFrom..validTo (ew. UPCOMING jeśli future)
+  EXPIRED // po validTo — cron ustawi
+  CANCELLED // mieszkaniec ręcznie odwołał
+}
+
+model Guest {
+  id           Int         @id @default(autoincrement())
+  buildingId   Int
+  building     Building    @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  // Powiadomienia o aktywności gościa (2026-08-14) — false wycisza pushe
+  // „gość wjechał/wyjechał/użył PIN-u"; prośby o otwarcie zawsze dochodzą.
+  notifyOnUse  Boolean     @default(true)
+  // Mieszkaniec-gospodarz. CASCADE delete bo nie chcemy „osieroconych" gości
+  // gdy resident usuwany.
+  residentId   Int
+  resident     Resident    @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  // Imię + opcjonalny telefon (wyświetlamy w panelu portiera/admina).
+  name         String
+  phone        String?
+  // Tablica opcjonalna — gość może być pieszy (tylko PIN). Zawsze UPPERCASE.
+  vehiclePlate String?
+  // PIN 6 cyfr, unikalny w obrębie ACTIVE gości w danym budynku
+  // (sprawdzamy przy generowaniu, retry przy kolizji). Plain text bo
+  // 6-cyfrowy PIN jest i tak króciutki, hashowanie nie daje realnej obrony.
+  pin          String      @db.VarChar(6)
+  validFrom    DateTime
+  validTo      DateTime
+  status       GuestStatus @default(ACTIVE)
+  // Pierwszy raz kiedy PIN/tablica zadziałała na bramce — null aż do użycia.
+  // Pomocniczne pole; pełen audit będzie w AccessEvent (Faza 3).
+  usedAt       DateTime?
+  createdAt    DateTime    @default(now())
+
+  // ── Guest Portal (pivot bezkontaktowy) ─────────────────────────────────────
+  // Gość dostaje link `gatelynk.com/g/<urlToken>` z przyciskami otwierania
+  // bram — omija Akuvox UX (brak „błędnego kodu" w głośniku) i działa też
+  // dla gości którzy nie chcą iść do klawiatury (np. dostawca zamówienia
+  // zostawiający paczkę przy bramie).
+  // Token: 64-hex (32 random bytes). NULL dla gości legacy bez portalu.
+  urlToken    String?   @db.VarChar(64)
+  // Email do wysłania linka przez Resend. NULL → tylko SMS (z telefonu
+  // mieszkańca, iMessage composer).
+  email       String?   @db.VarChar(255)
+  emailSentAt DateTime?
+
+  // ── Ograniczenia dostępu gościa (2026-07-08) ────────────────────────────────
+  // `allowedAccessPoints` — lista `[{apId: number, maxUses?: number}]`.
+  //   NULL = bez ograniczeń (backward-compat: wszyscy istniejący goście mają
+  //   dostęp do wszystkich AP jak dotąd). `maxUses` per-AP; brak = bez limitu.
+  // `recurringSchedule` — `{days: [1..7] (ISO, pn=1; pusta/null = codziennie),
+  //   startTime: "06:00", endTime: "07:00", tz: "Europe/Warsaw"}`.
+  //   NULL = dostęp przez całe okno validFrom..validTo. Harmonogram działa
+  //   ZAWSZE w ramach okna ważności (oba warunki AND). endTime <= startTime
+  //   oznacza okno przechodzące przez północ (np. 22:00-06:00).
+  // Egzekwowanie: portal (Cloud), PIN + LPR (Edge, offline-first — payload
+  // PIN_UPSERT/PIN_SYNC_ALL niesie te pola do Edge sqlite guest_pins).
+  allowedAccessPoints Json?
+  recurringSchedule   Json?
+
+  events       GuestEvent[]
+  accessEvents AccessEvent[]
+  accessUses   GuestAccessUse[]
+  openNonces   GuestOpenNonce[]
+  approvalRequests GuestApprovalRequest[]
+
+  @@index([buildingId, status])
+  @@index([buildingId, validTo])
+  // Index na PIN per-building dla szybkiego lookupu z webhook-a Akuvox
+  // (Edge → Cloud /edge/validate-pin).
+  @@index([buildingId, pin])
+  @@map("guests")
+}
+
+// ── Zużycie limitowanych otwarć gościa (2026-07-08) ───────────────────────────
+//
+// Append-only tabela „gość X użył wejścia Y o czasie T" — źródło do liczenia
+// limitu `maxUses` z `Guest.allowedAccessPoints`. Wybrana TABELA (nie licznik
+// w JSON) bo:
+//   • INSERT append-only nie ma race read-modify-write (portal może klikać
+//     równolegle z PIN-em na domofonie),
+//   • Edge raportuje użycia PIN/LPR asynchronicznie (offline queue) —
+//     `dedupKey` (uuid generowany na Edge) + unique index daje idempotentny
+//     dosync po reconnect (retry eventu nie dubluje licznika),
+//   • trail audytowy per użycie (debug „dlaczego limit wyczerpany").
+//
+// Podział autorytetu (eventual consistency):
+//   • PORTAL — Cloud wstawia synchronicznie przy otwarciu (source='PORTAL').
+//   • PIN / LPR — dzieją się na Edge (offline-first); Edge liczy lokalnie
+//     w sqlite `guest_uses` i raportuje tu eventem GUEST_ACCESS_USED.
+//   Cloud liczy: wszystkie source'y. Edge liczy: lokalne + snapshot PORTAL
+//   z payloadu PIN_UPSERT/SYNC_ALL. Okno niedokładności = użycia po drugiej
+//   stronie w czasie desyncu (dokumentacja w guest-restrictions.util.ts).
+model GuestAccessUse {
+  id            BigInt       @id @default(autoincrement())
+  buildingId    Int
+  building      Building     @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  guestId       Int
+  guest         Guest        @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  accessPointId Int?
+  accessPoint   AccessPoint? @relation(fields: [accessPointId], references: [id], onDelete: SetNull)
+  // 'PORTAL' | 'PIN' | 'LPR'
+  source        String       @db.VarChar(16)
+  // uuid generowany po stronie źródła (Edge) — dedup przy retry z offline
+  // queue. NULL dla wpisów Cloud-owych (portal, brak retry).
+  dedupKey      String?      @unique @db.VarChar(64)
+  ts            DateTime     @default(now())
+
+  @@index([guestId, accessPointId])
+  @@map("guest_access_uses")
+}
+
+// ── Jednorazowe nonce'y otwarć drzwi lokalu (2026-07-08, Nuki UNIT_DOOR) ──────
+//
+// Nonce = HMAC-SHA256(sekret serwera, guestId.apId.exp) generowany server-side
+// przy renderze strony Guest Pass (TTL 5 min). Wiersz w tej tabeli oznacza
+// SKONSUMOWANY nonce — konsumpcja to atomowy INSERT z unique(nonceHash)
+// (ON CONFLICT DO NOTHING): przy dwóch równoległych requestach dokładnie jeden
+// INSERT się powiedzie (race-safe bez SELECT-then-INSERT). Weryfikacja podpisu
+// jest stateless (HMAC), tabela służy wyłącznie jednorazowości.
+model GuestOpenNonce {
+  id            BigInt      @id @default(autoincrement())
+  guestId       Int
+  guest         Guest       @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  accessPointId Int?
+  accessPoint   AccessPoint? @relation(fields: [accessPointId], references: [id], onDelete: SetNull)
+  // sha256(nonce) hex — nie trzymamy surowego nonce'a.
+  nonceHash     String      @unique @db.VarChar(64)
+  expiresAt     DateTime
+  consumedAt    DateTime    @default(now())
+
+  @@index([expiresAt])
+  @@map("guest_open_nonces")
+}
+
+// ── Prośby o zatwierdzenie otwarcia przez hosta (2026-07-08, Nuki UNIT_DOOR) ──
+//
+// Gdy wpis w Guest.allowedAccessPoints ma `approvalRequired=true`, klik gościa
+// w przycisk drzwi lokalu NIE otwiera od razu — tworzy PENDING request (TTL 90s)
+// + push do hosta. Host w iOS klika Zatwierdź/Odrzuć:
+//   • APPROVED → Cloud wykonuje otwarcie (Edge → Nuki), zlicza użycie,
+//     `gateOpened` mówi czy fizycznie się udało,
+//   • DENIED → koniec,
+//   • EXPIRED → lazy przy pollingu gościa / hosta (expiresAt < now).
+// Przejścia stanu atomowe: UPDATE ... WHERE status='PENDING' (rowcount 1 wygrywa).
+model GuestApprovalRequest {
+  id            BigInt      @id @default(autoincrement())
+  buildingId    Int
+  building      Building    @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  guestId       Int
+  guest         Guest       @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  accessPointId Int
+  accessPoint   AccessPoint @relation(fields: [accessPointId], references: [id], onDelete: Cascade)
+  // Host (zapraszający mieszkaniec) — kopiowany z Guest.residentId przy insercie.
+  residentId    Int
+  resident      Resident    @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  // 'PENDING' | 'APPROVED' | 'DENIED' | 'EXPIRED'
+  status        String      @default("PENDING") @db.VarChar(16)
+  // Czy fizyczne otwarcie po APPROVED się powiodło (Edge/Nuki OK).
+  gateOpened    Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  expiresAt     DateTime
+  respondedAt   DateTime?
+  meta          Json?
+
+  @@index([residentId, status, expiresAt])
+  @@index([guestId, accessPointId, status])
+  @@map("guest_approval_requests")
+}
+
+// Zdarzenia związane z gośćmi — log "kto i kiedy" do widoku „Historia gości"
+// w panelu admina i konsjerża, oraz źródło dla pushy do gospodarza.
+//
+// Zakres na razie: tylko PORTAL_OPEN (każde kliknięcie w portalu /g/<token>).
+// Matche LPR-owe gości NIE są tu duplikowane — leżą w `lpr_reads` z `matched=true`,
+// a widok historii zawsze UNION-uje oba źródła. Dzięki temu nie obciążamy zapisu
+// LPR-a kolejnym INSERT-em (już teraz robi to z każdego kadru z Edge).
+model GuestEvent {
+  id            Int          @id @default(autoincrement())
+  buildingId    Int
+  building      Building     @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  // SetNull żeby usunięcie gościa nie kasowało historii (audit).
+  guestId       Int?
+  guest         Guest?       @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  // residentId duplikujemy z guests (denormalizacja) żeby query „pokaż zdarzenia
+  // moich gości" w iOS nie musiało zawsze JOIN-ować po guestId. SetNull jak wyżej.
+  residentId    Int?
+  resident      Resident?    @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  // 'PORTAL_OPEN' — jedyny dziś. Future: 'PORTAL_VIEW', 'EMAIL_SENT' itp.
+  // String zamiast enum: prościej dodawać typy bez migracji.
+  via           String       @db.VarChar(32)
+  // Punkt dostępu dla PORTAL_OPEN. Null jeśli zdarzenie nie dotyczy konkretnego
+  // AP (np. przyszłe PORTAL_VIEW).
+  accessPointId Int?
+  accessPoint   AccessPoint? @relation(fields: [accessPointId], references: [id], onDelete: SetNull)
+  // IP gościa (X-Forwarded-For od Fly proxy) — do rozróżnienia spam-clicków,
+  // rate-limit śladów, ewentualnego bana.
+  actorIp       String?      @db.VarChar(64)
+  ts            DateTime     @default(now())
+
+  @@index([buildingId, ts(sort: Desc)])
+  @@index([guestId, ts(sort: Desc)])
+  @@index([residentId, ts(sort: Desc)])
+  @@map("guest_events")
+}
+
+// ─── ACCESS EVENTS (Faza 3 — unified audit) ───────────────────────────────────
+//
+// Single source of truth dla „kto i jak wszedł do budynku". Append-only.
+// Hook'i w serwisach LPR/PIN/remote-open zapisują tu nowe wpisy obok źródeł
+// domenowych (lpr_reads, guest_events). LprRead ma 30-day TTL, AccessEvent
+// żyje dłużej (pełna historia audytu) — dlatego trzymamy `plate` jako
+// snapshot oraz polymorphic openedById/openedByType (RESIDENT/ADMIN/CONCIERGE
+// żyją w różnych tabelach, więc FK się nie da).
+//
+// Migracja: apps/api/prisma/migrations/20260502130000_add_access_events.
+
+enum AccessEventType {
+  LPR_MATCH // tablica rozpoznana, brama otwarta
+  LPR_NO_MATCH // tablica nieznana / odrzucona (audyt, brama nieotwarta)
+  PIN_USED // gość wpisał poprawny PIN na Akuvox
+  REMOTE_OPEN // mieszkaniec/admin/concierge wcisnął „otwórz" w app
+  MANUAL_OPEN // przycisk fizyczny / domofon głośnik
+  INTERCOM_CALL // wezwanie domofonowe (bez otwarcia)
+  SCHEDULED_OPEN // cron-owy auto-open (Faza refactor 2026-06-01)
+}
+
+model AccessEvent {
+  id            BigInt          @id @default(autoincrement())
+  buildingId    Int
+  building      Building        @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  accessPointId Int?
+  accessPoint   AccessPoint?    @relation(fields: [accessPointId], references: [id], onDelete: SetNull)
+  ts            DateTime        @default(now())
+  type          AccessEventType
+  direction     String? // 'IN' / 'OUT' (głównie LPR)
+  gateOpened    Boolean         @default(false)
+  reason        String?
+  residentId    Int?
+  resident      Resident?       @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  vehicleId     Int?
+  vehicle       Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  guestId       Int?
+  guest         Guest?          @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  lprReadId     Int?
+  lprRead       LprRead?        @relation(fields: [lprReadId], references: [id], onDelete: SetNull)
+  // Snapshot tablicy — działa nawet po DELETE LprRead (TTL 30d).
+  plate         String?
+  // Polymorphic: residentId/adminId/conciergeId — kto wcisnął „otwórz".
+  openedById    Int?
+  openedByType  String? // 'RESIDENT' | 'ADMIN' | 'CONCIERGE' | 'EDGE' | 'SYSTEM'
+  // Ad-hoc: confidence OCR, edgeReadId, deviceId — żeby nie dodawać
+  // nullable kolumn dla edge case'ów.
+  meta          Json?
+  createdAt     DateTime        @default(now())
+
+  @@index([buildingId, ts(sort: Desc)])
+  @@index([buildingId, type, ts(sort: Desc)])
+  @@index([residentId, ts(sort: Desc)])
+  @@index([guestId, ts(sort: Desc)])
+  @@index([plate])
+  @@map("access_events")
+}
+
+// ─── PAYMENTS ─────────────────────────────────────────────────────────────────
+
+enum PaymentType {
+  CHARGE // miesięczne obciążenie
+  PAYMENT // wpłata od mieszkańca
+  CORRECTION // ręczna korekta admina
+}
+
+model PaymentConfig {
+  id             Int      @id @default(autoincrement())
+  unitId         Int      @unique
+  unit           Unit     @relation(fields: [unitId], references: [id])
+  monthlyRent    Decimal  @db.Decimal(10, 2)
+  dueDay         Int      @default(10) // dzień miesiąca (1–28)
+  openingBalance Decimal  @default(0) @db.Decimal(10, 2)
+  openingDate    DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("payment_configs")
+}
+
+model PaymentEntry {
+  id          Int         @id @default(autoincrement())
+  unitId      Int
+  unit        Unit        @relation(fields: [unitId], references: [id])
+  amount      Decimal     @db.Decimal(10, 2) // dodatnia = wpłata, ujemna = obciążenie
+  type        PaymentType
+  date        DateTime
+  description String?
+  reference   String? // nr referencyjny z MT940
+  source      String?     @default("admin") // "admin" | "mt940" | "system"
+  createdAt   DateTime    @default(now())
+
+  // 2026-07-03 — powiązanie wpłaty z naliczeniem miesięcznym (PaymentCharge)
+  // oraz z importem MT940 (audyt skąd przyszła wpłata). Oba nullable —
+  // legacy wpisy zostają bez linku, raport miesięczny fallbackuje po dacie.
+  chargeId      Int?
+  charge        PaymentCharge? @relation(fields: [chargeId], references: [id], onDelete: SetNull)
+  mt940ImportId Int?
+  mt940Import   Mt940Import?   @relation(fields: [mt940ImportId], references: [id], onDelete: SetNull)
+
+  @@index([chargeId])
+  @@map("payment_entries")
+}
+
+// 2026-07-03 — Zarządzanie opłatami (składowe czynszu + naliczenia + MT940).
+//
+// Architektura (decyzja: PaymentEntry ZOSTAJE jako ledger/saldo):
+//   • PaymentComponent — składowa opłaty per budynek (unitId=NULL) lub
+//     override/dodatek per lokal (unitId ustawiony). calcType FIXED = kwota
+//     stała, PER_SQM = kwota × Unit.areaSqm.
+//   • PaymentCharge — naliczenie per lokal per miesiąc ("YYYY-MM"), snapshot
+//     składowych w JSON + suma + termin (dueDate z dueDay konfiguracji).
+//     Generowane idempotentnie endpointem BA. Przy generacji tworzony jest
+//     LUSTRZANY PaymentEntry typu CHARGE (ujemna kwota, reference
+//     "charge:YYYY-MM") — dzięki temu saldo i historia w iOS działają bez zmian.
+//   • Wpłaty to PaymentEntry typu PAYMENT z opcjonalnym chargeId; status
+//     naliczenia (PAID/PARTIAL/UNPAID/OVERDUE) jest WYLICZANY, nie przechowywany.
+//   • Mt940Import — audit trail importu wyciągu + dedup po hashu pliku.
+
+model PaymentSettings {
+  id         Int      @id @default(autoincrement())
+  buildingId Int      @unique
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  dueDay     Int      @default(10) // domyślny dzień wymagalności (1–28); per-lokal override w PaymentConfig.dueDay
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("payment_settings")
+}
+
+model PaymentComponent {
+  id         Int       @id @default(autoincrement())
+  buildingId Int
+  building   Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  unitId     Int? // NULL = składowa budynkowa (wszystkie lokale); ustawione = override/dodatek per lokal
+  unit       Unit?     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  name       String // "Czynsz podstawowy", "Fundusz remontowy", "Woda", "Śmieci"…
+  amount     Decimal   @db.Decimal(10, 2) // kwota (FIXED) lub stawka za m² (PER_SQM)
+  calcType   String    @default("FIXED") // FIXED | PER_SQM (PER_SQM wymaga Unit.areaSqm; brak metrażu → 0)
+  activeFrom DateTime  @default(now())
+  activeTo   DateTime? // NULL = bezterminowo
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([buildingId])
+  @@map("payment_components")
+}
+
+model PaymentCharge {
+  id          Int      @id @default(autoincrement())
+  buildingId  Int
+  building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  unitId      Int
+  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  period      String // "YYYY-MM"
+  components  Json // snapshot [{ name, amount }] z chwili generacji
+  totalAmount Decimal  @db.Decimal(10, 2)
+  dueDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payments PaymentEntry[]
+
+  @@unique([unitId, period])
+  @@index([buildingId, period])
+  @@map("payment_charges")
+}
+
+model Mt940Import {
+  id               Int      @id @default(autoincrement())
+  buildingId       Int
+  building         Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  fileName         String
+  fileHash         String // sha256 zawartości pliku — dedup podwójnego importu
+  accountNumber    String? // :25:
+  statementNumber  String? // :28C:
+  transactionCount Int      @default(0) // wszystkie uznania (C) w pliku
+  savedCount       Int      @default(0) // ile wpłat faktycznie zapisano
+  createdAt        DateTime @default(now())
+
+  entries PaymentEntry[]
+
+  @@unique([buildingId, fileHash])
+  @@map("mt940_imports")
+}
+
+// ─── ANOMALY EVENTS ───────────────────────────────────────────────────────────
+//
+// Wykrywane przez Edge AI (YOLOv8-pose + heurystyka geometryczna w `yolo-vision`):
+//   • FALL — możliwy upadek osoby (4 wskaźniki: bbox_ratio, head_below_hips,
+//             vertical_shoulders, low_in_frame; threshold ≥0.5 = fall_detected).
+//
+// Flow:
+//   1. Edge `VisionDetectService` rejestruje detekcję w lokalnym SQLite
+//      (`vision_detections.anomaly_type='FALL'`) + serwuje JPEG.
+//   2. Edge wysyła `EVT { event: 'ANOMALY_DETECTED' }` przez WS tunnel.
+//   3. Cloud `EdgeGateway` deleguje do `AnomalyEventsService.recordFromEdge`
+//      który persyst-uje row + triggeruje push notify do BA/Konsjerża +
+//      opt-in mieszkańców (`Resident.notifyAnomalies=true`).
+//   4. BA/Konsjerż widzi feed na /vision (banner ze sticky red),
+//      mieszkaniec dostaje push (jeśli opt-in).
+//   5. BA może zamarkować `resolvedAt`/`resolvedBy` (obsłużone) lub
+//      `falsePositive=true` (fałszywy alarm — sygnał do tuningu threshold).
+//
+// Decyzja design: append-only z polami stanowymi (resolvedAt) zamiast
+// state machine — łatwiej audytować "kiedy" + "kto". Indexy DESC dla
+// chronologicznego listingu typowego dla feed-ów.
+model AnomalyEvent {
+  id              BigInt    @id @default(autoincrement())
+  buildingId      Int
+  building        Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  cameraDeviceId  String    // device_config.deviceId (UUID) — referencja "miękka"
+  ts              DateTime  // moment detekcji wg Edge (może być != createdAt)
+  type            String    // 'FALL' | (przyszłość: 'FIRE','INTRUSION')
+  likelihood      Float     // 0.0–1.0 — confidence z fall_detector.py
+  indicators      Json      // ["horizontal_bbox","head_below_hips",...]
+  imageFilename   String?   // jpeg w `/api/edge/.../vision/frame/:filename` (przyszłość: proxy)
+  resolvedAt      DateTime?
+  resolvedBy      String?   // "BA:<id>" / "CONCIERGE:<id>"
+  falsePositive   Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  @@index([buildingId, ts(sort: Desc)])
+  @@index([buildingId, resolvedAt])
+  @@map("anomaly_events")
+}
+
+// ─── AKUVOX DIRECTORY SYNC v2 (2026-07-30) ────────────────────────────────────
+//
+// Przebudowa integracji kontaktów Akuvox pod firmware 29.30.10.x (docelowo
+// 29.30.10.465 LTS, model Directory → User → Contact Details). GateLynk jest
+// źródłem prawdy; Akuvox = lokalna, synchronizowana kopia katalogu.
+// Pełna analiza + decyzje: docs/akuvox-directory-v2-analysis.md.
+// Kod: apps/api/src/akuvox-directory/. Legacy (Remote Phonebook XML +
+// UserData.tgz per-budynek) zostaje bez zmian, oznaczone @deprecated.
+
+// Urządzenie Akuvox jako CEL synchronizacji katalogu. Świadomie osobne od
+// BuildingIntercom (tamto = config SIP/bridge; to = konfiguracja integracji
+// katalogu). Opcjonalny link intercomId spina oba rekordy.
+model AkuvoxDevice {
+  id         Int      @id @default(autoincrement())
+  buildingId Int
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  intercomId Int?
+  intercom   BuildingIntercom? @relation(fields: [intercomId], references: [id], onDelete: SetNull)
+
+  name            String // np. "Brama główna R29"
+  model           String? // np. "R29C", "E18C"
+  ipAddress       String?
+  macAddress      String?
+  firmwareVersion String? // np. "29.30.10.128", "29.30.10.465"
+  hardwareVersion String?
+
+  // Bugfix 2026-07-30: host SIP do numerów wybierania w plikach kontaktów —
+  // generujemy "<unit.id>@<dialHost>" (routing per-lokal). Puste = goły unit.id
+  // (+ ostrzeżenie w preview dla formatów CSV). Podpowiedź: LAN IP Edge;
+  // NIE kopiować ślepo edgeDevice.ipAddress (bywa Tailscale — gotcha legacy).
+  dialHost String?
+
+  // MANUAL_EXPORT | MANUAL_IMPORT (MVP) | PROVISIONING (Etap 2) | DEVICE_API (Etap 3)
+  syncMode         String @default("MANUAL_EXPORT")
+  // GATELYNK | SMARTPLUS | MERGED | MANUAL — kto rządzi kontaktami na urządzeniu.
+  contactAuthority String @default("GATELYNK")
+  // 'legacy-contacts' (starsze firmware, format E18C tgz) | 'directory-user'
+  // (29.30.10.465+, template-driven).
+  adapter          String @default("directory-user")
+
+  // AkuvoxDirectoryMapping (pkt 12 spec): displayMode/groupBy/szablony/prywatność.
+  mapping              Json  @default("{}")
+  // Ręczne nadpisania wykrytych capabilities (JSON partial AkuvoxCapabilities).
+  capabilitiesOverride Json?
+
+  // Poświadczenia web UI urządzenia. Hasło AES-256-GCM kluczem AKUVOX_CRED_KEY
+  // (env). NIGDY plain-text; nie wraca do frontendu (tylko credentialIsSet).
+  credentialUser String?
+  credentialEnc  String?
+
+  // Sparsowany ostatni eksport wgrany Z urządzenia (widok E) — baza diffów.
+  lastDeviceSnapshot Json?
+  lastSyncAt         DateTime?
+  lastSyncChecksum   String?
+
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  syncRuns AkuvoxSyncRun[]
+
+  @@index([buildingId])
+  @@map("akuvox_devices")
+}
+
+// Template formatu importu wgrany z realnego eksportu urządzenia (pkt 7 spec:
+// „nie twórz formatu CSV na oko"). Generator directory-user ODMAWIA generacji
+// bez template'a dla (model, firmwareVersion).
+model AkuvoxImportTemplate {
+  id         Int      @id @default(autoincrement())
+  buildingId Int
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  model           String
+  firmwareVersion String
+  format          String // 'tgz' | 'xml' | 'csv'
+
+  originalFilename String
+  rawFile          Bytes // oryginał — audyt + możliwość re-parse
+  parsedSpec       Json // TemplateSpec: pliki, atrybuty/kolumny + kolejność, separator, kodowanie
+  uploadedBy       String?
+  createdAt        DateTime @default(now())
+
+  @@unique([model, firmwareVersion, format])
+  @@map("akuvox_import_templates")
+}
+
+// Historia operacji Directory Sync (widok F + audyt, pkt 18 spec).
+model AkuvoxSyncRun {
+  id       Int          @id @default(autoincrement())
+  deviceId Int
+  device   AkuvoxDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  // PREVIEW | EXPORT | APPLY | TEMPLATE_UPLOAD | DEVICE_EXPORT_UPLOAD
+  kind     String
+  // OK | WARNING | ERROR
+  status   String
+  operator String?
+
+  summary           Json? // { create, update, disable, delete, unchanged, conflicts }
+  warnings          Json?
+  errors            Json?
+  directoryChecksum String?
+  fileName          String?
+  createdAt         DateTime @default(now())
+
+  @@index([deviceId, createdAt(sort: Desc)])
+  @@map("akuvox_sync_runs")
 }
