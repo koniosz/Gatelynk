@@ -1,0 +1,1261 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 70;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3D6204AF2FA408F60007F3EE /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6204AE2FA408F60007F3EE /* MessageComposer.swift */; };
+		3D6220242FB23E5400D2FCF1 /* GLComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6220212FB23E5400D2FCF1 /* GLComponents.swift */; };
+		3D6220252FB23E5400D2FCF1 /* GLTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6220222FB23E5400D2FCF1 /* GLTokens.swift */; };
+		3D6220282FB23E7500D2FCF1 /* VehicleFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6220272FB23E7500D2FCF1 /* VehicleFormView.swift */; };
+		3D6220292FB23E7500D2FCF1 /* GateActionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6220262FB23E7500D2FCF1 /* GateActionSheet.swift */; };
+		3D6FD4B22FC330850023CA34 /* AnomalyDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6FD4B12FC330850023CA34 /* AnomalyDetailView.swift */; };
+		3D99EDEC2FE001B8003E6631 /* VoIPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEB2FE001B8003E6631 /* VoIPManager.swift */; };
+		3D99EDED2FE001B8003E6631 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEA2FE001B8003E6631 /* CallManager.swift */; };
+		3D99EDEF2FE001C9003E6631 /* IntercomCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */; };
+		3D99EDF22FE03F9D003E6631 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 3D99EDF12FE03F9D003E6631 /* WebRTC */; };
+		3D99EE17302CD0AE003E6631 /* GlassNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA000000000000000000A301 /* GammaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A201 /* GammaApp.swift */; };
+		AA000000000000000000A302 /* GammaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A202 /* GammaTheme.swift */; };
+		AA000000000000000000A303 /* GammaBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A203 /* GammaBackground.swift */; };
+		AA000000000000000000A304 /* GammaLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A204 /* GammaLoginView.swift */; };
+		AA000000000000000000A305 /* GammaHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A205 /* GammaHomeView.swift */; };
+		AA000000000000000000A306 /* SlideToOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A206 /* SlideToOpen.swift */; };
+		AA000000000000000000A307 /* GammaAssistantCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A207 /* GammaAssistantCard.swift */; };
+		AA000000000000000000A308 /* GammaSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A208 /* GammaSheets.swift */; };
+		AA000000000000000000A309 /* GammaGateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A209 /* GammaGateSheet.swift */; };
+		AA000000000000000000A30A /* GammaVehiclesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A20A /* GammaVehiclesSheet.swift */; };
+		AA000000000000000000A30B /* GammaGuestsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A20B /* GammaGuestsSheet.swift */; };
+		AA000000000000000000A30C /* GammaPaymentsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A20C /* GammaPaymentsSheet.swift */; };
+		AA000000000000000000A30D /* GammaTicketsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A20D /* GammaTicketsSheet.swift */; };
+		AA000000000000000000A30E /* GammaParcelsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A20E /* GammaParcelsSheet.swift */; };
+		AA000000000000000000A30F /* GammaAnnouncementsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A20F /* GammaAnnouncementsSheet.swift */; };
+		AA000000000000000000A310 /* GammaChatSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A210 /* GammaChatSheet.swift */; };
+		AA000000000000000000A311 /* GammaMoreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A211 /* GammaMoreSheet.swift */; };
+		AA000000000000000000A312 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A213 /* Assets.xcassets */; };
+		AA000000000000000000A320 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB18 /* AppDelegate.swift */; };
+		AA000000000000000000A321 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB02 /* APIClient.swift */; };
+		AA000000000000000000A322 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB03 /* KeychainHelper.swift */; };
+		AA000000000000000000A323 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB04 /* Models.swift */; };
+		AA000000000000000000A324 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB05 /* AuthManager.swift */; };
+		AA000000000000000000A325 /* EdgeAssistantClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1B /* EdgeAssistantClient.swift */; };
+		AA000000000000000000AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000AA10 /* Assets.xcassets */; };
+		AA000000000000000000CC01 /* GateLynkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB01 /* GateLynkApp.swift */; };
+		AA000000000000000000CC02 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB02 /* APIClient.swift */; };
+		AA000000000000000000CC03 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB03 /* KeychainHelper.swift */; };
+		AA000000000000000000CC04 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB04 /* Models.swift */; };
+		AA000000000000000000CC05 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB05 /* AuthManager.swift */; };
+		AA000000000000000000CC06 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB06 /* LoginView.swift */; };
+		AA000000000000000000CC07 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB07 /* MainTabView.swift */; };
+		AA000000000000000000CC08 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB08 /* HomeView.swift */; };
+		AA000000000000000000CC09 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB09 /* NotificationsView.swift */; };
+		AA000000000000000000CC0A /* ParcelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB0A /* ParcelsView.swift */; };
+		AA000000000000000000CC0B /* ReservationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB0B /* ReservationsView.swift */; };
+		AA000000000000000000CC0C /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB0C /* ProfileView.swift */; };
+		AA000000000000000000CC0D /* ConciergeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB0D /* ConciergeTabView.swift */; };
+		AA000000000000000000CC0E /* ConciergeResidentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB0E /* ConciergeResidentsView.swift */; };
+		AA000000000000000000CC0F /* ConciergeUnitsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB0F /* ConciergeUnitsView.swift */; };
+		AA000000000000000000CC10 /* ConciergeVehiclesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB10 /* ConciergeVehiclesView.swift */; };
+		AA000000000000000000CC11 /* ConciergeParcelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB11 /* ConciergeParcelsView.swift */; };
+		AA000000000000000000CC12 /* BATabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB12 /* BATabView.swift */; };
+		AA000000000000000000CC13 /* BAResidentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB13 /* BAResidentsView.swift */; };
+		AA000000000000000000CC14 /* BAUnitsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB14 /* BAUnitsView.swift */; };
+		AA000000000000000000CC15 /* BAVehiclesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB15 /* BAVehiclesView.swift */; };
+		AA000000000000000000CC16 /* BANotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB16 /* BANotificationsView.swift */; };
+		AA000000000000000000CC17 /* TicketsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB17 /* TicketsView.swift */; };
+		AA000000000000000000CC18 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB18 /* AppDelegate.swift */; };
+		AA000000000000000000CC19 /* AccessPointsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB19 /* AccessPointsView.swift */; };
+		AA000000000000000000CC1A /* GuestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1A /* GuestsView.swift */; };
+		AA000000000000000000CC1B /* EdgeAssistantClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1B /* EdgeAssistantClient.swift */; };
+		AA000000000000000000CC1C /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1C /* AssistantView.swift */; };
+		AA000000000000000000CC1D /* PaymentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1D /* PaymentsView.swift */; };
+		AA000000000000000000CC1E /* DaySummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1E /* DaySummaryCard.swift */; };
+		AA000000000000000000CC1F /* AnnouncementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1F /* AnnouncementsView.swift */; };
+		AA000000000000000000CC20 /* TypewriterText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB20 /* TypewriterText.swift */; };
+		AA000000000000000000CC21 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB21 /* HistoryView.swift */; };
+		AA000000000000000000CC22 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB22 /* CalendarView.swift */; };
+		AA000000000000000000CC23 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB23 /* MoreView.swift */; };
+		AA000000000000000000CC24 /* NukiOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB24 /* NukiOnboardingView.swift */; };
+		AA000000000000000000FF01 /* GlassApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE01 /* GlassApp.swift */; };
+		AA000000000000000000FF02 /* GlassTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE02 /* GlassTheme.swift */; };
+		AA000000000000000000FF03 /* GlassBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE03 /* GlassBackground.swift */; };
+		AA000000000000000000FF04 /* GlassLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE04 /* GlassLoginView.swift */; };
+		AA000000000000000000FF05 /* GlassHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE05 /* GlassHomeView.swift */; };
+		AA000000000000000000FF06 /* SlideToOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE06 /* SlideToOpen.swift */; };
+		AA000000000000000000FF07 /* GlassAssistantCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE07 /* GlassAssistantCard.swift */; };
+		AA000000000000000000FF08 /* GlassSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE08 /* GlassSheets.swift */; };
+		AA000000000000000000FF09 /* GlassGateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE09 /* GlassGateSheet.swift */; };
+		AA000000000000000000FF0A /* GlassVehiclesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE0A /* GlassVehiclesSheet.swift */; };
+		AA000000000000000000FF0B /* GlassGuestsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE0B /* GlassGuestsSheet.swift */; };
+		AA000000000000000000FF0C /* GlassPaymentsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE0C /* GlassPaymentsSheet.swift */; };
+		AA000000000000000000FF0D /* GlassTicketsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE0D /* GlassTicketsSheet.swift */; };
+		AA000000000000000000FF0E /* GlassParcelsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE0E /* GlassParcelsSheet.swift */; };
+		AA000000000000000000FF0F /* GlassAnnouncementsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE0F /* GlassAnnouncementsSheet.swift */; };
+		AA000000000000000000FF10 /* GlassChatSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE10 /* GlassChatSheet.swift */; };
+		AA000000000000000000FF11 /* GlassMoreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE11 /* GlassMoreSheet.swift */; };
+		AA000000000000000000FF12 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE13 /* Assets.xcassets */; };
+		AA000000000000000000FF13 /* VoIPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEB2FE001B8003E6631 /* VoIPManager.swift */; };
+		AA000000000000000000FF14 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEA2FE001B8003E6631 /* CallManager.swift */; };
+		AA000000000000000000FF15 /* IntercomCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */; };
+		AA000000000000000000FF16 /* GlassComingSoon.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE16 /* GlassComingSoon.swift */; };
+		AA000000000000000000FF17 /* GlassHistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE17 /* GlassHistorySheet.swift */; };
+		AA000000000000000000FF18 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000DD10 /* WebRTC */; };
+		AA000000000000000000FF19 /* GlassAccessDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE18 /* GlassAccessDeck.swift */; };
+		AA000000000000000000FF1A /* GlassCameraSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE19 /* GlassCameraSheet.swift */; };
+		AA000000000000000000FF1B /* GlassShimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1A /* GlassShimmer.swift */; };
+		AA000000000000000000FF20 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB18 /* AppDelegate.swift */; };
+		AA000000000000000000FF21 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB02 /* APIClient.swift */; };
+		AA000000000000000000FF22 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB03 /* KeychainHelper.swift */; };
+		AA000000000000000000FF23 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB04 /* Models.swift */; };
+		AA000000000000000000FF24 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB05 /* AuthManager.swift */; };
+		AA000000000000000000FF25 /* EdgeAssistantClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB1B /* EdgeAssistantClient.swift */; };
+		AA000000000000000000FF26 /* GlassNukiOnboardingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1B /* GlassNukiOnboardingSheet.swift */; };
+		AA000000000000000000FF27 /* GlassAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1C /* GlassAppIntents.swift */; };
+		AA000000000000000000FF28 /* GlassCalendarSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1D /* GlassCalendarSheet.swift */; };
+		AA000000000000000000FF29 /* GlassPushContentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1E /* GlassPushContentSheet.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3D99EE15302CD0AE003E6631 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA000000000000000000AA01 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D99EE0F302CD0AE003E6631;
+			remoteInfo = GlassNotificationService;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		3D99EE07302CCF04003E6631 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3D99EE17302CD0AE003E6631 /* GlassNotificationService.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		3D6204AE2FA408F60007F3EE /* MessageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageComposer.swift; sourceTree = "<group>"; };
+		3D6220212FB23E5400D2FCF1 /* GLComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLComponents.swift; sourceTree = "<group>"; };
+		3D6220222FB23E5400D2FCF1 /* GLTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLTokens.swift; sourceTree = "<group>"; };
+		3D6220262FB23E7500D2FCF1 /* GateActionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GateActionSheet.swift; sourceTree = "<group>"; };
+		3D6220272FB23E7500D2FCF1 /* VehicleFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VehicleFormView.swift; sourceTree = "<group>"; };
+		3D6FD4B12FC330850023CA34 /* AnomalyDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnomalyDetailView.swift; sourceTree = "<group>"; };
+		3D99EDEA2FE001B8003E6631 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
+		3D99EDEB2FE001B8003E6631 /* VoIPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPManager.swift; sourceTree = "<group>"; };
+		3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntercomCallView.swift; sourceTree = "<group>"; };
+		3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GlassNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3DA904F32F7AE47300B44274 /* GateLynk.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GateLynk.entitlements; sourceTree = "<group>"; };
+		AA000000000000000000A201 /* GammaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaApp.swift; sourceTree = "<group>"; };
+		AA000000000000000000A202 /* GammaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaTheme.swift; sourceTree = "<group>"; };
+		AA000000000000000000A203 /* GammaBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaBackground.swift; sourceTree = "<group>"; };
+		AA000000000000000000A204 /* GammaLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaLoginView.swift; sourceTree = "<group>"; };
+		AA000000000000000000A205 /* GammaHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaHomeView.swift; sourceTree = "<group>"; };
+		AA000000000000000000A206 /* SlideToOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideToOpen.swift; sourceTree = "<group>"; };
+		AA000000000000000000A207 /* GammaAssistantCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaAssistantCard.swift; sourceTree = "<group>"; };
+		AA000000000000000000A208 /* GammaSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaSheets.swift; sourceTree = "<group>"; };
+		AA000000000000000000A209 /* GammaGateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaGateSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A20A /* GammaVehiclesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaVehiclesSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A20B /* GammaGuestsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaGuestsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A20C /* GammaPaymentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaPaymentsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A20D /* GammaTicketsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaTicketsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A20E /* GammaParcelsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaParcelsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A20F /* GammaAnnouncementsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaAnnouncementsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A210 /* GammaChatSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaChatSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A211 /* GammaMoreSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaMoreSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000A212 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA000000000000000000A213 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA000000000000000000A214 /* GateLynkGamma.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GateLynkGamma.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000000000000000000AA0E /* GateLynk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GateLynk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000000000000000000AA0F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA000000000000000000AA10 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA000000000000000000BB01 /* GateLynkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GateLynkApp.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB02 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB03 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB04 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB05 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB06 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB07 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB08 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB09 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB0A /* ParcelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParcelsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB0B /* ReservationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReservationsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB0C /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB0D /* ConciergeTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeTabView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB0E /* ConciergeResidentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeResidentsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB0F /* ConciergeUnitsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeUnitsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB10 /* ConciergeVehiclesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeVehiclesView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB11 /* ConciergeParcelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeParcelsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB12 /* BATabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BATabView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB13 /* BAResidentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BAResidentsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB14 /* BAUnitsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BAUnitsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB15 /* BAVehiclesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BAVehiclesView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB16 /* BANotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BANotificationsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB17 /* TicketsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TicketsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB18 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB19 /* AccessPointsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessPointsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB1A /* GuestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB1B /* EdgeAssistantClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeAssistantClient.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB1C /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB1D /* PaymentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB1E /* DaySummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaySummaryCard.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB1F /* AnnouncementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementsView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB20 /* TypewriterText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypewriterText.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB21 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB22 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB23 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB24 /* NukiOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NukiOnboardingView.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE01 /* GlassApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassApp.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE02 /* GlassTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassTheme.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE03 /* GlassBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassBackground.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE04 /* GlassLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassLoginView.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE05 /* GlassHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassHomeView.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE06 /* SlideToOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideToOpen.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE07 /* GlassAssistantCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAssistantCard.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE08 /* GlassSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSheets.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE09 /* GlassGateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassGateSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE0A /* GlassVehiclesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassVehiclesSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE0B /* GlassGuestsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassGuestsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE0C /* GlassPaymentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPaymentsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE0D /* GlassTicketsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassTicketsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE0E /* GlassParcelsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassParcelsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE0F /* GlassAnnouncementsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAnnouncementsSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE10 /* GlassChatSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassChatSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE11 /* GlassMoreSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassMoreSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA000000000000000000EE13 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA000000000000000000EE14 /* GateLynkGlass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GateLynkGlass.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000000000000000000EE15 /* GateLynkGlass.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GateLynkGlass.entitlements; sourceTree = "<group>"; };
+		AA000000000000000000EE16 /* GlassComingSoon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassComingSoon.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE17 /* GlassHistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassHistorySheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE18 /* GlassAccessDeck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAccessDeck.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE19 /* GlassCameraSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCameraSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE1A /* GlassShimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassShimmer.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE1B /* GlassNukiOnboardingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassNukiOnboardingSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE1C /* GlassAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAppIntents.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE1D /* GlassCalendarSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCalendarSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE1E /* GlassPushContentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPushContentSheet.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3D99EE18302CD0AE003E6631 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3D99EE0F302CD0AE003E6631 /* GlassNotificationService */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		3D99EE00302CCF04003E6631 /* NotificationService */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = NotificationService; sourceTree = "<group>"; };
+		3D99EE11302CD0AE003E6631 /* GlassNotificationService */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (3D99EE18302CD0AE003E6631 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = GlassNotificationService; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3D99EE0D302CD0AE003E6631 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000A104 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000AA07 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3D99EDF22FE03F9D003E6631 /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000DD04 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000FF18 /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3D6220232FB23E5400D2FCF1 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				3D6220212FB23E5400D2FCF1 /* GLComponents.swift */,
+				3D6220222FB23E5400D2FCF1 /* GLTokens.swift */,
+				AA000000000000000000BB20 /* TypewriterText.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000A108 /* GateLynkGamma */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000A201 /* GammaApp.swift */,
+				AA000000000000000000A109 /* Theme */,
+				AA000000000000000000A10A /* Views */,
+				AA000000000000000000A212 /* Info.plist */,
+				AA000000000000000000A213 /* Assets.xcassets */,
+			);
+			path = GateLynkGamma;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000A109 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000A202 /* GammaTheme.swift */,
+				AA000000000000000000A203 /* GammaBackground.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000A10A /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000A204 /* GammaLoginView.swift */,
+				AA000000000000000000A205 /* GammaHomeView.swift */,
+				AA000000000000000000A206 /* SlideToOpen.swift */,
+				AA000000000000000000A207 /* GammaAssistantCard.swift */,
+				AA000000000000000000A10B /* Sheets */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000A10B /* Sheets */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000A208 /* GammaSheets.swift */,
+				AA000000000000000000A209 /* GammaGateSheet.swift */,
+				AA000000000000000000A20A /* GammaVehiclesSheet.swift */,
+				AA000000000000000000A20B /* GammaGuestsSheet.swift */,
+				AA000000000000000000A20C /* GammaPaymentsSheet.swift */,
+				AA000000000000000000A20D /* GammaTicketsSheet.swift */,
+				AA000000000000000000A20E /* GammaParcelsSheet.swift */,
+				AA000000000000000000A20F /* GammaAnnouncementsSheet.swift */,
+				AA000000000000000000A210 /* GammaChatSheet.swift */,
+				AA000000000000000000A211 /* GammaMoreSheet.swift */,
+			);
+			path = Sheets;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA03 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000AA0E /* GateLynk.app */,
+				AA000000000000000000EE14 /* GateLynkGlass.app */,
+				AA000000000000000000A214 /* GateLynkGamma.app */,
+				3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA04 /* GateLynk */ = {
+			isa = PBXGroup;
+			children = (
+				3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */,
+				3D99EDEA2FE001B8003E6631 /* CallManager.swift */,
+				3D99EDEB2FE001B8003E6631 /* VoIPManager.swift */,
+				3D6FD4B12FC330850023CA34 /* AnomalyDetailView.swift */,
+				3D6220262FB23E7500D2FCF1 /* GateActionSheet.swift */,
+				3D6220272FB23E7500D2FCF1 /* VehicleFormView.swift */,
+				3D6220232FB23E5400D2FCF1 /* DesignSystem */,
+				3DA904F32F7AE47300B44274 /* GateLynk.entitlements */,
+				AA000000000000000000BB01 /* GateLynkApp.swift */,
+				AA000000000000000000BB18 /* AppDelegate.swift */,
+				AA000000000000000000AA12 /* Network */,
+				AA000000000000000000AA1A /* Services */,
+				AA000000000000000000AA13 /* Models */,
+				AA000000000000000000AA14 /* Auth */,
+				AA000000000000000000AA15 /* Views */,
+				AA000000000000000000AA0F /* Info.plist */,
+				AA000000000000000000AA10 /* Assets.xcassets */,
+			);
+			path = GateLynk;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA12 /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000BB02 /* APIClient.swift */,
+				AA000000000000000000BB03 /* KeychainHelper.swift */,
+			);
+			path = Network;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA13 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000BB04 /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA14 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000BB05 /* AuthManager.swift */,
+				AA000000000000000000BB06 /* LoginView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA15 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000BB07 /* MainTabView.swift */,
+				AA000000000000000000AA16 /* Resident */,
+				AA000000000000000000AA17 /* Concierge */,
+				AA000000000000000000AA18 /* BA */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA16 /* Resident */ = {
+			isa = PBXGroup;
+			children = (
+				3D6204AE2FA408F60007F3EE /* MessageComposer.swift */,
+				AA000000000000000000BB08 /* HomeView.swift */,
+				AA000000000000000000BB09 /* NotificationsView.swift */,
+				AA000000000000000000BB0A /* ParcelsView.swift */,
+				AA000000000000000000BB0B /* ReservationsView.swift */,
+				AA000000000000000000BB0C /* ProfileView.swift */,
+				AA000000000000000000BB17 /* TicketsView.swift */,
+				AA000000000000000000BB19 /* AccessPointsView.swift */,
+				AA000000000000000000BB1D /* PaymentsView.swift */,
+				AA000000000000000000BB1A /* GuestsView.swift */,
+				AA000000000000000000BB24 /* NukiOnboardingView.swift */,
+				AA000000000000000000BB1C /* AssistantView.swift */,
+				AA000000000000000000BB1E /* DaySummaryCard.swift */,
+				AA000000000000000000BB1F /* AnnouncementsView.swift */,
+				AA000000000000000000BB21 /* HistoryView.swift */,
+				AA000000000000000000BB22 /* CalendarView.swift */,
+				AA000000000000000000BB23 /* MoreView.swift */,
+			);
+			path = Resident;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA17 /* Concierge */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000BB0D /* ConciergeTabView.swift */,
+				AA000000000000000000BB0E /* ConciergeResidentsView.swift */,
+				AA000000000000000000BB0F /* ConciergeUnitsView.swift */,
+				AA000000000000000000BB10 /* ConciergeVehiclesView.swift */,
+				AA000000000000000000BB11 /* ConciergeParcelsView.swift */,
+			);
+			path = Concierge;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA18 /* BA */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000BB12 /* BATabView.swift */,
+				AA000000000000000000BB13 /* BAResidentsView.swift */,
+				AA000000000000000000BB14 /* BAUnitsView.swift */,
+				AA000000000000000000BB15 /* BAVehiclesView.swift */,
+				AA000000000000000000BB16 /* BANotificationsView.swift */,
+			);
+			path = BA;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA19 = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000AA04 /* GateLynk */,
+				AA000000000000000000DD08 /* GateLynkGlass */,
+				AA000000000000000000A108 /* GateLynkGamma */,
+				3D99EE00302CCF04003E6631 /* NotificationService */,
+				3D99EE11302CD0AE003E6631 /* GlassNotificationService */,
+				AA000000000000000000AA03 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA1A /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000BB1B /* EdgeAssistantClient.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000DD08 /* GateLynkGlass */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000EE15 /* GateLynkGlass.entitlements */,
+				AA000000000000000000EE01 /* GlassApp.swift */,
+				AA000000000000000000EE1C /* GlassAppIntents.swift */,
+				AA000000000000000000DD09 /* Theme */,
+				AA000000000000000000DD0A /* Views */,
+				AA000000000000000000EE12 /* Info.plist */,
+				AA000000000000000000EE13 /* Assets.xcassets */,
+			);
+			path = GateLynkGlass;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000DD09 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000EE02 /* GlassTheme.swift */,
+				AA000000000000000000EE03 /* GlassBackground.swift */,
+				AA000000000000000000EE1A /* GlassShimmer.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000DD0A /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000EE04 /* GlassLoginView.swift */,
+				AA000000000000000000EE05 /* GlassHomeView.swift */,
+				AA000000000000000000EE06 /* SlideToOpen.swift */,
+				AA000000000000000000EE07 /* GlassAssistantCard.swift */,
+				AA000000000000000000EE18 /* GlassAccessDeck.swift */,
+				AA000000000000000000DD0B /* Sheets */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000DD0B /* Sheets */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000EE08 /* GlassSheets.swift */,
+				AA000000000000000000EE09 /* GlassGateSheet.swift */,
+				AA000000000000000000EE0A /* GlassVehiclesSheet.swift */,
+				AA000000000000000000EE0B /* GlassGuestsSheet.swift */,
+				AA000000000000000000EE1B /* GlassNukiOnboardingSheet.swift */,
+				AA000000000000000000EE0C /* GlassPaymentsSheet.swift */,
+				AA000000000000000000EE0D /* GlassTicketsSheet.swift */,
+				AA000000000000000000EE0E /* GlassParcelsSheet.swift */,
+				AA000000000000000000EE0F /* GlassAnnouncementsSheet.swift */,
+				AA000000000000000000EE10 /* GlassChatSheet.swift */,
+				AA000000000000000000EE11 /* GlassMoreSheet.swift */,
+				AA000000000000000000EE1D /* GlassCalendarSheet.swift */,
+				AA000000000000000000EE1E /* GlassPushContentSheet.swift */,
+				AA000000000000000000EE16 /* GlassComingSoon.swift */,
+				AA000000000000000000EE17 /* GlassHistorySheet.swift */,
+				AA000000000000000000EE19 /* GlassCameraSheet.swift */,
+			);
+			path = Sheets;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3D99EE0F302CD0AE003E6631 /* GlassNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3D99EE19302CD0AE003E6631 /* Build configuration list for PBXNativeTarget "GlassNotificationService" */;
+			buildPhases = (
+				3D99EE0C302CD0AE003E6631 /* Sources */,
+				3D99EE0D302CD0AE003E6631 /* Frameworks */,
+				3D99EE0E302CD0AE003E6631 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3D99EE11302CD0AE003E6631 /* GlassNotificationService */,
+			);
+			name = GlassNotificationService;
+			packageProductDependencies = (
+			);
+			productName = GlassNotificationService;
+			productReference = 3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		AA000000000000000000A101 /* GateLynkGamma */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA000000000000000000A105 /* Build configuration list for PBXNativeTarget "GateLynkGamma" */;
+			buildPhases = (
+				AA000000000000000000A102 /* Sources */,
+				AA000000000000000000A103 /* Resources */,
+				AA000000000000000000A104 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GateLynkGamma;
+			productName = GateLynkGamma;
+			productReference = AA000000000000000000A214 /* GateLynkGamma.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AA000000000000000000AA02 /* GateLynk */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA000000000000000000AA0D /* Build configuration list for PBXNativeTarget "GateLynk" */;
+			buildPhases = (
+				AA000000000000000000AA05 /* Sources */,
+				AA000000000000000000AA06 /* Resources */,
+				AA000000000000000000AA07 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GateLynk;
+			productName = GateLynk;
+			productReference = AA000000000000000000AA0E /* GateLynk.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AA000000000000000000DD01 /* GateLynkGlass */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA000000000000000000DD05 /* Build configuration list for PBXNativeTarget "GateLynkGlass" */;
+			buildPhases = (
+				AA000000000000000000DD02 /* Sources */,
+				AA000000000000000000DD03 /* Resources */,
+				AA000000000000000000DD04 /* Frameworks */,
+				3D99EE07302CCF04003E6631 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3D99EE16302CD0AE003E6631 /* PBXTargetDependency */,
+			);
+			name = GateLynkGlass;
+			productName = GateLynkGlass;
+			productReference = AA000000000000000000EE14 /* GateLynkGlass.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA000000000000000000AA01 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					3D99EE0F302CD0AE003E6631 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					AA000000000000000000A101 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					AA000000000000000000AA02 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					AA000000000000000000DD01 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = AA000000000000000000AA0C /* Build configuration list for PBXProject "GateLynk" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA000000000000000000AA19;
+			packageReferences = (
+				3D99EDF02FE03F9D003E6631 /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
+			productRefGroup = AA000000000000000000AA03 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA000000000000000000AA02 /* GateLynk */,
+				AA000000000000000000DD01 /* GateLynkGlass */,
+				AA000000000000000000A101 /* GateLynkGamma */,
+				3D99EE0F302CD0AE003E6631 /* GlassNotificationService */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3D99EE0E302CD0AE003E6631 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000A103 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000A312 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000AA06 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000AA11 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000DD03 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000FF12 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3D99EE0C302CD0AE003E6631 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000A102 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000A301 /* GammaApp.swift in Sources */,
+				AA000000000000000000A302 /* GammaTheme.swift in Sources */,
+				AA000000000000000000A303 /* GammaBackground.swift in Sources */,
+				AA000000000000000000A304 /* GammaLoginView.swift in Sources */,
+				AA000000000000000000A305 /* GammaHomeView.swift in Sources */,
+				AA000000000000000000A306 /* SlideToOpen.swift in Sources */,
+				AA000000000000000000A307 /* GammaAssistantCard.swift in Sources */,
+				AA000000000000000000A308 /* GammaSheets.swift in Sources */,
+				AA000000000000000000A309 /* GammaGateSheet.swift in Sources */,
+				AA000000000000000000A30A /* GammaVehiclesSheet.swift in Sources */,
+				AA000000000000000000A30B /* GammaGuestsSheet.swift in Sources */,
+				AA000000000000000000A30C /* GammaPaymentsSheet.swift in Sources */,
+				AA000000000000000000A30D /* GammaTicketsSheet.swift in Sources */,
+				AA000000000000000000A30E /* GammaParcelsSheet.swift in Sources */,
+				AA000000000000000000A30F /* GammaAnnouncementsSheet.swift in Sources */,
+				AA000000000000000000A310 /* GammaChatSheet.swift in Sources */,
+				AA000000000000000000A311 /* GammaMoreSheet.swift in Sources */,
+				AA000000000000000000A320 /* AppDelegate.swift in Sources */,
+				AA000000000000000000A321 /* APIClient.swift in Sources */,
+				AA000000000000000000A322 /* KeychainHelper.swift in Sources */,
+				AA000000000000000000A323 /* Models.swift in Sources */,
+				AA000000000000000000A324 /* AuthManager.swift in Sources */,
+				AA000000000000000000A325 /* EdgeAssistantClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000AA05 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000CC01 /* GateLynkApp.swift in Sources */,
+				3D99EDEF2FE001C9003E6631 /* IntercomCallView.swift in Sources */,
+				AA000000000000000000CC02 /* APIClient.swift in Sources */,
+				AA000000000000000000CC03 /* KeychainHelper.swift in Sources */,
+				AA000000000000000000CC04 /* Models.swift in Sources */,
+				AA000000000000000000CC05 /* AuthManager.swift in Sources */,
+				AA000000000000000000CC06 /* LoginView.swift in Sources */,
+				AA000000000000000000CC07 /* MainTabView.swift in Sources */,
+				AA000000000000000000CC08 /* HomeView.swift in Sources */,
+				AA000000000000000000CC09 /* NotificationsView.swift in Sources */,
+				3D6204AF2FA408F60007F3EE /* MessageComposer.swift in Sources */,
+				AA000000000000000000CC0A /* ParcelsView.swift in Sources */,
+				AA000000000000000000CC0B /* ReservationsView.swift in Sources */,
+				AA000000000000000000CC1A /* GuestsView.swift in Sources */,
+				AA000000000000000000CC24 /* NukiOnboardingView.swift in Sources */,
+				AA000000000000000000CC0C /* ProfileView.swift in Sources */,
+				AA000000000000000000CC0D /* ConciergeTabView.swift in Sources */,
+				AA000000000000000000CC0E /* ConciergeResidentsView.swift in Sources */,
+				AA000000000000000000CC0F /* ConciergeUnitsView.swift in Sources */,
+				AA000000000000000000CC10 /* ConciergeVehiclesView.swift in Sources */,
+				AA000000000000000000CC11 /* ConciergeParcelsView.swift in Sources */,
+				AA000000000000000000CC12 /* BATabView.swift in Sources */,
+				3D6220282FB23E7500D2FCF1 /* VehicleFormView.swift in Sources */,
+				3D6220292FB23E7500D2FCF1 /* GateActionSheet.swift in Sources */,
+				AA000000000000000000CC13 /* BAResidentsView.swift in Sources */,
+				3D6FD4B22FC330850023CA34 /* AnomalyDetailView.swift in Sources */,
+				AA000000000000000000CC14 /* BAUnitsView.swift in Sources */,
+				3D6220242FB23E5400D2FCF1 /* GLComponents.swift in Sources */,
+				3D6220252FB23E5400D2FCF1 /* GLTokens.swift in Sources */,
+				AA000000000000000000CC15 /* BAVehiclesView.swift in Sources */,
+				AA000000000000000000CC16 /* BANotificationsView.swift in Sources */,
+				AA000000000000000000CC17 /* TicketsView.swift in Sources */,
+				AA000000000000000000CC18 /* AppDelegate.swift in Sources */,
+				AA000000000000000000CC19 /* AccessPointsView.swift in Sources */,
+				3D99EDEC2FE001B8003E6631 /* VoIPManager.swift in Sources */,
+				3D99EDED2FE001B8003E6631 /* CallManager.swift in Sources */,
+				AA000000000000000000CC1D /* PaymentsView.swift in Sources */,
+				AA000000000000000000CC1B /* EdgeAssistantClient.swift in Sources */,
+				AA000000000000000000CC1C /* AssistantView.swift in Sources */,
+				AA000000000000000000CC1E /* DaySummaryCard.swift in Sources */,
+				AA000000000000000000CC1F /* AnnouncementsView.swift in Sources */,
+				AA000000000000000000CC20 /* TypewriterText.swift in Sources */,
+				AA000000000000000000CC21 /* HistoryView.swift in Sources */,
+				AA000000000000000000CC22 /* CalendarView.swift in Sources */,
+				AA000000000000000000CC23 /* MoreView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA000000000000000000DD02 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000FF01 /* GlassApp.swift in Sources */,
+				AA000000000000000000FF27 /* GlassAppIntents.swift in Sources */,
+				AA000000000000000000FF28 /* GlassCalendarSheet.swift in Sources */,
+				AA000000000000000000FF29 /* GlassPushContentSheet.swift in Sources */,
+				AA000000000000000000FF02 /* GlassTheme.swift in Sources */,
+				AA000000000000000000FF03 /* GlassBackground.swift in Sources */,
+				AA000000000000000000FF04 /* GlassLoginView.swift in Sources */,
+				AA000000000000000000FF05 /* GlassHomeView.swift in Sources */,
+				AA000000000000000000FF06 /* SlideToOpen.swift in Sources */,
+				AA000000000000000000FF07 /* GlassAssistantCard.swift in Sources */,
+				AA000000000000000000FF08 /* GlassSheets.swift in Sources */,
+				AA000000000000000000FF09 /* GlassGateSheet.swift in Sources */,
+				AA000000000000000000FF0A /* GlassVehiclesSheet.swift in Sources */,
+				AA000000000000000000FF0B /* GlassGuestsSheet.swift in Sources */,
+				AA000000000000000000FF26 /* GlassNukiOnboardingSheet.swift in Sources */,
+				AA000000000000000000FF0C /* GlassPaymentsSheet.swift in Sources */,
+				AA000000000000000000FF0D /* GlassTicketsSheet.swift in Sources */,
+				AA000000000000000000FF0E /* GlassParcelsSheet.swift in Sources */,
+				AA000000000000000000FF0F /* GlassAnnouncementsSheet.swift in Sources */,
+				AA000000000000000000FF10 /* GlassChatSheet.swift in Sources */,
+				AA000000000000000000FF11 /* GlassMoreSheet.swift in Sources */,
+				AA000000000000000000FF20 /* AppDelegate.swift in Sources */,
+				AA000000000000000000FF21 /* APIClient.swift in Sources */,
+				AA000000000000000000FF22 /* KeychainHelper.swift in Sources */,
+				AA000000000000000000FF23 /* Models.swift in Sources */,
+				AA000000000000000000FF24 /* AuthManager.swift in Sources */,
+				AA000000000000000000FF25 /* EdgeAssistantClient.swift in Sources */,
+				AA000000000000000000FF13 /* VoIPManager.swift in Sources */,
+				AA000000000000000000FF14 /* CallManager.swift in Sources */,
+				AA000000000000000000FF15 /* IntercomCallView.swift in Sources */,
+				AA000000000000000000FF16 /* GlassComingSoon.swift in Sources */,
+				AA000000000000000000FF17 /* GlassHistorySheet.swift in Sources */,
+				AA000000000000000000FF19 /* GlassAccessDeck.swift in Sources */,
+				AA000000000000000000FF1A /* GlassCameraSheet.swift in Sources */,
+				AA000000000000000000FF1B /* GlassShimmer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3D99EE16302CD0AE003E6631 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3D99EE0F302CD0AE003E6631 /* GlassNotificationService */;
+			targetProxy = 3D99EE15302CD0AE003E6631 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3D99EE1A302CD0AE003E6631 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GlassNotificationService/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GlassNotificationService;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.glass.GlassNotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		3D99EE1B302CD0AE003E6631 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GlassNotificationService/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GlassNotificationService;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.glass.GlassNotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AA000000000000000000A106 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GateLynkGamma/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.gamma;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA000000000000000000A107 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GateLynkGamma/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.gamma;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AA000000000000000000AA08 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AA000000000000000000AA09 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA000000000000000000AA0A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GateLynk/GateLynk.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GateLynk/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA000000000000000000AA0B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GateLynk/GateLynk.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GateLynk/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AA000000000000000000DD06 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GateLynkGlass/GateLynkGlass.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GateLynkGlass/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.glass;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA000000000000000000DD07 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GateLynkGlass/GateLynkGlass.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GateLynkGlass/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.glass;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3D99EE19302CD0AE003E6631 /* Build configuration list for PBXNativeTarget "GlassNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3D99EE1A302CD0AE003E6631 /* Debug */,
+				3D99EE1B302CD0AE003E6631 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA000000000000000000A105 /* Build configuration list for PBXNativeTarget "GateLynkGamma" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA000000000000000000A106 /* Debug */,
+				AA000000000000000000A107 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA000000000000000000AA0C /* Build configuration list for PBXProject "GateLynk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA000000000000000000AA08 /* Debug */,
+				AA000000000000000000AA09 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA000000000000000000AA0D /* Build configuration list for PBXNativeTarget "GateLynk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA000000000000000000AA0A /* Debug */,
+				AA000000000000000000AA0B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA000000000000000000DD05 /* Build configuration list for PBXNativeTarget "GateLynkGlass" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA000000000000000000DD06 /* Debug */,
+				AA000000000000000000DD07 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		3D99EDF02FE03F9D003E6631 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = exactVersion;
+				version = 148.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3D99EDF12FE03F9D003E6631 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D99EDF02FE03F9D003E6631 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+		AA000000000000000000DD10 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D99EDF02FE03F9D003E6631 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = AA000000000000000000AA01 /* Project object */;
+}
