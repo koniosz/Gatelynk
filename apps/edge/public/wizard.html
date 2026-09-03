@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GateLynk Edge — Dodaj urządzenie</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  <style>
+    /* ============================================================
+       Motyw kolorystyczny — Cisco/HPE enterprise dark
+       (synchronizowany z apps/edge/public/index.html — :root)
+       ============================================================ */
+    :root {
+      --bg:           #0d1117;
+      --bg-elev:      #0f1419;
+      --card:         #161b22;
+      --card2:        #1c2128;
+      --card-hover:   #21262d;
+      --border:       #30363d;
+      --border-soft:  rgba(48,54,61,.5);
+      --text:         #e6edf3;
+      --text-strong:  #ffffff;
+      --muted:        #8b949e;
+      --dim:          #6e7681;
+      --accent:       #2563eb;
+      --accent-h:     #1d4ed8;
+      --accent-soft:  rgba(37,99,235,.18);
+      --success:      #22c55e;
+      --success-soft: rgba(34,197,94,.12);
+      --success-text: #4ade80;
+      --danger:       #ef4444;
+      --danger-soft:  rgba(239,68,68,.12);
+      --danger-text:  #f87171;
+      --warn:         #eab308;
+      --warn-soft:    rgba(234,179,8,.12);
+      --warn-text:    #facc15;
+      --shadow-md:    0 4px 12px rgba(0,0,0,.35);
+      --input-bg:     #1c2128;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+                 min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-h); }
+
+    .container { max-width: 64rem; margin: 0 auto; padding: 1.5rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 1.5rem; box-shadow: var(--shadow-md); }
+
+    /* Step pills */
+    .step-pills { display: flex; gap: 0.5rem; margin: 1.5rem 0; }
+    .step-pill {
+      flex: 1; padding: 0.75rem 0.5rem; text-align: center; font-size: 0.85rem;
+      background: var(--card2); border: 1px solid var(--border-soft);
+      border-radius: 8px; color: var(--muted); transition: all 0.2s;
+      cursor: default; user-select: none;
+    }
+    .step-pill.active { background: var(--accent-soft); border-color: var(--accent);
+                        color: var(--text-strong); font-weight: 600; }
+    .step-pill.done { background: var(--success-soft); border-color: var(--success);
+                      color: var(--success-text); }
+    .step-pill.done::before { content: "✓ "; }
+
+    /* Buttons */
+    .btn { padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
+           border: 1px solid var(--border); background: var(--card2); color: var(--text);
+           cursor: pointer; transition: all 0.15s; }
+    .btn:hover { background: var(--card-hover); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-h); border-color: var(--accent-h); }
+    .btn-danger { background: var(--danger); border-color: var(--danger); color: white; }
+    .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+    .btn-ghost:hover { background: var(--card2); color: var(--text); }
+
+    /* Type tiles (Step 1) */
+    .type-tile {
+      background: var(--card2); border: 2px solid var(--border-soft); border-radius: 12px;
+      padding: 1.5rem 1rem; text-align: center; cursor: pointer; transition: all 0.15s;
+    }
+    .type-tile:hover { background: var(--card-hover); border-color: var(--accent); transform: translateY(-2px); }
+    .type-tile.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .type-icon { font-size: 2.5rem; line-height: 1; margin-bottom: 0.5rem; }
+    .type-label { font-weight: 600; font-size: 0.95rem; }
+    .type-desc { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+
+    /* Discovery candidates */
+    .candidate {
+      background: var(--card2); border: 1px solid var(--border-soft); border-radius: 8px;
+      padding: 0.85rem 1rem; cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .candidate:hover { background: var(--card-hover); border-color: var(--accent); }
+    .candidate.matched { border-color: var(--success); }
+    .candidate.matched .badge { background: var(--success-soft); color: var(--success-text); }
+    .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;
+             background: var(--card-hover); color: var(--muted); }
+
+    /* Forms */
+    .field-group {
+      background: var(--card2); border: 1px solid var(--border-soft); border-radius: 10px;
+      padding: 1rem; margin-bottom: 1rem;
+    }
+    .field-group legend { font-weight: 700; font-size: 0.9rem; color: var(--text-strong);
+                          padding: 0 0.5rem; margin-bottom: 0.5rem; }
+    .form-row { display: grid; grid-template-columns: 200px 1fr; gap: 1rem; align-items: start;
+                margin-bottom: 0.85rem; }
+    .form-row label { font-size: 0.9rem; color: var(--text); padding-top: 0.5rem; }
+    .form-row label .required { color: var(--danger-text); }
+    .form-row .help { font-size: 0.78rem; color: var(--muted); margin-top: 0.25rem; }
+    .input, .select, .textarea {
+      width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border);
+      background: var(--input-bg); color: var(--text); border-radius: 6px;
+      font-size: 0.95rem; font-family: inherit;
+    }
+    .input:focus, .select:focus, .textarea:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+    .checkbox { width: auto; }
+    .field-error { color: var(--danger-text); font-size: 0.8rem; margin-top: 0.25rem; }
+
+    /* Test matrix */
+    .matrix-row {
+      display: grid; grid-template-columns: 32px 200px 1fr; gap: 0.75rem; align-items: center;
+      padding: 0.65rem 0.85rem; background: var(--card2); border-radius: 6px; margin-bottom: 0.25rem;
+    }
+    .matrix-row.ok      { border-left: 3px solid var(--success); }
+    .matrix-row.fail    { border-left: 3px solid var(--danger); }
+    .matrix-row.pending { border-left: 3px solid var(--warn); }
+    .matrix-icon { font-size: 1.1rem; text-align: center; }
+    .matrix-label { font-weight: 600; }
+    .matrix-detail { font-size: 0.85rem; color: var(--muted); }
+
+    /* Relays editor */
+    .relay-row {
+      display: grid; grid-template-columns: 80px 1fr 40px; gap: 0.5rem; align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Utilities */
+    .muted { color: var(--muted); }
+    .strong { color: var(--text-strong); font-weight: 600; }
+    .spinner { display: inline-block; width: 16px; height: 16px;
+               border: 2px solid var(--border); border-top-color: var(--accent);
+               border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress { height: 6px; background: var(--card2); border-radius: 3px; overflow: hidden; }
+    .progress-bar { height: 100%; background: var(--accent); transition: width 0.3s; }
+
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body x-data="wizardState()" x-init="init()" x-cloak>
+
+  <div class="container">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-2">
+      <h1 class="text-2xl font-bold">🧙 Dodaj urządzenie</h1>
+      <a href="/ui" class="btn-ghost btn">← Powrót do panelu</a>
+    </header>
+    <p class="muted text-sm mb-2">Krok <span x-text="step" class="strong"></span> z 5 — <span x-text="stepTitle"></span></p>
+
+    <!-- Step pills -->
+    <div class="step-pills">
+      <div class="step-pill" :class="step === 1 ? 'active' : step > 1 ? 'done' : ''">1. Typ</div>
+      <div class="step-pill" :class="step === 2 ? 'active' : step > 2 ? 'done' : ''">2. Wyszukiwanie</div>
+      <div class="step-pill" :class="step === 3 ? 'active' : step > 3 ? 'done' : ''">3. Konfiguracja</div>
+      <div class="step-pill" :class="step === 4 ? 'active' : step > 4 ? 'done' : ''">4. Test</div>
+      <div class="step-pill" :class="step === 5 ? 'active' : step > 5 ? 'done' : ''">5. Zapisz</div>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <!-- STEP 1: Wybór typu urządzenia                                       -->
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <div class="card" x-show="step === 1">
+      <h2 class="text-lg font-semibold mb-2">Jakie urządzenie chcesz dodać?</h2>
+      <p class="muted text-sm mb-4">Wybierz typ — pojawi się lista producentów i krok wyszukiwania w sieci.</p>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <template x-for="t in deviceTypes" :key="t.value">
+          <div class="type-tile" :class="selectedType === t.value ? 'selected' : ''" @click="selectType(t.value)">
+            <div class="type-icon" x-text="t.icon"></div>
+            <div class="type-label" x-text="t.label"></div>
+            <div class="type-desc" x-text="t.desc"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <!-- STEP 2: Discovery LAN + ręczny wybór producenta                     -->
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <div class="card" x-show="step === 2">
+      <h2 class="text-lg font-semibold mb-2">Wyszukaj urządzenie w sieci</h2>
+      <p class="muted text-sm mb-4">
+        Edge skanuje LAN przez mDNS (<span class="strong">_shelly._tcp</span>, <span class="strong">_http._tcp</span>)
+        i KNXnet/IP SEARCH (multicast 224.0.23.12:3671). Wybrany typ:
+        <span class="strong" x-text="selectedTypeLabel"></span>.
+      </p>
+
+      <div class="flex items-center gap-3 mb-4">
+        <button class="btn btn-primary" @click="startDiscovery" :disabled="discoveryRunning">
+          <span x-show="!discoveryRunning">🔍 Skanuj sieć (15 sek)</span>
+          <span x-show="discoveryRunning"><span class="spinner"></span> Skanowanie...</span>
+        </button>
+        <span class="muted text-sm" x-show="!discoveryRunning && discoveryDone">
+          Znaleziono <span class="strong" x-text="discoveryCandidates.length"></span> urządzeń,
+          dopasowanych do typu: <span class="strong" x-text="matchedForTypeCount"></span>
+        </span>
+      </div>
+
+      <div class="progress mb-4" x-show="discoveryRunning">
+        <div class="progress-bar" :style="`width: ${discoveryProgress}%`"></div>
+      </div>
+
+      <!-- Filtrowane kandydaty -->
+      <div x-show="discoveryCandidates.length > 0">
+        <!-- Podział na sekcje zamiast jednej płaskiej listy: instalator widzi
+             od razu, co jest w sieci i czym jest, bez zgadywania po adresie IP. -->
+        <template x-for="g in candidateGroups" :key="g.key">
+          <div class="mb-4">
+            <h3 class="text-sm font-semibold mb-2">
+              <span x-text="g.icon"></span>
+              <span x-text="g.label"></span>
+              <span class="muted">(<span x-text="g.items.length"></span>)</span>
+              <span class="muted text-xs" x-show="g.key !== selectedType && selectedType">
+                — inny typ niż wybrany
+              </span>
+            </h3>
+            <div class="space-y-1">
+              <template x-for="c in g.items" :key="c.ip">
+                <div class="candidate" :class="c.suggestedDriverId ? 'matched' : ''" @click="pickCandidate(c)">
+                  <div class="text-2xl" x-text="c.suggestedDriverId ? '🎯' : '❓'"></div>
+                  <div class="flex-1">
+                    <div class="strong" x-text="c.friendlyName || c.hostname || c.ip"></div>
+                    <div class="muted text-xs">
+                      <span x-text="c.ip"></span><span x-show="c.port">:</span><span x-text="c.port"></span>
+                      &middot; <span x-text="c.foundVia"></span>
+                      <span x-show="c.mac"> &middot; <span x-text="c.mac"></span></span>
+                    </div>
+                  </div>
+                  <span class="badge" x-text="c.suggestedDriverId || 'wybierz ręcznie'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div x-show="false">
+        <div class="space-y-1 mb-4">
+          <template x-for="c in candidatesForType" :key="c.ip + (c.mac ?? '')">
+            <div class="candidate" :class="c.suggestedDriverId ? 'matched' : ''" @click="pickCandidate(c)">
+              <div class="text-2xl" x-text="c.suggestedDriverId ? '🎯' : '❓'"></div>
+              <div class="flex-1">
+                <div class="strong" x-text="c.friendlyName || c.hostname || c.ip"></div>
+                <div class="muted text-xs">
+                  <span x-text="c.ip"></span><span x-show="c.port">:</span><span x-text="c.port"></span>
+                  &middot; <span x-text="c.foundVia"></span>
+                  <span x-show="c.mac"> &middot; <span x-text="c.mac"></span></span>
+                </div>
+              </div>
+              <span class="badge" x-text="c.suggestedDriverId || 'wybierz ręcznie'"></span>
+            </div>
+          </template>
+        </div>
+
+        <details class="text-sm muted" x-show="otherCandidates.length > 0">
+          <summary>Pozostałe znalezione (<span x-text="otherCandidates.length"></span>) — inny typ</summary>
+          <div class="mt-2 space-y-1">
+            <template x-for="c in otherCandidates" :key="c.ip">
+              <div class="candidate" style="opacity:0.6">
+                <div>📡</div>
+                <div class="flex-1">
+                  <div x-text="c.friendlyName || c.hostname || c.ip"></div>
+                  <div class="text-xs" x-text="c.ip + ' — ' + (c.suggestedType || 'unknown')"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </details>
+      </div>
+
+      <!-- Manual fallback -->
+      <div class="mt-6 pt-4" style="border-top: 1px solid var(--border-soft)">
+        <h3 class="text-sm font-semibold mb-2">Albo wybierz producenta ręcznie:</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <template x-for="d in availableDrivers" :key="d.id">
+            <div class="candidate" :class="manualDriverId === d.id ? 'matched' : ''" @click="manualDriverId = d.id; pickManualDriver()">
+              <div class="text-xl" x-text="d.icon || '⚙️'"></div>
+              <div class="flex-1">
+                <div class="strong flex items-center gap-2">
+                  <span x-text="d.label"></span>
+                  <span class="badge" :style="certStyle(d.certification?.status)" x-text="certLabel(d.certification?.status)"></span>
+                </div>
+                <div class="muted text-xs" x-text="d.models.slice(0,4).join(', ')"></div>
+                <div class="muted text-xs" x-show="d.certification?.testedFirmware?.length"
+                     x-text="`Testowane fw: ${(d.certification?.testedFirmware || []).join(', ')}`"></div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <!-- STEP 3: Formularz konfiguracyjny (dynamic z drivera)               -->
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <div class="card" x-show="step === 3">
+      <h2 class="text-lg font-semibold mb-1">Konfiguracja: <span class="strong" x-text="selectedDriver?.label"></span></h2>
+      <p class="muted text-sm mb-4" x-text="selectedDriver?.notes"></p>
+
+      <template x-for="group in visibleGroups" :key="group">
+        <fieldset class="field-group">
+          <legend x-text="groupLabels[group]"></legend>
+          <template x-for="field in fieldsByGroup[group]" :key="field.key">
+            <div class="form-row">
+              <label>
+                <span x-text="field.label"></span>
+                <span class="required" x-show="field.required">*</span>
+                <div class="help" x-show="field.help" x-text="field.help"></div>
+              </label>
+              <div>
+                <!-- Text / IP -->
+                <template x-if="['text','mac','group-address'].includes(field.type)">
+                  <input class="input" type="text" :placeholder="field.placeholder || ''"
+                         :value="config[field.key] ?? ''"
+                         @input="setField(field.key, $event.target.value)">
+                </template>
+                <!-- Password -->
+                <template x-if="field.type === 'password'">
+                  <input class="input" type="password" :placeholder="field.placeholder || ''"
+                         :value="config[field.key] ?? ''"
+                         @input="setField(field.key, $event.target.value)">
+                </template>
+                <!-- Number -->
+                <template x-if="field.type === 'number'">
+                  <input class="input" type="number" :min="field.min" :max="field.max"
+                         :value="config[field.key] ?? ''"
+                         @input="setField(field.key, Number($event.target.value))">
+                </template>
+                <!-- Select -->
+                <template x-if="field.type === 'select'">
+                  <select class="select" :value="config[field.key] ?? field.default ?? ''"
+                          @change="setField(field.key, $event.target.value)">
+                    <option value="">— wybierz —</option>
+                    <template x-for="opt in (field.options || [])" :key="opt.value">
+                      <option :value="opt.value" x-text="opt.label" :selected="config[field.key] === opt.value"></option>
+                    </template>
+                  </select>
+                </template>
+                <!-- Boolean -->
+                <template x-if="field.type === 'boolean'">
+                  <input class="checkbox" type="checkbox"
+                         :checked="config[field.key] ?? field.default ?? false"
+                         @change="setField(field.key, $event.target.checked)">
+                </template>
+                <!-- Textarea -->
+                <template x-if="field.type === 'textarea'">
+                  <textarea class="textarea" rows="3" :placeholder="field.placeholder || ''"
+                            @input="setField(field.key, $event.target.value)" x-text="config[field.key] ?? ''"></textarea>
+                </template>
+                <!-- Relays -->
+                <template x-if="field.type === 'relays'">
+                  <div>
+                    <template x-for="(r, i) in (config.relays || [])" :key="i">
+                      <div class="relay-row">
+                        <input class="input" type="number" min="1" max="8" :value="r.index"
+                               @input="updateRelay(i, 'index', Number($event.target.value))">
+                        <input class="input" type="text" placeholder="np. Brama, Furtka, Garaż"
+                               :value="r.name"
+                               @input="updateRelay(i, 'name', $event.target.value)">
+                        <button type="button" class="btn btn-ghost" @click="removeRelay(i)" title="Usuń">✕</button>
+                      </div>
+                    </template>
+                    <button type="button" class="btn" @click="addRelay">+ Dodaj przekaźnik</button>
+                  </div>
+                </template>
+                <!-- Field-level error -->
+                <div class="field-error" x-show="fieldErrors[field.key]" x-text="fieldErrors[field.key]"></div>
+              </div>
+            </div>
+          </template>
+        </fieldset>
+      </template>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <!-- STEP 4: Test matrix                                                  -->
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <div class="card" x-show="step === 4">
+      <h2 class="text-lg font-semibold mb-2">Test urządzenia</h2>
+      <p class="muted text-sm mb-4">
+        Edge testuje co potrafi (TCP, HTTP, auth, snapshot…). Akcje destrukcyjne — restart, otwieranie bram — są pokazane jako
+        <span class="strong">🟡 wymaga ręcznego testu</span>; możesz je odpalić z głównego panelu po zapisaniu.
+      </p>
+
+      <div class="flex items-center gap-3 mb-4">
+        <button class="btn btn-primary" @click="runTest" :disabled="testRunning">
+          <span x-show="!testRunning">🧪 Uruchom test</span>
+          <span x-show="testRunning"><span class="spinner"></span> Testuję...</span>
+        </button>
+        <button class="btn" @click="runTest" :disabled="testRunning" x-show="testMatrix">🔄 Powtórz</button>
+        <div class="muted text-sm" x-show="testMatrix && !testRunning">
+          Wynik: <span :class="testMatrix.online ? 'strong text-success' : 'strong text-danger'"
+                       x-text="testMatrix.online ? '✅ Online' : '⚠️ Niepełne'"></span>
+          &middot; <span x-text="(testMatrix.finishedAt - testMatrix.startedAt) + 'ms'"></span>
+        </div>
+      </div>
+
+      <div x-show="testMatrix && !testRunning">
+        <template x-for="entry in testMatrixEntries" :key="entry.key">
+          <div class="matrix-row" :class="entry.status">
+            <div class="matrix-icon" x-text="entry.icon"></div>
+            <div class="matrix-label" x-text="entry.label"></div>
+            <div class="matrix-detail" x-text="entry.detail"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <!-- STEP 5: Zapisz i gotowe                                              -->
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <div class="card" x-show="step === 5">
+      <h2 class="text-lg font-semibold mb-4">Gotowe!</h2>
+
+      <div x-show="!savedAt">
+        <p class="muted text-sm mb-4">Urządzenie ma już ID i config w sqlite Edge. Wprowadź jeszcze etykietę widoczną w aplikacji mieszkańca/admina i kliknij <span class="strong">Zakończ</span>.</p>
+        <div class="form-row">
+          <label>Nazwa wyświetlana <span class="required">*</span>
+            <div class="help">Etykieta widoczna w panelach (mieszkańcy, portier). Np. „Domofon — wejście główne".</div>
+          </label>
+          <input class="input" type="text" :value="config.name || ''" @input="setField('name', $event.target.value)"
+                 placeholder="np. Domofon — wejście główne">
+        </div>
+      </div>
+
+      <div x-show="savedAt" class="text-center py-8">
+        <div class="text-6xl mb-4">✅</div>
+        <div class="text-xl strong mb-2">Urządzenie dodane</div>
+        <div class="muted text-sm">deviceId: <code x-text="deviceId"></code></div>
+        <div class="mt-6 flex justify-center gap-2">
+          <a href="/ui" class="btn btn-primary">Wróć do panelu</a>
+          <button class="btn" @click="resetWizard">+ Dodaj kolejne</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <!-- Footer with nav                                                      -->
+    <!-- ──────────────────────────────────────────────────────────────────── -->
+    <footer class="mt-6 flex items-center justify-between" x-show="!savedAt">
+      <button class="btn btn-ghost" @click="back" :disabled="step <= 1">← Wstecz</button>
+      <div class="muted text-sm" x-show="error" x-text="error"></div>
+      <button class="btn btn-primary" @click="next" :disabled="!canProceed">
+        <span x-text="nextLabel"></span>
+        <span x-show="saving" class="ml-2"><span class="spinner"></span></span>
+      </button>
+    </footer>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────────────
+    // wizardState — Alpine.js data + metody. Całość logiki wizarda.
+    //
+    // Stan trzymany w pamięci aż do `saveDevice()`. Po zapisie URL `/ui` ma
+    // już urządzenie w liście. Wszystkie requesty idą do tego samego origin-u
+    // (`http://localhost:4000` lub Tailscale `http://100.x.x.x:4000`).
+    // ─────────────────────────────────────────────────────────────────────
+    function wizardState() {
+      return {
+        step: 1,
+        // ── Step 1
+        // UWAGA: brak typu `LOCK` — smart-locki mieszkaniowe (Tedee/Nuki) NIE są
+        // infrastrukturą budynku, tylko prywatnymi kluczami mieszkańca. Patrz
+        // packages/device-drivers/src/catalog/tedee.ts (header) — model docelowy
+        // to integracja w iOS app z PAK w Keychain, nie Edge sqlite.
+        deviceTypes: [
+          { value: 'INTERCOM',     icon: '🚪', label: 'Domofon',        desc: 'Akuvox, Hikvision, 2N, DNAKE' },
+          { value: 'CAMERA',       icon: '📷', label: 'Kamera IP',       desc: 'Hikvision, Dahua' },
+          { value: 'LPR_CAMERA',   icon: '🚗', label: 'Kamera LPR',      desc: 'Hikvision ANPR, Dahua ITC' },
+          { value: 'ELEVATOR',     icon: '🛗', label: 'Winda',           desc: 'Kontroler dostępu' },
+          { value: 'LIGHTING',     icon: '💡', label: 'Oświetlenie',     desc: 'Smart lighting' },
+          { value: 'SWITCH',       icon: '🔌', label: 'Przekaźnik',      desc: 'Shelly Pro 1 (Ethernet)' },
+          { value: 'KNX_BRIDGE',   icon: '🏗️', label: 'KNX-IP Bridge',   desc: 'eelectron, Jung, Gira' },
+        ],
+        selectedType: null,
+        // ── Step 2
+        discoveryRunning: false,
+        discoveryDone: false,
+        discoveryProgress: 0,
+        discoveryCandidates: [],
+        availableDrivers: [],
+        manualDriverId: '',
+        // ── Step 3
+        selectedDriver: null,
+        config: {},
+        fieldErrors: {},
+        groupLabels: {
+          device: 'Urządzenie',
+          network: 'Sieć',
+          auth: 'Logowanie',
+          rtsp: 'RTSP / Streaming',
+          relays: 'Przekaźniki',
+          lpr: 'LPR (rozpoznawanie tablic)',
+          ai: 'AI / Analityka',
+          cloud: 'Chmura (API)',
+          knx: 'KNX',
+          advanced: 'Zaawansowane',
+        },
+        // ── Step 4
+        deviceId: null,
+        testMatrix: null,
+        testRunning: false,
+        // ── Step 5
+        savedAt: null,
+        // ── Misc
+        saving: false,
+        error: null,
+
+        // ────────────────────────────────────────────────────────────────
+        // Lifecycle
+        // ────────────────────────────────────────────────────────────────
+        async init() {
+          // 2026-05-14: obsługa `?type=INTERCOM` (lub innego) z URL — gdy user
+          // przyszedł z głównego panelu Edge `/ui` z kontekstowego buttonu
+          // („Dodaj domofon", „Kamera IP" itp.), pomijamy Step 1 i skaczemy
+          // od razu do Step 2 z preselectowanym typem.
+          const params = new URLSearchParams(window.location.search)
+          const initialType = params.get('type')
+          if (initialType && this.deviceTypes.some((t) => t.value === initialType)) {
+            await this.selectType(initialType)
+            this.step = 2
+          }
+        },
+
+        // ────────────────────────────────────────────────────────────────
+        // Computed
+        // ────────────────────────────────────────────────────────────────
+        get stepTitle() {
+          return ({
+            1: 'wybór typu urządzenia',
+            2: 'wyszukiwanie w sieci',
+            3: 'konfiguracja',
+            4: 'test',
+            5: 'zapis',
+          })[this.step]
+        },
+        get selectedTypeLabel() {
+          return this.deviceTypes.find((t) => t.value === this.selectedType)?.label ?? ''
+        },
+        /**
+         * Czy kandydat to kamera ANPR. Adres sprzętowy tego NIE rozróżnia —
+         * Hikvision ma wspólny prefiks dla wszystkich kamer — więc jedynym
+         * sygnałem przed podaniem hasła jest symbol modelu z ogłoszenia w
+         * sieci. `DS-2CD4A..FWD` i `iDS-TCM` to rodziny ANPR, a sufiks `/P`
+         * oznacza wariant z odczytem tablic.
+         */
+        isLprCandidate(c) {
+          const s = ((c.model || '') + ' ' + (c.friendlyName || '') + ' ' + (c.hostname || '')).toUpperCase()
+          return /DS-2CD4A\d{2}FWD|IDS-TCM|IDS-2CD7A|\/P\b/.test(s)
+        },
+
+        /**
+         * Podział znalezionych urządzeń na sekcje — zgłoszenie Konrada
+         * 2026-08-07. Wcześniej była jedna płaska lista przefiltrowana po
+         * wybranym typie, więc instalator nie widział, co jeszcze jest w
+         * sieci, i musiał zgadywać, która kamera jest która.
+         */
+        get candidateGroups() {
+          const groups = [
+            { key: 'INTERCOM',   label: 'Domofony',        icon: '🚪', items: [] },
+            { key: 'LPR_CAMERA', label: 'Kamery LPR',      icon: '🚗', items: [] },
+            { key: 'CAMERA',     label: 'Pozostałe kamery', icon: '📹', items: [] },
+            { key: 'OTHER',      label: 'Inne urządzenia',  icon: '📡', items: [] },
+          ]
+          const by = (k) => groups.find((g) => g.key === k)
+
+          for (const c of this.discoveryCandidates) {
+            if (c.suggestedType === 'INTERCOM') by('INTERCOM').items.push(c)
+            else if (c.suggestedType === 'LPR_CAMERA' || this.isLprCandidate(c)) by('LPR_CAMERA').items.push(c)
+            else if (c.suggestedType === 'CAMERA') by('CAMERA').items.push(c)
+            else by('OTHER').items.push(c)
+          }
+          return groups.filter((g) => g.items.length > 0)
+        },
+
+        get candidatesForType() {
+          if (!this.selectedType) return []
+          return this.discoveryCandidates.filter((c) =>
+            c.suggestedType === this.selectedType || !c.suggestedType
+          )
+        },
+        get otherCandidates() {
+          if (!this.selectedType) return this.discoveryCandidates
+          return this.discoveryCandidates.filter((c) =>
+            c.suggestedType && c.suggestedType !== this.selectedType
+          )
+        },
+        get matchedForTypeCount() {
+          return this.candidatesForType.filter((c) => c.suggestedDriverId).length
+        },
+        get fieldsByGroup() {
+          if (!this.selectedDriver) return {}
+          const map = {}
+
+          // Syntetyczne pole „Model" — wstrzykiwane dla KAŻDEGO sterownika,
+          // zamiast dopisywania go ręcznie do `fields` w 20 wpisach katalogu.
+          // Dzięki temu każde nowe urządzenie automatycznie dostaje wybór modelu.
+          const models = this.selectedDriver.models || []
+          if (models.length) {
+            const opts = models.map((m) => ({ value: m, label: m }))
+            // Model wykryty przez discovery bywa spoza katalogu (nowa rewizja).
+            // Dokładamy go jako opcję, żeby wybór go nie skasował.
+            const current = this.config.model
+            if (current && !models.includes(current)) {
+              opts.unshift({ value: current, label: `${current} (wykryty)` })
+            }
+            map.device = [{
+              key: 'model',
+              label: 'Model urządzenia',
+              type: 'select',
+              group: 'device',
+              required: true,
+              options: opts,
+              help: 'Od modelu zależą ścieżki API i obejścia firmware — wybierz dokładnie ten, ' +
+                    'który widnieje na urządzeniu. Warianty różniące się sufiksem (np. „/P" = ANPR) ' +
+                    'to RÓŻNE urządzenia.',
+            }]
+          }
+
+          for (const f of this.selectedDriver.fields) {
+            const g = f.group || 'advanced'
+            if (!map[g]) map[g] = []
+            map[g].push(f)
+          }
+          return map
+        },
+        get visibleGroups() {
+          const order = ['device', 'network', 'auth', 'rtsp', 'relays', 'lpr', 'cloud', 'knx', 'ai', 'advanced']
+          return order.filter((g) => this.fieldsByGroup[g]?.length > 0)
+        },
+        get testMatrixEntries() {
+          if (!this.testMatrix) return []
+          const labelMap = {
+            network: 'Sieć (TCP)',
+            auth: 'Uwierzytelnienie',
+            ping: 'HTTP ping',
+            snapshot: 'Snapshot',
+            restart: 'Restart',
+            openDoor: 'Otwórz przekaźnik',
+            toggle: 'Włącz/wyłącz',
+            lock: 'Zamknij',
+            unlock: 'Otwórz',
+            rtsp: 'RTSP',
+            mjpeg: 'MJPEG live',
+            lprPushList: 'LPR — sync listy',
+            lprEvents: 'LPR — eventy ANPR',
+          }
+          const out = []
+          for (const [key, v] of Object.entries(this.testMatrix.capabilities ?? {})) {
+            if (!v) continue
+            let status, icon, detail
+            if (v.tested && v.ok) { status = 'ok'; icon = '✅'; detail = v.detail + (v.latencyMs ? ` (${v.latencyMs}ms)` : '') }
+            else if (v.tested && v.ok === false) { status = 'fail'; icon = '❌'; detail = v.error || 'błąd' }
+            else if (v.supported) { status = 'pending'; icon = '🟡'; detail = v.hint || 'wymaga ręcznego testu' }
+            else { continue }
+            out.push({ key, label: labelMap[key] || key, status, icon, detail })
+          }
+          return out
+        },
+        get canProceed() {
+          if (this.step === 1) return !!this.selectedType
+          if (this.step === 2) return !!this.selectedDriver
+          if (this.step === 3) return this.validateConfig()
+          if (this.step === 4) return true  // można pomijać test
+          if (this.step === 5) return !!(this.config.name || '').trim()
+          return false
+        },
+        get nextLabel() {
+          if (this.step === 4) return 'Dalej →'
+          if (this.step === 5) return 'Zakończ ✓'
+          return 'Dalej →'
+        },
+
+        // ────────────────────────────────────────────────────────────────
+        // Step 1: Type
+        // ────────────────────────────────────────────────────────────────
+        async selectType(type) {
+          this.selectedType = type
+          this.error = null
+          // pre-load driverów dla typu — będą w Step 2 manual select
+          try {
+            const res = await fetch(`/devices/drivers?type=${type}`)
+            this.availableDrivers = await res.json()
+          } catch (err) {
+            this.error = 'Błąd pobierania katalogu driverów: ' + err.message
+          }
+        },
+
+        // ────────────────────────────────────────────────────────────────
+        // Step 2: Discovery + manual driver
+        // ────────────────────────────────────────────────────────────────
+        async startDiscovery() {
+          this.discoveryRunning = true
+          this.discoveryDone = false
+          this.discoveryProgress = 0
+          this.discoveryCandidates = []
+          this.error = null
+
+          try {
+            const startRes = await fetch('/devices/discover', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ protocols: ['mdns', 'knxnet-ip'], timeoutMs: 15000 }),
+            })
+            const run = await startRes.json()
+            const runId = run.runId
+
+            // Progress bar — wizualne 0→100% w 15 sek
+            const startedAt = Date.now()
+            const progressTimer = setInterval(() => {
+              const elapsed = Date.now() - startedAt
+              this.discoveryProgress = Math.min(98, Math.round((elapsed / 15000) * 100))
+            }, 300)
+
+            // Poll
+            let result
+            for (let i = 0; i < 20; i++) {
+              await new Promise((r) => setTimeout(r, 1000))
+              const r = await fetch(`/devices/discover/${runId}`)
+              result = await r.json()
+              if (result.status === 'done') break
+            }
+            clearInterval(progressTimer)
+            this.discoveryProgress = 100
+            this.discoveryCandidates = result.candidates || []
+            this.discoveryDone = true
+          } catch (err) {
+            this.error = 'Błąd skanu: ' + err.message
+          } finally {
+            this.discoveryRunning = false
+          }
+        },
+
+        async pickCandidate(c) {
+          // Wybór kandydata z mDNS/KNX → pre-fill drivera + IP/port/MAC
+          if (c.suggestedDriverId) {
+            await this.loadDriver(c.suggestedDriverId)
+          }
+          if (c.ip)   this.config.ipAddress = c.ip
+          if (c.port && this.config.httpPort === undefined) this.config.httpPort = c.port
+          if (c.mac)  this.config.mac = c.mac
+          if (c.friendlyName && !this.config.name) this.config.name = c.friendlyName
+          // Skok do Step 3
+          this.step = 3
+        },
+
+        async pickManualDriver() {
+          if (!this.manualDriverId) return
+          await this.loadDriver(this.manualDriverId)
+        },
+
+        // ── Cert badge helpers ────────────────────────────────────────────
+        certLabel(status) {
+          return ({
+            certified:  '✅ Certyfikowany',
+            beta:       '🟡 Beta',
+            community:  '🤝 Community',
+            untested:   '⚪ Nietestowany',
+          })[status || 'untested']
+        },
+        certStyle(status) {
+          const map = {
+            certified: 'background: var(--success-soft); color: var(--success-text); border-color: var(--success);',
+            beta:      'background: var(--warn-soft); color: var(--warn-text); border-color: var(--warn);',
+            community: 'background: var(--accent-soft); color: var(--accent);',
+            untested:  'background: var(--card-hover); color: var(--muted);',
+          }
+          return map[status || 'untested']
+        },
+
+        async loadDriver(driverId) {
+          const driver = this.availableDrivers.find((d) => d.id === driverId)
+          if (!driver) {
+            // Driver dla innego typu — dociągamy z API
+            const res = await fetch('/devices/drivers')
+            const all = await res.json()
+            this.selectedDriver = all.find((d) => d.id === driverId)
+          } else {
+            this.selectedDriver = driver
+          }
+          // Pre-fill defaults
+          this.config = { ...(this.selectedDriver?.defaults || {}), ...this.config }
+          this.config.driverId = driverId
+          this.config.manufacturer = this.selectedDriver.manufacturer
+          // NIE wybieramy modelu za instalatora. Wcześniej było tu
+          // `models[0]` — czyli pierwszy model z listy sterownika lądował w
+          // konfiguracji po cichu, bez pytania i bez możliwości zmiany.
+          // Skutek (VN, 2026-08-05): dwie kamery DS-2CD4A26FWD-IZS/P zapisały
+          // się jako iDS-TCM403-AI, a od modelu zależą ścieżki ISAPI.
+          // Model wykryty przez discovery (mDNS/UPnP) zostaje — jest wiarygodny.
+          // Gdy go brak, pole zostaje puste i instalator musi wybrać (required).
+        },
+
+        // ────────────────────────────────────────────────────────────────
+        // Step 3: Form
+        // ────────────────────────────────────────────────────────────────
+        setField(key, value) {
+          this.config[key] = value
+          this.config = { ...this.config }  // wymuś re-render (Alpine)
+          delete this.fieldErrors[key]
+        },
+        addRelay() {
+          if (!this.config.relays) this.config.relays = []
+          this.config.relays = [...this.config.relays, { index: this.config.relays.length + 1, name: '' }]
+        },
+        updateRelay(i, key, value) {
+          this.config.relays[i][key] = value
+          this.config.relays = [...this.config.relays]
+        },
+        removeRelay(i) {
+          this.config.relays = this.config.relays.filter((_, idx) => idx !== i)
+        },
+        validateConfig() {
+          const errors = {}
+          for (const f of this.selectedDriver?.fields ?? []) {
+            const v = this.config[f.key]
+            if (f.required && (v === undefined || v === null || v === '')) {
+              errors[f.key] = 'Wymagane'
+            }
+          }
+          this.fieldErrors = errors
+          return Object.keys(errors).length === 0
+        },
+
+        // ────────────────────────────────────────────────────────────────
+        // Step 4: Test
+        // ────────────────────────────────────────────────────────────────
+        async runTest() {
+          if (!this.deviceId) {
+            this.error = 'Brak deviceId — zapisz device najpierw'
+            return
+          }
+          this.testRunning = true
+          this.testMatrix = null
+          try {
+            const res = await fetch(`/devices/${this.deviceId}/test-matrix`, { method: 'POST' })
+            this.testMatrix = await res.json()
+          } catch (err) {
+            this.error = 'Błąd testu: ' + err.message
+          } finally {
+            this.testRunning = false
+          }
+        },
+
+        // ────────────────────────────────────────────────────────────────
+        // Navigation
+        // ────────────────────────────────────────────────────────────────
+        async next() {
+          this.error = null
+
+          if (this.step === 3) {
+            // Zapis device w sqlite Edge → dostajemy deviceId, którym możemy testować
+            if (!this.validateConfig()) return
+            await this.saveDeviceDraft()
+            if (this.deviceId) {
+              this.step = 4
+              // auto-run test po wejściu do step 4
+              this.$nextTick(() => this.runTest())
+            }
+            return
+          }
+
+          if (this.step === 5) {
+            await this.saveDeviceFinal()
+            return
+          }
+
+          this.step++
+        },
+
+        back() {
+          if (this.step > 1) this.step--
+        },
+
+        async saveDeviceDraft() {
+          this.saving = true
+          try {
+            const payload = {
+              type: this.selectedType,
+              config: { ...this.config },
+            }
+            if (this.deviceId) {
+              // PATCH istniejący (powrót do Step 3 po edycji)
+              await fetch(`/devices/${this.deviceId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              })
+            } else {
+              const res = await fetch('/devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              })
+              const created = await res.json()
+              this.deviceId = created.deviceId || created.id
+            }
+          } catch (err) {
+            this.error = 'Błąd zapisu: ' + err.message
+          } finally {
+            this.saving = false
+          }
+        },
+
+        async saveDeviceFinal() {
+          // Zapis ostatecznej nazwy + flaga "ready"
+          if (!this.deviceId) {
+            this.error = 'Brak deviceId'
+            return
+          }
+          this.saving = true
+          try {
+            await fetch(`/devices/${this.deviceId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: this.selectedType,
+                config: { ...this.config },
+              }),
+            })
+            this.savedAt = Date.now()
+          } catch (err) {
+            this.error = 'Błąd zapisu: ' + err.message
+          } finally {
+            this.saving = false
+          }
+        },
+
+        resetWizard() {
+          this.step = 1
+          this.selectedType = null
+          this.discoveryRunning = false
+          this.discoveryDone = false
+          this.discoveryProgress = 0
+          this.discoveryCandidates = []
+          this.availableDrivers = []
+          this.manualDriverId = ''
+          this.selectedDriver = null
+          this.config = {}
+          this.fieldErrors = {}
+          this.deviceId = null
+          this.testMatrix = null
+          this.savedAt = null
+          this.error = null
+        },
+      }
+    }
+  </script>
+</body>
+</html>

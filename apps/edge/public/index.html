@@ -1,0 +1,3877 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GateLynk Edge</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ============================================================
+       Dark theme (default) — Cisco/HPE enterprise style
+       ============================================================ */
+    :root, [data-theme="dark"] {
+      --bg:           #0d1117;
+      --bg-elev:      #0f1419;
+      --card:         #161b22;
+      --card2:        #1c2128;
+      --card-hover:   #21262d;
+      --border:       #30363d;
+      --border-soft:  rgba(48,54,61,.5);
+      --text:         #e6edf3;
+      --text-strong:  #ffffff;
+      --muted:        #8b949e;
+      --dim:          #6e7681;
+      --accent:       #2563eb;
+      --accent-h:     #1d4ed8;
+      --accent-soft:  rgba(37,99,235,.18);
+      --success:      #22c55e;
+      --success-soft: rgba(34,197,94,.12);
+      --success-text: #4ade80;
+      --danger:       #ef4444;
+      --danger-soft:  rgba(239,68,68,.12);
+      --danger-text:  #f87171;
+      --warn:         #eab308;
+      --warn-soft:    rgba(234,179,8,.12);
+      --warn-text:    #facc15;
+      --shadow-sm:    0 1px 2px rgba(0,0,0,.3);
+      --shadow-md:    0 4px 12px rgba(0,0,0,.35);
+      --shadow-lg:    0 12px 28px rgba(0,0,0,.5);
+      --log-bg:       #05080d;
+      --input-bg:     #1c2128;
+      --thumb-bg:     #05080d;
+    }
+
+    /* ============================================================
+       Light theme — Apple-like, soft greys, airy shadows
+       ============================================================ */
+    [data-theme="light"] {
+      --bg:           #f5f7fa;
+      --bg-elev:      #ffffff;
+      --card:         #ffffff;
+      --card2:        #f3f5f8;
+      --card-hover:   #fafbfd;
+      --border:       #e4e7ec;
+      --border-soft:  rgba(228,231,236,.7);
+      --text:         #1d2733;
+      --text-strong:  #0b1220;
+      --muted:        #5b6573;
+      --dim:          #98a0ac;
+      --accent:       #2563eb;
+      --accent-h:     #1d4ed8;
+      --accent-soft:  rgba(37,99,235,.1);
+      --success:      #16a34a;
+      --success-soft: rgba(22,163,74,.1);
+      --success-text: #15803d;
+      --danger:       #dc2626;
+      --danger-soft:  rgba(220,38,38,.08);
+      --danger-text:  #b91c1c;
+      --warn:         #d97706;
+      --warn-soft:    rgba(217,119,6,.1);
+      --warn-text:    #b45309;
+      --shadow-sm:    0 1px 2px rgba(15,23,42,.04);
+      --shadow-md:    0 4px 14px rgba(15,23,42,.06);
+      --shadow-lg:    0 20px 48px rgba(15,23,42,.1);
+      --log-bg:       #0b1220;
+      --input-bg:     #ffffff;
+      --thumb-bg:     #eef1f4;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      transition: background-color .25s ease, color .25s ease;
+    }
+
+    .card  {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow-sm);
+      transition: background-color .2s, border-color .2s, box-shadow .2s;
+    }
+    .card:hover { box-shadow: var(--shadow-md); }
+    .card2 { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .dot-green { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+    .dot-red   { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+    .dot-gray  { background: var(--dim); }
+    .dot-yellow{ background: var(--warn); }
+
+    /* Header status pills */
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 20px; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background-color .2s, color .2s, border-color .2s; }
+    .pill-green { background: var(--success-soft); color: var(--success-text); border: 1px solid transparent; }
+    .pill-blue  { background: var(--accent-soft); color: var(--accent); border: 1px solid transparent; }
+    .pill-gray  { background: var(--card2); color: var(--muted); border: 1px solid var(--border); }
+    .pill-red   { background: var(--danger-soft); color: var(--danger-text); border: 1px solid transparent; }
+
+    /* Tabs */
+    .tab-btn { border: none; border-bottom: 2px solid transparent; color: var(--muted); transition: color .15s, border-color .15s; background: transparent; margin-bottom: -1px; cursor: pointer; }
+    .tab-btn:hover  { color: var(--text); }
+    .tab-btn.active { border-bottom-color: var(--accent); color: var(--text-strong); font-weight: 600; }
+    .tab-btn.active svg { color: var(--accent); }
+
+    /* Buttons */
+    .btn-green    { background: var(--success); color: #fff; border: none; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s, transform .1s; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm); }
+    .btn-green:hover    { background: #15803d; }
+    .btn-green:active   { transform: translateY(1px); }
+    .btn-green:disabled { opacity: .55; cursor: not-allowed; }
+
+    .btn-primary  { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s, transform .1s; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover  { background: var(--accent-h); }
+    .btn-primary:active { transform: translateY(1px); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-ghost    { background: var(--card); color: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 7px 12px; font-size: 13px; cursor: pointer; transition: color .15s, border-color .15s, background .15s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-ghost:hover { color: var(--text); background: var(--card-hover); }
+
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-danger   { color: var(--danger-text); border: 1px solid var(--border); background: var(--danger-soft); border-radius: 10px; padding: 7px 12px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background .15s; }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+
+    /* "Otwórz" green relay button — matches mockup exactly */
+    .btn-open { background: var(--success); color: #fff; border: none; border-radius: 10px; font-weight: 500; cursor: pointer; transition: background .15s, transform .1s; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(22,163,74,.25); }
+    .btn-open:hover  { background: #15803d; }
+    .btn-open:active { transform: translateY(1px); }
+    .btn-open:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+    /* Icon-only round button (lock, edit, delete) */
+    .btn-icon { background: transparent; border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: color .15s, background .15s, border-color .15s; flex-shrink: 0; }
+    .btn-icon:hover { color: var(--text); background: var(--card-hover); }
+
+    /* Theme toggle (header) */
+    .theme-toggle { width: 34px; height: 34px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: color .15s, background .15s, border-color .15s, transform .2s; }
+    .theme-toggle:hover { color: var(--text); background: var(--card-hover); }
+    .theme-toggle:active { transform: scale(.94); }
+    .theme-toggle .icon-sun  { display: none; }
+    .theme-toggle .icon-moon { display: block; }
+    [data-theme="light"] .theme-toggle .icon-sun  { display: block; }
+    [data-theme="light"] .theme-toggle .icon-moon { display: none; }
+
+    /* Inputs */
+    input, select, textarea {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 9px 12px;
+      font-size: 13px;
+      transition: border-color .15s, box-shadow .15s, background .2s;
+      outline: none;
+      width: 100%;
+      font-family: inherit;
+    }
+    input::placeholder, textarea::placeholder { color: var(--dim); }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    select option { background: var(--card); color: var(--text); }
+    input[type="checkbox"] { width: auto; padding: 0; accent-color: var(--accent); }
+
+    /* Sub-tabs inside PACZKI / USTAWIENIA */
+    .subtab-btn { background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); padding: 9px 14px; font-size: 13px; cursor: pointer; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+    .subtab-btn:hover { color: var(--text); }
+    .subtab-btn.active { color: var(--text-strong); border-bottom-color: var(--accent); font-weight: 600; }
+
+    /* Modal */
+    .modal-overlay { background: rgba(0,0,0,.55); backdrop-filter: blur(6px); }
+    [data-theme="light"] .modal-overlay { background: rgba(15,23,42,.35); }
+
+    /* Thumbnails */
+    .thumb { background: var(--thumb-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+    /* Animations */
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .animate-pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin .7s linear infinite; }
+    @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    main > div:not(.hidden) { animation: fadein .22s ease-out; }
+
+    /* Mode toggle (snapshot/live) */
+    .active-cam { background: var(--card) !important; color: var(--text-strong) !important; font-weight: 600; box-shadow: var(--shadow-sm); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* Card icon box (small coloured tile next to titles) */
+    .icon-tile { width: 38px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; }
+    .icon-tile.tile-green { background: var(--success-soft); color: var(--success-text); }
+    .icon-tile.tile-blue  { background: var(--accent-soft);  color: var(--accent); }
+    .icon-tile.tile-warn  { background: var(--warn-soft);    color: var(--warn-text); }
+    .icon-tile.tile-red   { background: var(--danger-soft);  color: var(--danger-text); }
+    .icon-tile.device-icon svg { width: 22px; height: 22px; display: block; }
+    /* Rich device illustrations — photo-style PNG assets with transparent bg */
+    .device-illustration {
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      background: transparent;
+    }
+    .device-illustration img {
+      width: 100%; height: 100%;
+      display: block;
+      object-fit: contain;          /* preserve aspect, no crop */
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.35));
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    /* Intercom is portrait (≈0.53 aspect), camera is landscape (≈1.08 aspect) */
+    .device-illustration.intercom { width: 38px; height: 70px; }
+    .device-illustration.camera   { width: 64px; height: 48px; }
+    [data-theme="light"] .device-illustration img { filter: drop-shadow(0 3px 6px rgba(0,0,0,0.18)); }
+
+    /* Status inline strip (system status card) */
+    .stat-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .stat-strip > div { display: inline-flex; align-items: center; gap: 8px; padding: 2px 0; }
+    .stat-strip .sep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+  </style>
+  <script>
+    // Apply theme BEFORE body renders — avoids FOUC
+    (function() {
+      var saved = localStorage.getItem('edgeTheme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
+</head>
+<body>
+
+<!-- ─── HEADER ─────────────────────────────────────────────────────────────── -->
+<header class="px-6 py-3 flex items-center justify-between sticky top-0 z-40" style="background: var(--bg); border-bottom: 1px solid var(--border);">
+  <div class="flex items-center gap-3">
+    <div class="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm text-white" style="background: linear-gradient(135deg, #2563eb, #1d4ed8);">GL</div>
+    <div class="leading-tight">
+      <div class="flex items-baseline gap-2">
+        <h1 class="text-sm font-bold" style="color: var(--text-strong);">GateLynk Edge</h1>
+        <span id="buildingBadge" class="hidden text-xs px-2 py-0.5 rounded-full" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft);">Budynek: <span id="buildingName">—</span></span>
+      </div>
+      <p class="text-xs" style="color: var(--muted);">IP: <span id="localIp" class="font-mono">—</span></p>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <!-- AI Engine — link do strony konfiguracji (FAZA 8.h.6, 2026-06-05) -->
+    <a href="/ui/ai-engine.html" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+       style="background: transparent; color: var(--text); border: 1px solid var(--border);"
+       onmouseover="this.style.background='var(--card2)'"
+       onmouseout="this.style.background='transparent'"
+       title="Konfiguracja AI Engine (YOLO/Vision service)">
+      🤖 AI Engine
+    </a>
+    <!-- Dodaj urządzenie — link do wizarda (2026-05-14: zastępuje stare modale openAddModalFor) -->
+    <a href="/ui/wizard.html" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+       style="background: var(--accent); color: white; border: 1px solid var(--accent);"
+       onmouseover="this.style.background='var(--accent-h)'"
+       onmouseout="this.style.background='var(--accent)'"
+       title="Otwórz wizard dodawania nowego urządzenia">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Dodaj urządzenie
+    </a>
+
+    <span id="pillSystem" class="pill pill-gray">
+      <span class="dot dot-gray"></span> System
+    </span>
+    <span id="pillLan" class="pill pill-gray">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+      LAN
+    </span>
+    <span id="pillCloud" class="pill pill-gray">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+      <span id="pillCloudTxt">Cloud</span>
+    </span>
+
+    <!-- Theme toggle -->
+    <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Zmień motyw (jasny / ciemny)" aria-label="Zmień motyw">
+      <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
+    </button>
+
+    <!-- Placeholder spans kept for compat with legacy JS -->
+    <span id="cloudStatus" class="hidden"></span>
+  </div>
+</header>
+
+<!-- ─── TABS ───────────────────────────────────────────────────────────────── -->
+<div class="px-6 overflow-x-auto" style="background: var(--bg); border-bottom: 1px solid var(--border);">
+  <div class="flex gap-0 min-w-max" role="tablist">
+    <button class="tab-btn active px-5 py-3 text-sm cursor-pointer flex items-center gap-2"
+            data-type="SYSTEM" onclick="switchTab('SYSTEM', this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      System
+    </button>
+    <button class="tab-btn px-5 py-3 text-sm cursor-pointer flex items-center gap-2"
+            data-type="DOSTEP" onclick="switchTab('DOSTEP', this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Dostęp
+    </button>
+    <button class="tab-btn px-5 py-3 text-sm cursor-pointer flex items-center gap-2"
+            data-type="MONITORING" onclick="switchTab('MONITORING', this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      Monitoring
+    </button>
+    <button class="tab-btn px-5 py-3 text-sm cursor-pointer flex items-center gap-2"
+            data-type="PACZKI" onclick="switchTab('PACZKI', this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      Paczki
+    </button>
+    <button class="tab-btn px-5 py-3 text-sm cursor-pointer flex items-center gap-2"
+            data-type="LOGI" onclick="switchTab('LOGI', this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Logi
+      <span id="logBadgeTop" class="hidden ml-0.5 text-white text-xs px-1.5 py-0.5 rounded-full leading-none" style="background: var(--danger);">0</span>
+    </button>
+    <button class="tab-btn px-5 py-3 text-sm cursor-pointer flex items-center gap-2"
+            data-type="USTAWIENIA" onclick="switchTab('USTAWIENIA', this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Ustawienia
+    </button>
+  </div>
+</div>
+
+<!-- ─── MAIN CONTENT ───────────────────────────────────────────────────────── -->
+<main class="max-w-5xl mx-auto px-4 py-6">
+
+  <!-- ═════════════════ SYSTEM TAB (nowy dashboard) ═════════════════ -->
+  <div id="section-SYSTEM">
+    <!-- System status card -->
+    <div class="card px-5 py-4 mb-4">
+      <p class="text-xs font-semibold uppercase mb-3" style="color: var(--muted); letter-spacing: .12em;">SYSTEM STATUS</p>
+      <div class="stat-strip">
+        <div class="text-sm">
+          <span class="dot dot-green"></span>
+          <span id="sysDevicesOnline" style="color: var(--text);">— urządzeń online</span>
+        </div>
+        <div class="sep"></div>
+        <div class="text-sm">
+          <span class="dot dot-green"></span>
+          <span style="color: var(--muted);">Średni czas reakcji:</span>
+          <span id="sysAvgPing" class="font-mono font-semibold px-2 py-0.5 rounded text-xs" style="background: var(--accent-soft); color: var(--accent);">—</span>
+        </div>
+        <div class="sep"></div>
+        <div class="text-sm">
+          <span class="dot dot-green"></span>
+          <span style="color: var(--muted);">Sieć stabilna</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device grid header -->
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold">Urządzenia</h2>
+      <p id="sysDeviceCount" class="text-xs" style="color: var(--muted);">—</p>
+    </div>
+    <div id="systemDeviceGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+      <div class="text-center py-10 col-span-full" style="color: var(--muted);">
+        <svg class="spinner w-7 h-7 mx-auto mb-2" fill="none" viewBox="0 0 24 24" style="color: var(--accent);">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+        </svg>
+        Ładowanie urządzeń…
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div id="quickActionsWrap" class="card px-5 py-4 hidden">
+      <p class="text-xs font-medium mb-3" style="color: var(--muted);">Szybkie akcje</p>
+      <div id="quickActions" class="flex flex-wrap gap-2"></div>
+    </div>
+  </div>
+
+  <!-- ═════════════════ DOSTĘP TAB (domofony) ═════════════════ -->
+  <div id="section-DOSTEP" class="hidden">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="font-semibold">Punkty dostępu</h2>
+        <p id="dostepCount" class="text-xs mt-0.5" style="color: var(--muted);">Ładowanie…</p>
+      </div>
+      <a href="/ui/wizard.html?type=INTERCOM" class="btn-primary"
+         title="Otwórz wizard — kreator dodawania (z auto-discovery i test-matrix)">
+        <span class="text-base leading-none">+</span> Dodaj domofon
+      </a>
+    </div>
+    <div id="dostepList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <!-- render by JS -->
+    </div>
+  </div>
+
+  <!-- ═════════════════ MONITORING TAB (kamery IP + LPR) ═════════════════ -->
+  <div id="section-MONITORING" class="hidden">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="font-semibold">Monitoring wizyjny</h2>
+        <p id="monitoringCount" class="text-xs mt-0.5" style="color: var(--muted);">Ładowanie…</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="/ui/wizard.html?type=CAMERA" class="btn-ghost">
+          <span>+</span> Kamera IP
+        </a>
+        <a href="/ui/wizard.html?type=LPR_CAMERA" class="btn-ghost">
+          <span>+</span> Kamera LPR
+        </a>
+      </div>
+    </div>
+    <div id="monitoringList" class="space-y-3">
+      <!-- render by JS -->
+    </div>
+  </div>
+
+  <!-- ═════════════════ PACZKI sub-tabs bar (pokazywany tylko gdy zakładka Paczki aktywna) ═════════════════ -->
+  <div id="paczkiSubtabs" class="hidden mb-5" style="border-bottom: 1px solid var(--border);">
+    <div class="flex gap-0">
+      <button class="subtab-btn active" data-paczki="paczkomat" onclick="switchPaczkiSubtab('paczkomat', this)">📦 Paczkomat</button>
+    </div>
+  </div>
+
+  <!-- ═════════════════ USTAWIENIA sub-tabs bar ═════════════════ -->
+  <div id="ustawieniaSubtabs" class="hidden mb-5" style="border-bottom: 1px solid var(--border);">
+    <div class="flex gap-0 flex-wrap">
+      <button class="subtab-btn active" data-usub="connection" onclick="switchUstSubtab('connection', this)">🌐 Połączenie</button>
+      <button class="subtab-btn" data-usub="network" onclick="switchUstSubtab('network', this)">📡 Sieć LAN</button>
+      <button class="subtab-btn" data-usub="elevator" onclick="switchUstSubtab('elevator', this)">🛗 Winda</button>
+      <button class="subtab-btn" data-usub="smart" onclick="switchUstSubtab('smart', this)">🏠 Smart Building</button>
+    </div>
+  </div>
+
+  <!-- ── Legacy device section (INTERCOM / CAMERA / LPR_CAMERA) — used internally by JS render ── -->
+  <div id="deviceSection" class="hidden">
+    <!-- Toolbar -->
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 id="tabTitle" class="text-lg font-semibold">Domofony</h2>
+        <p id="tabCount" class="text-sm" style="color: var(--muted);">Ładowanie…</p>
+      </div>
+      <a href="/ui/wizard.html" class="btn-primary"
+         title="Otwórz wizard — kreator dodawania">
+        <span class="text-base">+</span> Dodaj urządzenie
+      </a>
+    </div>
+
+    <!-- Device list -->
+    <div id="deviceList" class="space-y-3">
+      <div class="text-center py-10" style="color: var(--muted);" id="loadingState">
+        <svg class="spinner w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="color: var(--accent);">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+        </svg>
+        Ładowanie urządzeń…
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Elevator section (Akuvox E32) — nested inside USTAWIENIA ── -->
+  <div id="section-ELEVATOR" class="hidden">
+
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-semibold">🛗 Kontrola windy</h2>
+        <p class="text-sm" style="color: var(--muted);">Akuvox E32 — zarządzanie dostępem do pięter</p>
+      </div>
+      <div id="e32StatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full" style="background: var(--card2); border: 1px solid var(--border);">
+        <span class="dot dot-gray" id="e32StatusDot"></span>
+        <span id="e32StatusText" class="text-xs font-medium" style="color: var(--muted);">Niepołączony</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
+      <!-- Config card -->
+      <div class="lg:col-span-2 card px-5 py-4">
+        <h3 class="text-sm font-semibold mb-4 flex items-center gap-2">⚙️ Połączenie z E32</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Adres IP</label>
+            <input id="e32Ip" type="text" placeholder="192.168.1.200" pattern="^(\d{1,3}\.){3}\d{1,3}$" class="font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Port HTTP</label>
+            <input id="e32Port" type="number" placeholder="80" value="80" class="font-mono" />
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Login</label>
+              <input id="e32Login" type="text" placeholder="admin" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Hasło</label>
+              <input id="e32Password" type="password" placeholder="••••••" />
+            </div>
+          </div>
+          <div class="flex gap-2 pt-1">
+            <button onclick="saveE32Config()" class="btn-primary flex-1 justify-center">💾 Zapisz</button>
+            <button onclick="pingE32(this)" class="btn-ghost flex-1 justify-center">🔌 Ping</button>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-4 space-y-1.5" style="border-top: 1px solid var(--border);">
+          <div class="flex justify-between text-xs">
+            <span style="color: var(--muted);">Model</span>
+            <span id="e32InfoModel" class="font-medium font-mono">—</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span style="color: var(--muted);">Firmware</span>
+            <span id="e32InfoFw" class="font-medium font-mono">—</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span style="color: var(--muted);">Wyjścia sterujące</span>
+            <span id="e32InfoRelays" class="font-medium">—</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span style="color: var(--muted);">Liczba skonfigurowanych pięter</span>
+            <span id="e32InfoFloors" class="font-medium">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floor map card -->
+      <div class="lg:col-span-3 card px-5 py-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold flex items-center gap-2">🏢 Mapa pięter</h3>
+          <button onclick="addElevatorFloor()" class="text-xs font-medium" style="color: var(--accent);">+ Dodaj piętro</button>
+        </div>
+
+        <div class="grid grid-cols-12 gap-2 mb-2 px-1">
+          <span class="col-span-1 text-xs font-medium uppercase tracking-wide" style="color: var(--dim);">#</span>
+          <span class="col-span-4 text-xs font-medium uppercase tracking-wide" style="color: var(--dim);">Nazwa piętra</span>
+          <span class="col-span-3 text-xs font-medium uppercase tracking-wide" style="color: var(--dim);">Port E32</span>
+          <span class="col-span-3 text-xs font-medium uppercase tracking-wide" style="color: var(--dim);">Czas otwarcia</span>
+          <span class="col-span-1"></span>
+        </div>
+
+        <div id="elevatorFloorList" class="space-y-2"></div>
+        <p id="elevatorFloorHint" class="text-xs text-center py-6" style="color: var(--dim);">
+          Brak skonfigurowanych pięter — kliknij „+ Dodaj piętro"
+        </p>
+
+        <div class="mt-4 pt-3 flex justify-end" style="border-top: 1px solid var(--border);">
+          <button onclick="saveE32Floors()" class="btn-primary">💾 Zapisz mapę pięter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Access rules card -->
+    <div class="card px-5 py-4 mb-4">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold flex items-center gap-2">🔑 Uprawnienia dostępu do pięter</h3>
+        <button onclick="syncE32Access(this)" class="btn-ghost btn-sm">↻ Synchronizuj z chmurą</button>
+      </div>
+
+      <div id="e32AccessTable">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" id="accessTableEl">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <th class="text-left py-2 px-3 text-xs font-medium w-1/3" style="color: var(--muted);">Lokal / Mieszkaniec</th>
+                <th id="accessFloorHeaders" class="text-center py-2 px-2 text-xs font-medium" style="color: var(--muted);"></th>
+                <th class="text-right py-2 px-3 text-xs font-medium w-24" style="color: var(--muted);">Akcja</th>
+              </tr>
+            </thead>
+            <tbody id="accessTableBody">
+              <tr>
+                <td colspan="3" class="text-center py-10 text-xs" style="color: var(--dim);">
+                  Skonfiguruj połączenie z E32 oraz mapę pięter,<br/>
+                  następnie zsynchronizuj dane z chmury GateLynk.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity log -->
+    <div class="card px-5 py-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold flex items-center gap-2">📋 Dziennik zdarzeń</h3>
+        <button onclick="clearElevatorLog()" class="text-xs" style="color: var(--dim);">Wyczyść</button>
+      </div>
+      <div id="elevatorLog" class="space-y-1 max-h-48 overflow-y-auto font-mono text-xs" style="color: var(--muted);">
+        <div class="text-center py-4" style="color: var(--dim);">Brak zdarzeń</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Paczkomat section (nested inside PACZKI) ── -->
+  <div id="section-PACZKOMAT" class="hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="card px-5 py-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style="background: var(--card2);">📦</div>
+        <div>
+          <p class="text-xs" style="color: var(--muted);">Skrytki ogółem</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+      </div>
+      <div class="card px-5 py-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style="background: var(--card2);">✅</div>
+        <div>
+          <p class="text-xs" style="color: var(--muted);">Wolne</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+      </div>
+      <div class="card px-5 py-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style="background: var(--card2);">📬</div>
+        <div>
+          <p class="text-xs" style="color: var(--muted);">Zajęte</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card px-8 py-14 text-center" style="border-style: dashed;">
+      <div class="text-5xl mb-4">📦</div>
+      <p class="font-semibold text-base mb-2">Moduł Paczkomat — wkrótce</p>
+      <p class="text-sm max-w-md mx-auto" style="color: var(--muted);">
+        Integracja z urządzeniami paczkomatowymi (ESP32, własne skrytki), zarządzanie skrytkami,
+        powiadomienia SMS/push dla mieszkańców oraz historia odbioru przesyłek.
+      </p>
+      <div class="flex flex-wrap justify-center gap-2 mt-5">
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">🔌 API MQTT</span>
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">📱 Powiadomienia push</span>
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">🗃️ Historia przesyłek</span>
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">🔑 Kody jednorazowe</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Smart Building section (nested inside USTAWIENIA) ── -->
+  <div id="section-SMART_BUILDING" class="hidden">
+    <div class="card px-5 py-4 mb-4 flex items-center gap-3">
+      <span class="text-sm font-medium whitespace-nowrap">URL dashboardu:</span>
+      <input id="knxUrl" type="url" placeholder="http://192.168.1.x:8080  lub  http://knx-panel.local"
+             class="flex-1 font-mono" oninput="saveKnxUrl()" />
+      <button onclick="loadKnxFrame()" class="btn-primary whitespace-nowrap">Otwórz</button>
+    </div>
+
+    <div id="knxFrameWrap" class="hidden card overflow-hidden relative" style="height: 72vh;">
+      <div id="knxFrameLoading" class="hidden absolute inset-0 flex items-center justify-center z-10" style="background: rgba(13,17,23,.8);">
+        <svg class="spinner w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="color: var(--accent);">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+      </div>
+      <iframe id="knxFrame" src="" class="w-full h-full border-0" allowfullscreen
+              onload="document.getElementById('knxFrameLoading').classList.add('hidden')"></iframe>
+    </div>
+
+    <div id="knxPlaceholder" class="card px-8 py-14 text-center" style="border-style: dashed;">
+      <div class="text-5xl mb-4">🏠</div>
+      <p class="font-semibold text-base mb-2">Panel KNX / Smart Building</p>
+      <p class="text-sm max-w-md mx-auto" style="color: var(--muted);">
+        Wpisz adres URL panelu KNX (np. ETS, OpenHAB, Home Assistant) powyżej i kliknij <strong>Otwórz</strong>,
+        aby wyświetlić dashboard automatyki w ramce.
+      </p>
+      <div class="flex flex-wrap justify-center gap-2 mt-5">
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">🔌 KNX / ETS</span>
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">🏡 OpenHAB</span>
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">⚡ Home Assistant</span>
+        <span class="px-3 py-1 text-xs rounded-full" style="background: var(--card2); color: var(--muted);">💡 HDL Buspro</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── NETWORK TREE (nested inside USTAWIENIA) ── -->
+  <div id="section-NETWORK" class="hidden">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-semibold">🌐 Drzewo urządzeń LAN</h2>
+        <p id="networkSummary" class="text-sm" style="color: var(--muted);">Ładowanie…</p>
+      </div>
+      <button onclick="refreshNetworkTree(this)" id="networkRefreshBtn" class="btn-primary">
+        🔄 Odśwież status
+      </button>
+    </div>
+    <div id="networkTree" class="space-y-3"></div>
+  </div>
+
+  <div id="section-SETTINGS" class="hidden">
+
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-semibold">⚙️ Połączenie z chmurą</h2>
+        <p class="text-sm" style="color: var(--muted);">Konfiguracja serwera API i aktywacja urządzenia</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+      <!-- ── Cloud connection card ── -->
+      <div class="card px-5 py-5">
+        <h3 class="text-sm font-semibold mb-1 flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg flex items-center justify-center text-base" style="background: var(--card2);">🌐</span>
+          Serwer API (chmura)
+        </h3>
+        <p class="text-xs mb-4" style="color: var(--muted);">
+          Adres serwera GateLynk — lokalny w sieci LAN lub publiczny URL w chmurze.
+        </p>
+
+        <!-- Current status bar -->
+        <div class="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-lg" style="background: var(--card2); border: 1px solid var(--border);">
+          <span class="dot dot-gray" id="settingsCloudDot"></span>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium" style="color: var(--text);">Status połączenia</p>
+            <p id="settingsCloudLabel" class="text-xs truncate" style="color: var(--muted);">sprawdzanie…</p>
+          </div>
+          <span id="settingsUptimeBadge" class="hidden text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style="color: var(--success-text); background: var(--success-soft);"></span>
+        </div>
+
+        <!-- URL field -->
+        <div class="mb-3">
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Adres serwera API</label>
+          <input id="settingsApiUrl" type="url"
+                 placeholder="http://192.168.1.x:3000 lub https://api.gatelynk.pl"
+                 class="w-full rounded-lg px-3 py-2.5 text-sm font-mono" />
+          <p class="text-xs mt-1" style="color: var(--muted);">
+            Wpisz pełny adres, np. <code class="px-1 rounded" style="background: var(--card2); color: var(--text);">http://192.168.1.130:3000</code>
+          </p>
+        </div>
+
+        <div class="flex gap-2">
+          <button onclick="saveApiUrl(this)" class="btn-primary flex-1">
+            💾 Zapisz i połącz
+          </button>
+          <button onclick="testApiConnection(this)" class="btn-ghost">
+            🔌 Test
+          </button>
+        </div>
+
+        <!-- Test result -->
+        <div id="settingsTestResult" class="hidden mt-3 px-3 py-2 rounded-lg text-xs font-medium"></div>
+      </div>
+
+      <!-- ── Activation card ── -->
+      <div class="card px-5 py-5">
+        <h3 class="text-sm font-semibold mb-1 flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg flex items-center justify-center text-base" style="background: var(--card2);">🔑</span>
+          Aktywacja urządzenia
+        </h3>
+        <p class="text-xs mb-4" style="color: var(--muted);">
+          Kod aktywacyjny generuje Superadmin w panelu GateLynk dla danego budynku.
+        </p>
+
+        <!-- Activation status -->
+        <div id="settingsActivationStatus" class="mb-4">
+          <!-- Rendered by JS -->
+        </div>
+
+        <!-- Activation form (shown when NOT activated) -->
+        <div id="settingsActivationForm">
+          <div class="mb-3">
+            <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Kod aktywacyjny</label>
+            <input id="settingsActivationCode" type="text"
+                   placeholder="GLEX-XXXX-XXXX"
+                   maxlength="14"
+                   class="w-full rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest uppercase"
+                   oninput="formatActivationCode(this)" />
+            <p class="text-xs mt-1" style="color: var(--muted);">Format: GLEX-XXXX-XXXX (wygenerowany przez Superadmina)</p>
+          </div>
+
+          <button onclick="activateDevice(this)" class="btn-primary w-full">
+            ✅ Aktywuj urządzenie
+          </button>
+        </div>
+
+        <!-- Deactivate (shown when activated) -->
+        <div id="settingsDeactivateWrap" class="hidden">
+          <button onclick="deactivateDevice(this)"
+                  class="w-full px-4 py-2.5 text-sm rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  style="color: var(--danger-text); border: 1px solid var(--danger-soft); background: var(--danger-soft);">
+            ⚠️ Dezaktywuj urządzenie
+          </button>
+          <p class="text-xs text-center mt-2" style="color: var(--muted);">
+            Dezaktywacja rozłączy urządzenie od chmury. Potrzebny będzie nowy kod aktywacyjny.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── System info card ── -->
+    <div class="card mt-5 px-5 py-5">
+      <h3 class="text-sm font-semibold mb-4 flex items-center gap-2">
+        <span class="w-7 h-7 rounded-lg flex items-center justify-center text-base" style="background: var(--card2);">🖥️</span>
+        Informacje o urządzeniu
+      </h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="settingsSysInfo">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── LOG SECTION ───────────────────────────────────────────────────────── -->
+  <div id="logSection" class="hidden">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-lg font-semibold">📋 Log zdarzeń</h2>
+        <p class="text-sm" style="color: var(--muted);">Akcje w czasie rzeczywistym — relay, tunel, urządzenia</p>
+      </div>
+      <div class="flex gap-2 items-center">
+        <select id="logFilter" onchange="applyLogFilter()" class="text-xs rounded-lg px-2 py-1.5">
+          <option value="">Wszystkie</option>
+          <option value="HTTP">HTTP (apka mobilna)</option>
+          <option value="RELAY">Relay</option>
+          <option value="TUNNEL">Tunel</option>
+          <option value="DEVICE">Urządzenie</option>
+        </select>
+        <button onclick="clearLogDisplay()" class="btn-ghost text-xs">
+          🗑 Wyczyść widok
+        </button>
+        <button onclick="toggleLogPause()" id="logPauseBtn" class="btn-primary text-xs">
+          ⏸ Pauza
+        </button>
+      </div>
+    </div>
+
+    <!-- Live indicator -->
+    <div class="flex items-center gap-2 mb-3">
+      <span id="logLiveIndicator" class="flex items-center gap-1.5 text-xs font-medium" style="color: var(--success-text);">
+        <span class="w-2 h-2 rounded-full animate-pulse" style="background: var(--success);"></span> Live
+      </span>
+      <span id="logEntryCount" class="text-xs" style="color: var(--muted);">0 wpisów</span>
+    </div>
+
+    <!-- Log entries -->
+    <div id="logContainer"
+         class="rounded-xl font-mono text-xs overflow-y-auto"
+         style="height: 520px; background:#05080d; border: 1px solid var(--border);">
+      <div id="logEntries" class="p-3 space-y-0.5">
+        <div class="text-center py-8" style="color: var(--muted);">Oczekiwanie na zdarzenia…</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ─── MODAL ──────────────────────────────────────────────────────────────── -->
+<div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay p-4">
+  <div class="rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" style="background: var(--card); border: 1px solid var(--border);">
+
+    <!-- Modal header -->
+    <div class="flex items-center justify-between px-6 py-4" style="background: var(--card2); border-bottom: 1px solid var(--border); border-radius: 1rem 1rem 0 0;">
+      <h3 id="modalTitle" class="font-semibold text-base" style="color: var(--text);">Dodaj urządzenie</h3>
+      <button onclick="closeModal()" class="transition-colors text-xl leading-none" style="color: var(--muted);">&times;</button>
+    </div>
+
+    <!-- Modal body -->
+    <form id="deviceForm" onsubmit="submitForm(event)" class="px-6 py-5 space-y-4">
+      <input type="hidden" id="editDeviceId" value="" />
+      <input type="hidden" id="formDeviceType" value="" />
+
+      <!-- Common fields -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2">
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Nazwa urządzenia *</label>
+          <input type="text" id="f_name" required placeholder="np. Domofon wejście główne"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+
+        <div class="col-span-2" id="f_manufacturer_wrap">
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Producent *</label>
+          <select id="f_manufacturer" required class="w-full rounded-lg px-3 py-2 text-sm">
+          </select>
+        </div>
+
+        <div class="col-span-2" id="f_model_wrap">
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Model</label>
+          <!-- datalist zamiast <select>: modele z katalogu sterowników są
+               podpowiedziami, ale instalator może wpisać wariant spoza listy
+               (firmware/rewizje pojawiają się szybciej niż nasz katalog). -->
+          <input type="text" id="f_model" placeholder="np. R29" list="modelSuggestions"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+          <datalist id="modelSuggestions"></datalist>
+          <p class="text-xs mt-1" style="color: var(--muted);">
+            Model decyduje o ścieżkach API i obejściach firmware — wpisz dokładny
+            symbol z urządzenia (np. <span class="font-mono">DS-2CD4A26FWD-IZS/P</span>,
+            sufiks <span class="font-mono">/P</span> ma znaczenie).
+          </p>
+        </div>
+
+        <div class="col-span-2">
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Adres IP *</label>
+          <input type="text" id="f_ipAddress" required placeholder="192.168.1.100"
+                 pattern="^(\d{1,3}\.){3}\d{1,3}$"
+                 title="Prawidłowy adres IPv4"
+                 class="w-full rounded-lg px-3 py-2 text-sm font-mono" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Login</label>
+          <input type="text" id="f_login" placeholder="admin"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Hasło</label>
+          <input type="password" id="f_password" placeholder="••••••••"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+
+      <!-- INTERCOM extra — dynamic relay list + RTSP -->
+      <div id="extra_intercom" class="hidden">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-medium" style="color: var(--muted);">Przekaźniki</label>
+          <button type="button" onclick="addRelay()"
+                  class="text-xs font-medium transition-colors" style="color: var(--accent);">
+            + Dodaj przekaźnik
+          </button>
+        </div>
+        <div id="relayList" class="space-y-2"></div>
+        <p id="relayHint" class="text-xs mt-1 hidden" style="color: var(--muted);">Brak przekaźników — kliknij „+ Dodaj przekaźnik"</p>
+        <!-- RTSP for snapshot -->
+        <div class="mt-4 pt-4" style="border-top: 1px solid var(--border);">
+          <p class="text-xs font-medium mb-2" style="color: var(--muted);">📷 Kamera RTSP (opcjonalnie — do podglądu)</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2">
+              <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Hasło RTSP</label>
+              <input type="password" id="f_rtspPassword" placeholder="domyślnie: admin"
+                     class="w-full rounded-lg px-3 py-2 text-sm" />
+              <p class="text-xs mt-0.5" style="color: var(--muted);">Akuvox E18: zazwyczaj „admin" (różni się od hasła web)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAMERA extra -->
+      <div id="extra_camera" class="hidden grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Kanał</label>
+          <input type="number" id="f_channel" placeholder="1" min="1"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Port RTSP</label>
+          <input type="number" id="f_rtspPort" placeholder="554"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+
+      <!-- LPR extra -->
+      <div id="extra_lpr" class="hidden space-y-4">
+        <!-- Kto odczytuje tablice. Wybór jawny, bo od niego zależy, czy kamera
+             musi umieć wysłać numer — a część kamer ANPR tego NIE potrafi
+             (starsze DeepinView 4A: dane wychodzą tylko przez SDK producenta). -->
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Kto odczytuje tablice</label>
+          <select id="f_plateSource" class="w-full rounded-lg px-3 py-2 text-sm">
+            <option value="auto">Automatycznie — wykryj po modelu kamery</option>
+            <option value="camera">Kamera (natywne ANPR — podaje gotowy numer)</option>
+            <option value="edge-ocr">GateLynk Edge (kamera daje sygnał, tablicę czyta Edge)</option>
+          </select>
+          <p class="text-[11px] mt-1" style="color: var(--muted);">
+            Wybierz <strong>GateLynk Edge</strong>, gdy kamera rozpoznaje tablice tylko na własny
+            użytek i nie udostępnia numeru przez sieć. Tryb automatyczny pyta kamerę o model
+            i decyduje sam — zostaw go, jeśli nie masz powodu wymuszać innego.
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Kanał</label>
+          <input type="number" id="f_lprChannel" placeholder="1" min="1"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+
+        <!-- Linked intercom (Edge holds the whitelist, intercom opens the gate) -->
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">ID domofonu (opcjonalne)</label>
+          <input type="text" id="f_linkedIntercomDeviceId" placeholder="uuid-domofonu (puste = pierwszy zarejestrowany)"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+          <p class="text-[11px] mt-1" style="color: var(--muted);">
+            Gdy Edge dopasuje tablicę — wyzwala przekaźnik na tym domofonie. Puste = pierwszy zarejestrowany.
+          </p>
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--muted);">Numer przekaźnika</label>
+          <input type="number" id="f_linkedRelayIndex" placeholder="1" min="0" max="8"
+                 class="w-full rounded-lg px-3 py-2 text-sm" />
+          <p class="text-[11px] mt-1" style="color: var(--muted);">
+            Numer styku na domofonie (Akuvox E18 = 1). Domyślnie 1.
+          </p>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" onclick="closeModal()" class="btn-ghost">
+          Anuluj
+        </button>
+        <button type="submit" id="submitBtn" class="btn-primary">
+          Zapisz
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ─── TEST DIAGNOSTIC MODAL ──────────────────────────────────────────────── -->
+<div id="testModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay p-4">
+  <div class="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style="background: var(--card); border: 1px solid var(--border);">
+    <div class="flex items-center justify-between px-6 py-4" style="background: var(--card2); border-bottom: 1px solid var(--border); border-radius: 1rem 1rem 0 0;">
+      <div>
+        <h3 id="testModalTitle" class="font-semibold text-base" style="color: var(--text);">Diagnostyka urządzenia</h3>
+        <p id="testModalSubtitle" class="text-xs mt-0.5" style="color: var(--muted);"></p>
+      </div>
+      <button onclick="closeTestModal()" class="transition-colors text-xl leading-none" style="color: var(--muted);">&times;</button>
+    </div>
+
+    <!-- Steps list -->
+    <div id="testSteps" class="px-6 py-5 space-y-3 min-h-[120px]"></div>
+
+    <!-- Camera view (snapshot → live toggle) -->
+    <div id="testCameraWrap" class="hidden px-6 pb-2">
+      <!-- Toggle bar -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-medium" style="color: var(--muted);">Podgląd kamery</span>
+        <div class="flex gap-1 rounded-lg p-0.5" style="background: var(--card2); border: 1px solid var(--border);">
+          <button id="btnSnapshot" onclick="switchCameraMode('snapshot')"
+                  class="cam-mode-btn active-cam px-3 py-1 rounded-md text-xs font-medium transition-all">
+            📷 Snapshot
+          </button>
+          <button id="btnLive" onclick="switchCameraMode('live')"
+                  class="cam-mode-btn px-3 py-1 rounded-md text-xs font-medium transition-all" style="color: var(--muted);">
+            ▶ Live
+          </button>
+        </div>
+      </div>
+      <!-- Image — src swaps between snapshot data URL and stream URL -->
+      <div class="relative">
+        <img id="testCameraImg" src="" alt="Camera"
+             class="w-full rounded-xl object-contain max-h-72" style="background:#05080d; border: 1px solid var(--border);" />
+        <div id="liveIndicator" class="hidden absolute top-2 left-2 flex items-center gap-1 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> LIVE
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 pb-5 flex justify-end mt-3">
+      <button onclick="closeTestModal()" class="btn-ghost">
+        Zamknij
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── VIDEO MODAL ────────────────────────────────────────────────────────── -->
+<div id="videoModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay p-4">
+  <div class="rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" style="background: var(--card); border: 1px solid var(--border);">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4" style="background: var(--card2); border-bottom: 1px solid var(--border); border-radius:1rem 1rem 0 0;">
+      <div>
+        <h3 id="videoModalTitle" class="font-semibold text-base" style="color: var(--text);">📷 Podgląd kamery</h3>
+        <p id="videoModalSubtitle" class="text-xs mt-0.5" style="color: var(--muted);"></p>
+      </div>
+      <button onclick="closeVideoModal()" class="transition-colors text-2xl leading-none" style="color: var(--muted);">&times;</button>
+    </div>
+
+    <!-- Image area -->
+    <div class="relative flex items-center justify-center" style="min-height:260px; background:#05080d;">
+
+      <!-- Loading -->
+      <div id="videoModalLoading" class="flex flex-col items-center gap-3 py-16" style="color: var(--muted);">
+        <svg class="spinner w-9 h-9" style="color: var(--accent);" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+        <span class="text-sm">Pobieranie obrazu…</span>
+      </div>
+
+      <!-- Image -->
+      <img id="videoModalImg" src="" alt=""
+           class="hidden w-full object-contain"
+           style="max-height:64vh;"
+           onload="onVideoImgLoaded()" onerror="onVideoImgError()" />
+
+      <!-- LIVE badge -->
+      <div id="videoModalLiveInd" class="hidden absolute top-3 left-3 flex items-center gap-1.5 bg-black/70 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
+        <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> LIVE
+      </div>
+
+      <!-- No image placeholder -->
+      <div id="videoModalNoImg" class="hidden flex flex-col items-center gap-2 py-16" style="color: var(--muted);">
+        <span class="text-4xl">📷</span>
+        <p class="text-sm font-medium">Brak podglądu</p>
+        <p class="text-xs" style="color: var(--dim);">Sprawdź konfigurację kamery RTSP i hasło</p>
+      </div>
+    </div>
+
+    <!-- Controls bar -->
+    <div class="px-6 py-4 flex items-center justify-between" style="background: var(--card2); border-top: 1px solid var(--border);">
+      <!-- Mode toggle -->
+      <div class="flex gap-1 rounded-lg p-0.5" style="background: var(--bg); border: 1px solid var(--border);">
+        <button id="videoModalBtnSnap" onclick="switchVideoMode('snapshot')"
+                class="vid-mode-btn px-4 py-1.5 rounded-md text-xs font-semibold transition-all active-cam">
+          📷 Snapshot
+        </button>
+        <button id="videoModalBtnLive" onclick="switchVideoMode('live')"
+                class="vid-mode-btn px-4 py-1.5 rounded-md text-xs font-semibold transition-all" style="color: var(--muted);">
+          ▶ Live
+        </button>
+      </div>
+
+      <!-- Right actions -->
+      <div class="flex items-center gap-2">
+        <button id="videoModalRefreshBtn" onclick="refreshVideoSnapshot()" class="btn-ghost text-xs">
+          ↺ Odśwież
+        </button>
+        <button onclick="closeVideoModal()" class="btn-ghost text-xs">
+          Zamknij
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ─── LPR PLATES MODAL (read-only) ────────────────────────────────────────── -->
+<div id="platesModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay p-4">
+  <div class="rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col"
+       style="background: var(--card); border: 1px solid var(--border); max-height: 85vh;">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4" style="background: var(--card2); border-bottom: 1px solid var(--border); border-radius:1rem 1rem 0 0;">
+      <div>
+        <h3 class="font-semibold text-base" style="color: var(--text);">🚗 Tablice rejestracyjne</h3>
+        <p id="platesModalSubtitle" class="text-xs mt-0.5" style="color: var(--muted);"></p>
+      </div>
+      <button onclick="closePlatesModal()" class="transition-colors text-2xl leading-none" style="color: var(--muted);">&times;</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex px-6 pt-3 gap-1" style="background: var(--card2); border-bottom: 1px solid var(--border);">
+      <button id="platesTabBtn" onclick="setPlatesModalTab('plates')"
+              class="px-3 py-2 text-xs font-medium rounded-t-lg transition-colors"
+              style="color: var(--accent); background: var(--card); border: 1px solid var(--border); border-bottom: none;">
+        Biała lista
+      </button>
+      <button id="readsTabBtn" onclick="setPlatesModalTab('reads')"
+              class="px-3 py-2 text-xs font-medium rounded-t-lg transition-colors"
+              style="color: var(--muted); background: transparent; border: 1px solid transparent;">
+        Odczyty
+      </button>
+    </div>
+
+    <!-- Tab: Biała lista ─────────────────────────────────────────────────────
+         `flex flex-col min-h-0 flex-1` is the magic incantation: the tab fills
+         the remaining modal height, its scroll child gets `min-h-0` so it can
+         actually shrink below its content size and show the overflow scroll. -->
+    <div id="platesTab" class="flex flex-col min-h-0 flex-1">
+      <!-- Read-only hint -->
+      <div class="px-6 py-2.5 text-xs flex items-start gap-2"
+           style="background: var(--accent-soft); color: var(--accent); border-bottom: 1px solid var(--border);">
+        <span>ℹ️</span>
+        <span>Widok tylko do odczytu. Dodawanie, edycja i usuwanie tablic odbywa się w panelu Cloud (integrator / admin budynku).</span>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-auto flex-1 min-h-0">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0" style="background: var(--card2); border-bottom: 1px solid var(--border);">
+            <tr style="color: var(--muted);">
+              <th class="text-left px-6 py-2.5 font-medium text-xs uppercase tracking-wider">Tablica</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Właściciel</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Ważna od</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Ważna do</th>
+            </tr>
+          </thead>
+          <tbody id="platesModalBody">
+            <!-- populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab: Odczyty ────────────────────────────────────────────────────────
+         `hidden flex …` — `hidden` sets display:none and is defined after
+         `flex` in Tailwind's source order, so when hidden is toggled off the
+         `flex` display + column layout takes effect. -->
+    <div id="readsTab" class="hidden flex flex-col min-h-0 flex-1">
+      <!-- Search + filter controls -->
+      <div class="px-6 py-3 flex flex-wrap items-center gap-2"
+           style="background: var(--card); border-bottom: 1px solid var(--border);">
+        <input id="readsSearchInput" type="text" placeholder="Szukaj po numerze tablicy…"
+               oninput="onReadsSearchChange()"
+               class="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg text-sm"
+               style="background: var(--card2); border: 1px solid var(--border); color: var(--text);" />
+        <select id="readsMatchedFilter" onchange="refreshReadsTab()"
+                class="px-2 py-1.5 rounded-lg text-xs"
+                style="background: var(--card2); border: 1px solid var(--border); color: var(--text);">
+          <option value="">Wszystkie</option>
+          <option value="true">✅ Z białej listy</option>
+          <option value="false">⛔ Spoza listy</option>
+        </select>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-auto flex-1 min-h-0">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0" style="background: var(--card2); border-bottom: 1px solid var(--border);">
+            <tr style="color: var(--muted);">
+              <th class="text-left px-6 py-2.5 font-medium text-xs uppercase tracking-wider" style="width: 84px;">Zdjęcie</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Czas</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Tablica</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Pojazd</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Status</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Brama</th>
+              <th class="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider">Właściciel</th>
+            </tr>
+          </thead>
+          <tbody id="readsModalBody">
+            <!-- populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 py-3 flex items-center justify-between" style="background: var(--card2); border-top: 1px solid var(--border);">
+      <span id="platesModalCount" class="text-xs" style="color: var(--muted);"></span>
+      <div class="flex items-center gap-2">
+        <button onclick="refreshPlatesModal()" class="btn-ghost text-xs">↺ Odśwież</button>
+        <button onclick="closePlatesModal()" class="btn-ghost text-xs">Zamknij</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ─── LPR SNAPSHOT LIGHTBOX ──────────────────────────────────────────────────
+     Top-level overlay (z-[70] beats the plates modal's z-50). Rendered outside
+     the plates modal so its inner `overflow-hidden` doesn't clip it — the
+     lightbox needs to cover the whole viewport. -->
+<div id="snapshotLightbox" class="hidden fixed inset-0 z-[70] flex items-center justify-center"
+     style="background: rgba(0,0,0,0.9);" onclick="closeSnapshotLightbox(event)">
+  <button type="button" onclick="closeSnapshotLightbox(event)"
+          class="absolute top-4 right-4 text-white text-4xl leading-none z-[71]"
+          style="background: rgba(0,0,0,0.4); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"
+          aria-label="Zamknij">×</button>
+  <div class="flex flex-col items-center gap-3 p-4" style="max-width: 95vw; max-height: 95vh;">
+    <img id="snapshotLightboxImg" class="rounded-lg shadow-2xl"
+         style="max-width: 95vw; max-height: 85vh; width: auto; height: auto; object-fit: contain;" />
+    <div id="snapshotLightboxCaption" class="text-sm text-white/80 font-mono"></div>
+  </div>
+</div>
+
+<!-- ─── TOAST ──────────────────────────────────────────────────────────────── -->
+<div id="toast" class="hidden fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-xl transition-all"
+     style="background: var(--card2); border: 1px solid var(--border); color: var(--text);"></div>
+
+<!-- ─── SCRIPT ─────────────────────────────────────────────────────────────── -->
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const API = window.location.origin
+
+const MANUFACTURERS = {
+  INTERCOM:   ['Akuvox', '2N', 'Hikvision', 'Dnake', 'Comelit'],
+  CAMERA:     ['Hikvision', 'Dahua', 'Axis', 'Inne'],
+  LPR_CAMERA: ['Hikvision', 'Dahua', 'Axis', 'Bosch', 'Inne'],
+}
+
+const TAB_LABELS = {
+  INTERCOM:       'Domofony',
+  CAMERA:         'Kamery IP',
+  LPR_CAMERA:     'Kamery LPR',
+  ELEVATOR:       'Kontrola windy',
+  PACZKOMAT:      'Paczkomat',
+  SMART_BUILDING: 'Smart Building',
+  SETTINGS:       'Ustawienia',
+}
+
+const DEVICE_TABS  = ['INTERCOM', 'CAMERA', 'LPR_CAMERA']
+const CONTENT_TABS = ['ELEVATOR', 'PACZKOMAT', 'SMART_BUILDING', 'NETWORK', 'SETTINGS']
+// New top-level tabs (5)
+const TOP_TABS     = ['SYSTEM', 'DOSTEP', 'MONITORING', 'PACZKI', 'LOGI', 'USTAWIENIA']
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentTab         = 'SYSTEM'
+let currentPaczkiSub   = 'paczkomat'
+let currentUstSub      = 'connection'
+let allDevices         = []
+let elevatorInitialized = false
+
+// ── Theme toggle (light / dark) ──────────────────────────────────────────────
+function toggleTheme() {
+  const cur  = document.documentElement.getAttribute('data-theme') || 'dark'
+  const next = cur === 'dark' ? 'light' : 'dark'
+  document.documentElement.setAttribute('data-theme', next)
+  localStorage.setItem('edgeTheme', next)
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  detectIp()
+  checkCloud()
+  await loadDevices()
+  pollDeviceStatus()                       // first poll right away
+  setInterval(pollDeviceStatus, 30_000)    // refresh online/offline every 30s
+  // Restore saved KNX URL
+  const savedKnx = localStorage.getItem('knxDashboardUrl')
+  if (savedKnx) {
+    document.getElementById('knxUrl').value = savedKnx
+  }
+})
+
+// ── Device status polling (populates d.isOnline + dots + system counter) ─────
+async function pollDeviceStatus() {
+  try {
+    const res = await fetch(`${API}/devices/tree`, { signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) return
+    const tree = await res.json()
+    // Flatten tree → Map<deviceId, online>
+    const onlineMap = new Map()
+    for (const grp of tree) for (const d of grp.devices || []) onlineMap.set(d.deviceId, !!d.online)
+    // Update in-memory state + DOM dots
+    for (const dev of allDevices) {
+      const online = onlineMap.get(dev.deviceId) ?? false
+      dev.isOnline = online
+      updateDot(dev.deviceId, online)
+    }
+    // Refresh the "X/N online" system counter without re-rendering cards
+    const sysOnline = document.getElementById('sysDevicesOnline')
+    if (sysOnline) {
+      const on = allDevices.filter(d => d.isOnline).length
+      sysOnline.textContent = `${on}/${allDevices.length} online`
+    }
+    // Refresh camera snapshots on each poll (kept cheap by the 60s server-side cache)
+    if (document.querySelector('[data-camera-thumb]')) loadAllCameraSnapshots()
+  } catch { /* transient network errors — swallow */ }
+}
+
+// ── Camera snapshot loader: fetches JSON from /snapshot and sets <img> data URL ──
+async function loadCameraSnapshot(deviceId, imgEl, fallbackEl) {
+  try {
+    const res = await fetch(`${API}/devices/${deviceId}/snapshot`, { signal: AbortSignal.timeout(8_000) })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const { snapshot } = await res.json()
+    if (snapshot) {
+      imgEl.src = snapshot
+      imgEl.style.display = 'block'
+      if (fallbackEl) fallbackEl.style.display = 'none'
+    } else {
+      imgEl.style.display = 'none'
+      if (fallbackEl) fallbackEl.style.display = 'flex'
+    }
+  } catch {
+    imgEl.style.display = 'none'
+    if (fallbackEl) fallbackEl.style.display = 'flex'
+  }
+}
+
+// Kicks off snapshot loads after a Monitoring render
+function loadAllCameraSnapshots() {
+  document.querySelectorAll('[data-camera-thumb]').forEach(wrap => {
+    const deviceId = wrap.getAttribute('data-camera-thumb')
+    const img = wrap.querySelector('img.snap')
+    const fb  = wrap.querySelector('.thumb-fallback')
+    if (deviceId && img) loadCameraSnapshot(deviceId, img, fb)
+  })
+}
+
+// ── IP / Cloud ────────────────────────────────────────────────────────────────
+async function detectIp() {
+  try {
+    const res = await fetch(`${API}/status/info`, { signal: AbortSignal.timeout(3000) })
+    if (res.ok) {
+      const d = await res.json()
+      document.getElementById('localIp').textContent = d.ip ?? window.location.hostname
+    }
+  } catch {
+    document.getElementById('localIp').textContent = window.location.hostname
+  }
+}
+
+async function checkCloud() {
+  const pillCloud    = document.getElementById('pillCloud')
+  const pillCloudTxt = document.getElementById('pillCloudTxt')
+  const pillSystem   = document.getElementById('pillSystem')
+  const pillLan      = document.getElementById('pillLan')
+  // legacy (still used elsewhere)
+  const elLegacy     = document.getElementById('cloudStatus')
+
+  const setPill = (el, state /* 'green'|'red'|'gray' */) => {
+    if (!el) return
+    el.classList.remove('pill-green','pill-red','pill-gray')
+    el.classList.add(`pill-${state}`)
+    const dot = el.querySelector('.dot')
+    if (dot) {
+      dot.classList.remove('dot-green','dot-red','dot-gray')
+      dot.classList.add(`dot-${state}`)
+    }
+  }
+  // System pill: always green if this panel is rendering
+  setPill(pillSystem, 'green')
+  // LAN pill: green (we are on LAN by definition — Edge app)
+  setPill(pillLan, 'green')
+
+  try {
+    const res = await fetch(`${API}/status/cloud`, { signal: AbortSignal.timeout(4000) })
+    const d = res.ok ? await res.json() : null
+    const online = d?.connected === true
+    setPill(pillCloud, online ? 'green' : 'red')
+    if (pillCloudTxt) pillCloudTxt.textContent = online ? 'Cloud connected' : 'Cloud offline'
+    if (elLegacy) {
+      elLegacy.innerHTML = `<span class="dot ${online ? 'dot-green' : 'dot-red'}"></span><span>${online ? 'Połączono' : 'Brak połączenia'}</span>`
+    }
+  } catch {
+    setPill(pillCloud, 'red')
+    if (pillCloudTxt) pillCloudTxt.textContent = 'Cloud offline'
+    if (elLegacy) elLegacy.innerHTML = `<span class="dot dot-red"></span><span>Brak połączenia</span>`
+  }
+}
+
+// ── Tabs (new 5-tab taxonomy) ──────────────────────────────────────────────────
+function switchTab(type, btn) {
+  currentTab = type
+
+  // Update top-tab button styles
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+  if (btn) btn.classList.add('active')
+
+  // Hide all new wrapper sections
+  TOP_TABS.forEach(t => {
+    const el = document.getElementById(`section-${t}`)
+    if (el) el.classList.add('hidden')
+  })
+
+  // Hide all legacy content sections
+  CONTENT_TABS.forEach(t => {
+    const el = document.getElementById(`section-${t}`)
+    if (el) el.classList.add('hidden')
+  })
+  document.getElementById('deviceSection')?.classList.add('hidden')
+  document.getElementById('logSection')?.classList.add('hidden')
+
+  // Hide subtab bars
+  document.getElementById('paczkiSubtabs')?.classList.add('hidden')
+  document.getElementById('ustawieniaSubtabs')?.classList.add('hidden')
+
+  // Show the requested top-tab
+  const wrap = document.getElementById(`section-${type}`)
+  if (wrap) wrap.classList.remove('hidden')
+
+  // Per-tab wiring
+  if (type === 'SYSTEM') {
+    renderSystemDashboard()
+  } else if (type === 'DOSTEP') {
+    renderDostep()
+  } else if (type === 'MONITORING') {
+    renderMonitoring()
+  } else if (type === 'PACZKI') {
+    document.getElementById('paczkiSubtabs')?.classList.remove('hidden')
+    activatePaczkiSub(currentPaczkiSub)
+  } else if (type === 'LOGI') {
+    // Show logs as a dedicated top-level section
+    const logSec = document.getElementById('logSection')
+    if (logSec) logSec.classList.remove('hidden')
+    initLog?.()
+    // Clear the "new events" counter badge on the tab
+    const lbTop = document.getElementById('logBadgeTop')
+    if (lbTop) { lbTop.classList.add('hidden'); lbTop.textContent = '0' }
+    window.logNewCount = 0
+  } else if (type === 'USTAWIENIA') {
+    document.getElementById('ustawieniaSubtabs')?.classList.remove('hidden')
+    activateUstSub(currentUstSub)
+  }
+}
+
+function switchPaczkiSubtab(sub, btn) {
+  currentPaczkiSub = sub
+  document.querySelectorAll('#paczkiSubtabs .subtab-btn').forEach(b => b.classList.remove('active'))
+  if (btn) btn.classList.add('active')
+  activatePaczkiSub(sub)
+}
+
+function activatePaczkiSub(sub) {
+  const paczkomat = document.getElementById('section-PACZKOMAT')
+  if (paczkomat) paczkomat.classList.toggle('hidden', sub !== 'paczkomat')
+}
+
+function switchUstSubtab(sub, btn) {
+  currentUstSub = sub
+  document.querySelectorAll('#ustawieniaSubtabs .subtab-btn').forEach(b => b.classList.remove('active'))
+  if (btn) btn.classList.add('active')
+  activateUstSub(sub)
+}
+
+function activateUstSub(sub) {
+  const map = {
+    connection: 'section-SETTINGS',
+    network:    'section-NETWORK',
+    elevator:   'section-ELEVATOR',
+    smart:      'section-SMART_BUILDING',
+  }
+  Object.values(map).forEach(id => document.getElementById(id)?.classList.add('hidden'))
+  const targetId = map[sub]
+  if (targetId) document.getElementById(targetId)?.classList.remove('hidden')
+  if (sub === 'elevator' && !elevatorInitialized) {
+    elevatorInitialized = true
+    initElevator?.()
+  }
+  if (sub === 'connection') initSettings?.()
+  if (sub === 'network')    loadNetworkTree?.()
+}
+
+// Helper: open add-device modal pre-filled with type (INTERCOM/CAMERA/LPR_CAMERA)
+function openAddModalFor(type) {
+  resetForm()
+  document.getElementById('editDeviceId').value = ''
+  document.getElementById('formDeviceType').value = type
+  document.getElementById('modalTitle').textContent = `Dodaj — ${TAB_LABELS[type] || type}`
+  setExtraFields(type)
+  populateManufacturers(type)
+  document.getElementById('modal').classList.remove('hidden')
+  setTimeout(() => document.getElementById('f_name').focus(), 50)
+}
+
+// ── New dashboard renderers ───────────────────────────────────────────────────
+function renderSystemDashboard() {
+  const grid = document.getElementById('systemDeviceGrid')
+  const quick = document.getElementById('quickActions')
+  const quickWrap = document.getElementById('quickActionsWrap')
+  const sysOnline = document.getElementById('sysDevicesOnline')
+  const sysPing   = document.getElementById('sysAvgPing')
+
+  if (sysOnline) {
+    const online = allDevices.filter(d => d.isOnline).length
+    sysOnline.textContent = `${online}/${allDevices.length} online`
+  }
+  if (sysPing) sysPing.textContent = '~'
+
+  if (grid) {
+    if (!allDevices.length) {
+      grid.innerHTML = `<div class="text-center py-10 col-span-2" style="color: var(--muted);">Brak urządzeń — dodaj pierwsze w zakładce <strong>Dostęp</strong> lub <strong>Monitoring</strong>.</div>`
+    } else {
+      grid.innerHTML = allDevices.map(d => deviceCard(d)).join('')
+      // Re-apply known dot states (in case pollDeviceStatus already ran)
+      for (const dev of allDevices) if (dev.isOnline !== undefined) updateDot(dev.deviceId, dev.isOnline)
+      loadAllCameraSnapshots()
+    }
+  }
+
+  // Quick actions: relays from all INTERCOM devices
+  if (quick && quickWrap) {
+    const relays = []
+    allDevices.filter(d => d.type === 'INTERCOM').forEach(d => {
+      const rs = d.config?.relays || []
+      rs.forEach((r, i) => {
+        relays.push({ deviceId: d.deviceId, name: d.config?.name || d.deviceId, relay: r.name || `Relay ${i+1}`, index: i })
+      })
+    })
+    if (!relays.length) {
+      quickWrap.classList.add('hidden')
+    } else {
+      quickWrap.classList.remove('hidden')
+      quick.innerHTML = relays.map(r => `
+        <button onclick="triggerRelay('${r.deviceId}', ${r.index}, this)"
+                class="btn-open text-xs px-3 py-2 rounded-lg flex items-center gap-2">
+          <span>🔓</span>
+          <span>${escHtml(r.name)} · ${escHtml(r.relay)}</span>
+        </button>`).join('')
+    }
+  }
+}
+
+function renderDostep() {
+  const list = document.getElementById('dostepList')
+  const count = document.getElementById('dostepCount')
+  // SWITCH (Shelly Pro 1 + inne relay-only) też pokazujemy w zakładce Dostęp —
+  // bo Shelly typowo steruje bramą wjazdową/furtką (taki sam relay-pulse jak intercom).
+  const items = allDevices.filter(d => d.type === 'INTERCOM' || d.type === 'SWITCH')
+  if (count) count.textContent = `${items.length} ${items.length === 1 ? 'urządzenie' : 'urządzeń'}`
+  if (!list) return
+  if (!items.length) {
+    list.innerHTML = `<div class="text-center py-10 col-span-2" style="color: var(--muted);">Brak urządzeń kontroli dostępu — kliknij „+ Dodaj domofon" lub dodaj przekaźnik przez wizard.</div>`
+    return
+  }
+  list.innerHTML = items.map(d => deviceCard(d)).join('')
+  for (const dev of items) if (dev.isOnline !== undefined) updateDot(dev.deviceId, dev.isOnline)
+}
+
+function renderMonitoring() {
+  const list = document.getElementById('monitoringList')
+  const count = document.getElementById('monitoringCount')
+  const items = allDevices.filter(d => d.type === 'CAMERA' || d.type === 'LPR_CAMERA')
+  if (count) count.textContent = `${items.length} ${items.length === 1 ? 'kamera' : 'kamer'}`
+  if (!list) return
+  if (!items.length) {
+    list.innerHTML = `<div class="text-center py-10" style="color: var(--muted);">Brak kamer — dodaj pierwszą kamerę IP lub LPR.</div>`
+    return
+  }
+  list.innerHTML = items.map(d => deviceCard(d)).join('')
+  for (const dev of items) if (dev.isOnline !== undefined) updateDot(dev.deviceId, dev.isOnline)
+  loadAllCameraSnapshots()
+}
+
+// ── API calls ──────────────────────────────────────────────────────────────────
+async function loadDevices() {
+  try {
+    const res = await fetch(`${API}/devices`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    allDevices = await res.json()
+    renderDevices()
+  } catch (err) {
+    const list = document.getElementById('systemDeviceGrid') || document.getElementById('deviceList')
+    if (list) list.innerHTML = `<div class="text-center py-10 text-sm" style="color: var(--danger-text);">Błąd ładowania urządzeń: ${err.message}</div>`
+  }
+}
+
+async function deleteDevice(deviceId) {
+  if (!confirm('Czy na pewno chcesz usunąć to urządzenie?')) return
+  try {
+    const res = await fetch(`${API}/devices/${deviceId}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    toast('Urządzenie usunięte', 'ok')
+    await loadDevices()
+  } catch (err) {
+    toast(`Błąd: ${err.message}`, 'err')
+  }
+}
+
+// ── Streaming diagnostics ──────────────────────────────────────────────────────
+async function testDevice(deviceId, btn) {
+  const device = allDevices.find(d => d.deviceId === deviceId)
+  const name   = device?.config?.name || deviceId
+
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full"></span>'
+
+  openTestModal(name, device?.config?.ipAddress || '', deviceId)
+
+  try {
+    const res = await fetch(`${API}/devices/${deviceId}/test/stream`)
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+
+    const reader  = res.body.getReader()
+    const decoder = new TextDecoder()
+    let   buffer  = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()          // keep partial line for next chunk
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { handleTestEvent(deviceId, JSON.parse(line.slice(6))) } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    addTestStep('error', 'error', `Błąd: ${err.message}`, '')
+  } finally {
+    btn.disabled = false
+    btn.textContent = '🧪 Test'
+  }
+}
+
+function openTestModal(name, ip, deviceId) {
+  testStreamDeviceId  = deviceId || ''
+  testSnapshotDataUrl = ''
+  document.getElementById('testModalTitle').textContent = `Diagnostyka — ${escHtml(name)}`
+  document.getElementById('testModalSubtitle').textContent = ip
+  document.getElementById('testSteps').innerHTML = ''
+  document.getElementById('testCameraWrap').classList.add('hidden')
+  document.getElementById('testCameraImg').src = ''
+  document.getElementById('liveIndicator').classList.add('hidden')
+  setActiveCamBtn('snapshot')
+  document.getElementById('testModal').classList.remove('hidden')
+}
+
+function closeTestModal() {
+  // Stop live stream by clearing src (browser closes the HTTP connection → ffmpeg is killed)
+  const img = document.getElementById('testCameraImg')
+  img.src = ''
+  document.getElementById('testModal').classList.add('hidden')
+}
+
+function handleTestEvent(deviceId, ev) {
+  if (ev.step === 'done') {
+    updateDot(deviceId, ev.online !== false)
+    return
+  }
+  if (ev.status === 'testing') {
+    addTestStep(ev.step, 'testing', ev.label, '')
+    return
+  }
+  // Update existing step row
+  updateTestStep(ev.step, ev.status, ev.detail || '')
+  if (ev.snapshot) showTestSnapshot(ev.snapshot)
+}
+
+function addTestStep(key, status, label, detail) {
+  const existing = document.getElementById(`step-${key}`)
+  if (existing) return
+  const el = document.createElement('div')
+  el.id = `step-${key}`
+  el.className = 'flex items-start gap-3'
+  el.innerHTML = stepHtml(key, status, label, detail)
+  document.getElementById('testSteps').appendChild(el)
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+function updateTestStep(key, status, detail) {
+  const el = document.getElementById(`step-${key}`)
+  if (!el) return
+  el.innerHTML = stepHtml(key, status, el.dataset.label || '', detail)
+}
+
+function stepHtml(key, status, label, detail) {
+  const icons = {
+    testing: `<span class="flex-shrink-0 mt-0.5">
+                <svg class="spinner w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+              </span>`,
+    ok:      `<span class="flex-shrink-0 text-green-500 text-base mt-0.5">✅</span>`,
+    warn:    `<span class="flex-shrink-0 text-amber-500 text-base mt-0.5">⚠️</span>`,
+    error:   `<span class="flex-shrink-0 text-red-500 text-base mt-0.5">❌</span>`,
+  }
+  const icon = icons[status] || icons.testing
+  const detailHtml = detail
+    ? `<span class="text-xs block mt-0.5" style="color: var(--muted);">${escHtml(detail)}</span>` : ''
+  return `${icon}
+    <div data-label="${escHtml(label)}">
+      <span class="text-sm" style="color: var(--text);">${escHtml(label)}</span>
+      ${detailHtml}
+    </div>`
+}
+
+// ── Camera view helpers ───────────────────────────────────────────────────────
+let testSnapshotDataUrl = ''
+let testStreamDeviceId  = ''
+
+function showTestSnapshot(dataUrl) {
+  testSnapshotDataUrl = dataUrl
+  document.getElementById('testCameraImg').src = dataUrl
+  document.getElementById('testCameraWrap').classList.remove('hidden')
+  document.getElementById('liveIndicator').classList.add('hidden')
+  setActiveCamBtn('snapshot')
+}
+
+function switchCameraMode(mode) {
+  const img       = document.getElementById('testCameraImg')
+  const liveInd   = document.getElementById('liveIndicator')
+
+  if (mode === 'live') {
+    if (!testStreamDeviceId) return
+    img.src = `${API}/devices/${testStreamDeviceId}/stream`
+    liveInd.classList.remove('hidden')
+    setActiveCamBtn('live')
+  } else {
+    // Stop stream → restore snapshot
+    img.src = testSnapshotDataUrl || ''
+    liveInd.classList.add('hidden')
+    setActiveCamBtn('snapshot')
+  }
+}
+
+function setActiveCamBtn(mode) {
+  document.getElementById('btnSnapshot').classList.toggle('active-cam', mode === 'snapshot')
+  document.getElementById('btnSnapshot').classList.toggle('text-gray-500', mode !== 'snapshot')
+  document.getElementById('btnLive').classList.toggle('active-cam', mode === 'live')
+  document.getElementById('btnLive').classList.toggle('text-gray-500', mode !== 'live')
+}
+
+function updateDot(deviceId, online) {
+  const dot = document.querySelector(`[data-device-dot="${deviceId}"]`)
+  if (!dot) return
+  dot.className = `dot ${online ? 'dot-green' : 'dot-red'}`
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function renderDevices() {
+  // Dispatch by current top-tab
+  if (currentTab === 'SYSTEM')     return renderSystemDashboard()
+  if (currentTab === 'DOSTEP')     return renderDostep()
+  if (currentTab === 'MONITORING') return renderMonitoring()
+  // Legacy path used only if a legacy tab is somehow active
+  const filtered = allDevices.filter(d => d.type === currentTab)
+  const list = document.getElementById('deviceList')
+  if (!list) return
+  const tc = document.getElementById('tabCount')
+  if (tc) tc.textContent = filtered.length === 0 ? 'Brak urządzeń' : `${filtered.length}`
+  list.innerHTML = filtered.length === 0
+    ? `<div class="text-center py-14" style="color: var(--muted);">Brak urządzeń.</div>`
+    : filtered.map(d => deviceCard(d)).join('')
+}
+
+// ── Device-type illustrations (photo-style PNG assets) ────────────────────────
+// Served from /img/camera.png and /img/intercom.png in apps/edge/public/img/
+const ICON_BULLET_CAMERA = `<img src="img/camera.png"   alt="Kamera IP"  draggable="false" />`
+const ICON_INTERCOM      = `<img src="img/intercom.png" alt="Domofon"    draggable="false" />`
+
+// 2026-05-14: ikony SVG dla nowych device-types (SWITCH/LOCK/KNX/ELEVATOR/LIGHTING).
+// Inline SVG bo nie mamy dla nich PNG-ów w `img/`. Style spójne z istniejącymi
+// ikonami (linia 1.5-2px, currentColor) — łatwo dorobić PNG-i potem.
+const ICON_SWITCH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; padding: 14px;">
+  <rect x="3" y="6" width="18" height="12" rx="2"/>
+  <circle cx="8" cy="12" r="2.5" fill="currentColor"/>
+  <path d="M14 9h4M14 12h4M14 15h4"/>
+</svg>`
+const ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; padding: 14px;">
+  <rect x="3" y="11" width="18" height="11" rx="2"/>
+  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+</svg>`
+const ICON_KNX = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; padding: 14px;">
+  <rect x="4" y="4" width="16" height="16" rx="2"/>
+  <path d="M9 8v8M15 8v8M4 12h16"/>
+</svg>`
+const ICON_ELEVATOR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; padding: 14px;">
+  <rect x="4" y="2" width="16" height="20" rx="2"/>
+  <path d="M8 7l2-2 2 2M16 17l-2 2-2-2"/>
+  <line x1="12" y1="2" x2="12" y2="22"/>
+</svg>`
+const ICON_LIGHT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; padding: 14px;">
+  <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.7.7 1 1.6 1 2.3v1h6v-1c0-.7.3-1.6 1-2.3A7 7 0 0 0 12 2z"/>
+</svg>`
+
+function deviceTypeIcon(type) {
+  switch (type) {
+    case 'INTERCOM':    return ICON_INTERCOM
+    case 'CAMERA':
+    case 'LPR_CAMERA':  return ICON_BULLET_CAMERA
+    case 'SWITCH':      return ICON_SWITCH
+    case 'LOCK':        return ICON_LOCK
+    case 'KNX_BRIDGE':
+    case 'KNX_OBJECT':  return ICON_KNX
+    case 'ELEVATOR':    return ICON_ELEVATOR
+    case 'LIGHTING':    return ICON_LIGHT
+    default:            return ICON_SWITCH
+  }
+}
+
+function deviceTypeLabel(type, cfg) {
+  const map = {
+    INTERCOM:   'Domofon',
+    CAMERA:     'Kamera IP',
+    LPR_CAMERA: 'Kamera LPR',
+    SWITCH:     'Przekaźnik',
+    LOCK:       'Zamek',
+    KNX_BRIDGE: 'KNX-IP Bridge',
+    KNX_OBJECT: 'Obiekt KNX',
+    ELEVATOR:   'Kontroler windy',
+    LIGHTING:   'Oświetlenie',
+  }
+  return map[type] || 'Urządzenie'
+}
+
+// ── Legacy inline SVGs kept below (unused, retained for reference) ────────────
+const _UNUSED_ICON_BULLET_CAMERA = `
+  <svg viewBox="0 0 64 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <linearGradient id="camBodyG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fafbfc"/>
+        <stop offset=".5" stop-color="#e5e7eb"/>
+        <stop offset="1" stop-color="#9aa1ab"/>
+      </linearGradient>
+      <linearGradient id="camMountG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#d1d5db"/>
+        <stop offset="1" stop-color="#6b7280"/>
+      </linearGradient>
+      <radialGradient id="camLensG" cx=".35" cy=".35" r=".8">
+        <stop offset="0" stop-color="#4b5563"/>
+        <stop offset=".55" stop-color="#111827"/>
+        <stop offset="1" stop-color="#000"/>
+      </radialGradient>
+    </defs>
+    <!-- soft ground shadow -->
+    <ellipse cx="34" cy="44" rx="26" ry="2" fill="#000" opacity=".18"/>
+    <!-- wall mount plate (disc on wall) -->
+    <ellipse cx="56" cy="24" rx="5.5" ry="7.5" fill="url(#camMountG)" stroke="#4b5563" stroke-width=".4"/>
+    <circle cx="56" cy="18" r="0.8" fill="#374151"/>
+    <circle cx="56" cy="30" r="0.8" fill="#374151"/>
+    <!-- arm / yoke -->
+    <rect x="42" y="20" width="12" height="8" rx="1.5" fill="url(#camMountG)"/>
+    <circle cx="48" cy="24" r="1" fill="#374151"/>
+    <!-- camera body cylinder -->
+    <rect x="10" y="15" width="36" height="19" rx="5" fill="url(#camBodyG)" stroke="#9aa1ab" stroke-width=".5"/>
+    <!-- top body highlight -->
+    <rect x="12" y="16.5" width="32" height="2" rx="1" fill="#fff" opacity=".7"/>
+    <!-- sunshield / hood (extends forward over lens) -->
+    <path d="M5 17 L16 14.5 L16 17.5 L5 20 Z" fill="#cfd5dc" stroke="#9aa1ab" stroke-width=".4"/>
+    <!-- lens bezel -->
+    <circle cx="17" cy="24.5" r="9" fill="#1f2937"/>
+    <circle cx="17" cy="24.5" r="8.2" fill="#0f172a"/>
+    <!-- IR LED ring (12 small illuminators) -->
+    <g fill="#e5e7eb">
+      <circle cx="17"   cy="16.7" r=".8"/>
+      <circle cx="20.9" cy="17.6" r=".8"/>
+      <circle cx="23.8" cy="20.4" r=".8"/>
+      <circle cx="24.7" cy="24.5" r=".8"/>
+      <circle cx="23.8" cy="28.6" r=".8"/>
+      <circle cx="20.9" cy="31.4" r=".8"/>
+      <circle cx="17"   cy="32.3" r=".8"/>
+      <circle cx="13.1" cy="31.4" r=".8"/>
+      <circle cx="10.2" cy="28.6" r=".8"/>
+      <circle cx="9.3"  cy="24.5" r=".8"/>
+      <circle cx="10.2" cy="20.4" r=".8"/>
+      <circle cx="13.1" cy="17.6" r=".8"/>
+    </g>
+    <!-- lens glass -->
+    <circle cx="17" cy="24.5" r="5.2" fill="url(#camLensG)"/>
+    <!-- lens catchlight -->
+    <ellipse cx="15" cy="22.3" rx="1.6" ry="1.1" fill="#fff" opacity=".35"/>
+    <circle cx="18.7" cy="26.6" r=".5" fill="#fff" opacity=".6"/>
+    <!-- small status LED on body -->
+    <circle cx="39" cy="19" r="0.8" fill="#f97316"/>
+    <!-- body seam -->
+    <line x1="35" y1="15" x2="35" y2="34" stroke="#9aa1ab" stroke-width=".4" opacity=".6"/>
+  </svg>`
+
+// Legacy inline intercom SVG (unused, retained for reference)
+const _UNUSED_ICON_INTERCOM = `
+  <svg viewBox="0 0 48 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <linearGradient id="icmPanelG" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0"  stop-color="#d1d5db"/>
+        <stop offset=".4" stop-color="#b3b9c2"/>
+        <stop offset=".7" stop-color="#8b93a0"/>
+        <stop offset="1"  stop-color="#636b78"/>
+      </linearGradient>
+      <radialGradient id="icmEyeG" cx=".4" cy=".4" r=".75">
+        <stop offset="0"  stop-color="#4b5563"/>
+        <stop offset=".6" stop-color="#0f172a"/>
+        <stop offset="1"  stop-color="#000"/>
+      </radialGradient>
+      <radialGradient id="icmBellG" cx=".35" cy=".3" r=".85">
+        <stop offset="0"   stop-color="#93c5fd"/>
+        <stop offset=".45" stop-color="#3b82f6"/>
+        <stop offset="1"   stop-color="#1e40af"/>
+      </radialGradient>
+      <filter id="icmBellGlow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="1.5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <!-- ground shadow -->
+    <ellipse cx="24" cy="61.5" rx="20" ry="1.8" fill="#000" opacity=".22"/>
+    <!-- metallic panel -->
+    <rect x="4" y="2" width="40" height="60" rx="2.2" fill="url(#icmPanelG)" stroke="#4b5563" stroke-width=".5"/>
+    <!-- brushed-metal vertical streaks -->
+    <g stroke="#fff" stroke-width=".18" opacity=".45">
+      <line x1="7"  y1="4" x2="7"  y2="60"/>
+      <line x1="11" y1="4" x2="11" y2="60"/>
+      <line x1="15" y1="4" x2="15" y2="60"/>
+      <line x1="19" y1="4" x2="19" y2="60"/>
+      <line x1="23" y1="4" x2="23" y2="60"/>
+      <line x1="27" y1="4" x2="27" y2="60"/>
+      <line x1="31" y1="4" x2="31" y2="60"/>
+      <line x1="35" y1="4" x2="35" y2="60"/>
+      <line x1="39" y1="4" x2="39" y2="60"/>
+    </g>
+    <!-- panel highlight (top edge) -->
+    <rect x="5" y="2.5" width="38" height="1.4" rx=".7" fill="#fff" opacity=".5"/>
+    <!-- camera eye housing -->
+    <circle cx="24" cy="14" r="8.5" fill="#111827"/>
+    <circle cx="24" cy="14" r="7"   fill="url(#icmEyeG)"/>
+    <!-- lens glass + catchlights -->
+    <circle cx="24" cy="14" r="4.5" fill="#0b1220"/>
+    <ellipse cx="22.2" cy="12" rx="1.4" ry=".9" fill="#fff" opacity=".35"/>
+    <circle cx="25.3" cy="15.3" r=".45" fill="#fff" opacity=".55"/>
+    <!-- IR / light sensor dot next to lens -->
+    <circle cx="33.5" cy="10" r=".8" fill="#1f2937"/>
+    <!-- speaker grille (dot matrix) -->
+    <g fill="#111827">
+      ${
+        [27, 30, 33, 36].map(y =>
+          [11, 15, 19, 23, 27, 31, 35, 37].map(x =>
+            `<circle cx="${x}" cy="${y}" r=".55"/>`
+          ).join('')
+        ).join('')
+      }
+    </g>
+    <!-- blue bell button (glowing) -->
+    <circle cx="24" cy="46" r="7.5" fill="#1e3a8a" opacity=".35" filter="url(#icmBellGlow)"/>
+    <circle cx="24" cy="46" r="6.2" fill="url(#icmBellG)" stroke="#1e40af" stroke-width=".6"/>
+    <!-- bell button highlight -->
+    <ellipse cx="21.7" cy="43.5" rx="2.4" ry="1.3" fill="#fff" opacity=".35"/>
+    <!-- bell glyph inside button -->
+    <g fill="#fff" transform="translate(19.5 42.2)">
+      <path d="M4.5 1 c-2.1 0 -3.5 1.5 -3.5 3.3 v1.3 l-0.9 1 h8.8 l-0.9 -1 v-1.3 c0 -1.8 -1.4 -3.3 -3.5 -3.3 z"/>
+      <circle cx="4.5" cy="7.2" r="0.85"/>
+    </g>
+    <!-- dark plastic bottom strip with bell icon + sound waves -->
+    <rect x="4" y="54" width="40" height="8" rx="1.4" fill="#1f2937"/>
+    <g fill="#9ca3af" transform="translate(22 56)">
+      <path d="M2.2 1 c-1.1 0 -1.8 .75 -1.8 1.7 v.7 l-0.5 .55 h4.6 l-0.5 -.55 v-.7 c0 -.95 -.7 -1.7 -1.8 -1.7 z"/>
+      <circle cx="2.2" cy="4.4" r=".45"/>
+    </g>
+    <g fill="none" stroke="#9ca3af" stroke-width=".5" transform="translate(22 56)">
+      <path d="M-1.5 1.2 Q-2.4 3 -1.5 4.8"/>
+      <path d="M6 1.2 Q6.9 3 6 4.8"/>
+    </g>
+  </svg>`
+
+function deviceCard(d) {
+  const cfg   = d.config || {}
+  const name  = cfg.name || d.deviceId
+  const mfrParts = [cfg.manufacturer, cfg.model].filter(Boolean).map(escHtml).join(' · ')
+  const subLine = cfg.ipAddress
+    ? `<span class="font-mono" style="color: var(--muted);">${escHtml(cfg.ipAddress)}</span>${mfrParts ? ` · <span style="color: var(--muted);">${mfrParts}</span>` : ''}`
+    : (mfrParts ? `<span style="color: var(--muted);">${mfrParts}</span>` : '')
+
+  // ── INTERCOM + SWITCH card (relay-pulse) ──────────────────────────────────
+  // SWITCH (Shelly Pro 1) ma identyczną semantykę otwierania bramy jak intercom —
+  // przekaźnik wyzwalany impulsem (`pulseSeconds` w driverze). Łączymy oba typy
+  // w jedną kartę, różnice tylko w ikonie/labelu (deviceTypeIcon/Label).
+  if (d.type === 'INTERCOM' || d.type === 'SWITCH') {
+    const relays = cfg.relays || []
+
+    const relayBtns = relays.length > 0
+      ? relays.map(r => `
+          <button data-relay-btn="${d.deviceId}-${r.index}"
+                  onclick="triggerRelay('${d.deviceId}', ${r.index}, '${escHtml(r.name || `Przekaźnik ${r.index}`)}', this)"
+                  title="Wyzwól elektrozaczep: ${escHtml(r.name || `Przekaźnik ${r.index}`)}"
+                  class="btn-open relay-trigger-btn px-4 py-2 text-sm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+            <span class="max-w-[140px] truncate">Otwórz${r.name ? ` · ${escHtml(r.name)}` : ''}</span>
+          </button>`).join('')
+      : `<button disabled class="px-4 py-2 text-sm rounded-lg cursor-not-allowed inline-flex items-center gap-1.5" style="background: var(--card2); color: var(--dim); border: 1px solid var(--border);" title="Brak skonfigurowanych przekaźników">
+           🔓 Brak przekaźników
+         </button>`
+
+    const typeLabel = deviceTypeLabel(d.type, cfg)
+    // SWITCH (Shelly bez kamery) — nie ma snapshot-u, pomijamy thumb żeby
+    // karta nie pokazywała pustego okienka „Ładowanie…".
+    const showThumb = d.type === 'INTERCOM'
+    return `
+      <div class="card px-5 py-4">
+        <div class="flex items-start gap-4">
+          <span class="device-illustration intercom" aria-hidden="true">
+            ${deviceTypeIcon(d.type)}
+          </span>
+          ${showThumb ? `<div class="thumb flex-shrink-0" data-camera-thumb="${d.deviceId}"
+               style="width:112px; height:66px; position: relative; border-radius: 8px; overflow: hidden; background: var(--card2); border: 1px solid var(--border);">
+            <img class="snap" alt="Mini podgląd domofonu"
+                 style="width:100%; height:100%; object-fit: cover; display: none;" />
+            <div class="thumb-fallback" style="display:flex; position:absolute; inset:0; align-items:center; justify-content:center; color: var(--dim); padding: 8px;">
+              <span style="font-size:10px; letter-spacing:.08em; text-transform:uppercase;">Ładowanie…</span>
+            </div>
+          </div>` : ''}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-semibold truncate" style="color: var(--text-strong);">${escHtml(name)}</span>
+              <span class="dot dot-gray flex-shrink-0" data-device-dot="${d.deviceId}" title="Status"></span>
+            </div>
+            <div class="text-xs mt-0.5" style="color: var(--muted);">${typeLabel}${cfg.ipAddress ? ` · <span class="font-mono">${escHtml(cfg.ipAddress)}</span>` : ''}</div>
+            ${mfrParts ? `<div class="text-xs mt-0.5 truncate" style="color: var(--dim);">${mfrParts}</div>` : ''}
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 flex-wrap mt-3 pt-3" style="border-top: 1px solid var(--border);">
+          ${relayBtns}
+          <div class="flex-1"></div>
+          <button onclick="openEditModal('${d.deviceId}')" title="Edytuj" class="btn-icon" aria-label="Edytuj">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button data-test-btn="${d.deviceId}" onclick="testDevice('${d.deviceId}', this)" title="Diagnostyka" class="btn-icon" aria-label="Diagnostyka">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6v6l3 3v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V11l3-3V2z"/></svg>
+          </button>
+          <button onclick="deleteDevice('${d.deviceId}')" title="Usuń" class="btn-icon" style="color: var(--danger-text);" aria-label="Usuń">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+      </div>`
+  }
+
+  // ── CAMERA / LPR_CAMERA card (Monitoring) ─────────────────────────────────
+  // Pozostałe typy (LOCK / KNX_BRIDGE / KNX_OBJECT / ELEVATOR / LIGHTING) →
+  // fallback do generycznej karty `genericDeviceCard` (bez kamery, bez thumb).
+  if (d.type !== 'CAMERA' && d.type !== 'LPR_CAMERA') {
+    return genericDeviceCard(d, cfg, name, mfrParts)
+  }
+  const isLpr = d.type === 'LPR_CAMERA'
+  const typeLabel = isLpr ? 'Kamera LPR' : 'Kamera IP'
+  const chInfo = cfg.channel ? `Kanał ${cfg.channel}` : ''
+  const rtsp   = cfg.rtspPort ? `RTSP ${cfg.rtspPort}` : ''
+  const meta   = [cfg.manufacturer, cfg.model, chInfo, rtsp].filter(Boolean).map(escHtml).join(' · ')
+
+  return `
+    <div class="card px-4 py-4">
+      <div class="flex items-start gap-4">
+        <span class="device-illustration camera" aria-hidden="true">
+          ${ICON_BULLET_CAMERA}
+        </span>
+        <div class="thumb flex-shrink-0" data-camera-thumb="${d.deviceId}"
+             style="width:128px; height:76px; position: relative; border-radius: 8px; overflow: hidden; background: var(--card2); border: 1px solid var(--border);">
+          <img class="snap" alt="Mini podgląd"
+               style="width:100%; height:100%; object-fit: cover; display: none;" />
+          <div class="thumb-fallback" style="display:flex; position:absolute; inset:0; align-items:center; justify-content:center; color: var(--dim); padding: 8px;">
+            <span style="font-size:10px; letter-spacing:.08em; text-transform:uppercase;">Ładowanie…</span>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-semibold truncate" style="color: var(--text-strong);">${escHtml(name)}</span>
+            <span class="dot dot-gray flex-shrink-0" data-device-dot="${d.deviceId}" title="Status"></span>
+          </div>
+          <div class="text-xs mt-0.5" style="color: var(--muted);">${typeLabel}${cfg.ipAddress ? ` · <span class="font-mono">${escHtml(cfg.ipAddress)}</span>` : ''}</div>
+          ${meta ? `<div class="text-xs mt-0.5 truncate" style="color: var(--dim);">${meta}</div>` : ''}
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 flex-wrap mt-3 pt-3" style="border-top: 1px solid var(--border);">
+        <button onclick="openVideoModal('${d.deviceId}', '${escHtml(name)}', '${escHtml(cfg.ipAddress || '')}')"
+                class="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Podgląd
+        </button>
+        <button data-test-btn="${d.deviceId}" onclick="testDevice('${d.deviceId}', this)"
+                class="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6v6l3 3v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V11l3-3V2z"/></svg>
+          Diagnostyka
+        </button>
+        ${isLpr ? `<button onclick="openPlatesModal('${d.deviceId}', '${escHtml(name)}')"
+                class="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 11h2M11 11h2M15 11h2"/></svg>
+          Tablice
+        </button>` : ''}
+        <div class="flex-1"></div>
+        <button onclick="openEditModal('${d.deviceId}')" title="Edytuj" class="btn-icon" aria-label="Edytuj">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button onclick="deleteDevice('${d.deviceId}')" title="Usuń" class="btn-icon" style="color: var(--danger-text);" aria-label="Usuń">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </div>
+    </div>`
+}
+
+// Generyczna karta dla typów które nie są ani intercom/switch (relay-pulse),
+// ani kamerą (snapshot). Pokazuje ikonę, nazwę, typ, podstawowe meta,
+// akcje: Edytuj / Diagnostyka / Usuń. Bez „Otwórz" — bo nie wiemy co miałby
+// otwierać (LOCK przyszłość, KNX_OBJECT zależy od `function`, etc).
+function genericDeviceCard(d, cfg, name, mfrParts) {
+  const typeLabel = deviceTypeLabel(d.type, cfg)
+  return `
+    <div class="card px-5 py-4">
+      <div class="flex items-start gap-4">
+        <span class="device-illustration" aria-hidden="true">
+          ${deviceTypeIcon(d.type)}
+        </span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-semibold truncate" style="color: var(--text-strong);">${escHtml(name)}</span>
+            <span class="dot dot-gray flex-shrink-0" data-device-dot="${d.deviceId}" title="Status"></span>
+          </div>
+          <div class="text-xs mt-0.5" style="color: var(--muted);">${typeLabel}${cfg.ipAddress ? ` · <span class="font-mono">${escHtml(cfg.ipAddress)}</span>` : ''}</div>
+          ${mfrParts ? `<div class="text-xs mt-0.5 truncate" style="color: var(--dim);">${mfrParts}</div>` : ''}
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 flex-wrap mt-3 pt-3" style="border-top: 1px solid var(--border);">
+        <div class="flex-1"></div>
+        <button onclick="openEditModal('${d.deviceId}')" title="Edytuj" class="btn-icon" aria-label="Edytuj">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button data-test-btn="${d.deviceId}" onclick="testDevice('${d.deviceId}', this)" title="Diagnostyka" class="btn-icon" aria-label="Diagnostyka">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6v6l3 3v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V11l3-3V2z"/></svg>
+        </button>
+        <button onclick="deleteDevice('${d.deviceId}')" title="Usuń" class="btn-icon" style="color: var(--danger-text);" aria-label="Usuń">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </div>
+    </div>`
+}
+
+function extraInfo(type, cfg) {
+  if (type === 'INTERCOM') {
+    const relays = cfg.relays
+    if (relays && relays.length > 0) {
+      return relays.map(r =>
+        `<span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft);">${escHtml(r.name || `Przekaźnik ${r.index}`)}</span>`
+      ).join(' ')
+    }
+    return ''
+  }
+  if (type === 'CAMERA')
+    return [
+      cfg.channel  ? `<span class="text-xs" style="color: var(--muted);">Kanał: ${cfg.channel}</span>` : '',
+      cfg.rtspPort ? `<span class="text-xs" style="color: var(--muted);">RTSP: ${cfg.rtspPort}</span>` : '',
+    ].filter(Boolean).join(' ')
+  if (type === 'LPR_CAMERA' && cfg.channel)
+    return `<span class="text-xs" style="color: var(--muted);">Kanał: ${cfg.channel}</span>`
+  return ''
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openAddModal() {
+  resetForm()
+  document.getElementById('editDeviceId').value = ''
+  document.getElementById('formDeviceType').value = currentTab
+  document.getElementById('modalTitle').textContent = `Dodaj — ${TAB_LABELS[currentTab]}`
+  setExtraFields(currentTab)
+  populateManufacturers(currentTab)
+  document.getElementById('modal').classList.remove('hidden')
+  setTimeout(() => document.getElementById('f_name').focus(), 50)
+}
+
+function openEditModal(deviceId) {
+  const d = allDevices.find(x => x.deviceId === deviceId)
+  if (!d) return
+  const cfg = d.config || {}
+
+  resetForm()
+  document.getElementById('editDeviceId').value = deviceId
+  document.getElementById('formDeviceType').value = d.type
+  document.getElementById('modalTitle').textContent = `Edytuj — ${TAB_LABELS[d.type]}`
+  setExtraFields(d.type)
+  populateManufacturers(d.type)
+
+  // Fill fields
+  setVal('f_name',         cfg.name         || '')
+  setVal('f_ipAddress',    cfg.ipAddress     || '')
+  setVal('f_login',        cfg.login         || '')
+  setVal('f_password',     cfg.password      || '')
+  setVal('f_model',        cfg.model         || '')
+  setVal('f_manufacturer', cfg.manufacturer  || '')
+
+  if (d.type === 'INTERCOM') {
+    clearRelays()
+    const relays = cfg.relays || []
+    if (relays.length > 0) {
+      relays.forEach(r => addRelay(r.index, r.name))
+    }
+    syncRelayHint()
+    setVal('f_rtspPassword', cfg.rtspPassword || '')
+  }
+  if (d.type === 'CAMERA') {
+    setVal('f_channel',  cfg.channel  || '')
+    setVal('f_rtspPort', cfg.rtspPort || '')
+  }
+  if (d.type === 'LPR_CAMERA') {
+    setVal('f_lprChannel', cfg.channel || '')
+    setVal('f_plateSource', cfg.plateSource || 'auto')
+    setVal('f_linkedIntercomDeviceId', cfg.linkedIntercomDeviceId || '')
+    setVal('f_linkedRelayIndex', cfg.linkedRelayIndex ?? '')
+  }
+
+  document.getElementById('modal').classList.remove('hidden')
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden')
+}
+
+function resetForm() {
+  document.getElementById('deviceForm').reset()
+  document.getElementById('editDeviceId').value = ''
+  clearRelays()
+  syncRelayHint()
+}
+
+function setExtraFields(type) {
+  document.getElementById('extra_intercom').classList.add('hidden')
+  document.getElementById('extra_camera').classList.add('hidden')
+  document.getElementById('extra_lpr').classList.add('hidden')
+  // Model jest widoczny dla KAŻDEGO typu urządzenia. Wcześniej był ukrywany
+  // dla LPR_CAMERA — przez to modelu kamery LPR nie dało się ani wybrać przy
+  // dodawaniu, ani później poprawić (zgłoszenie 2026-08-05, VN: kamery
+  // DS-2CD4A26FWD-IZS/P zapisały się jako iDS-TCM403-AI i nie było jak tego
+  // zmienić). Dla LPR model ma znaczenie SZCZEGÓLNE, bo od niego zależą
+  // ścieżki ISAPI i obejścia firmware.
+  document.getElementById('f_model_wrap').classList.remove('hidden')
+  populateModelSuggestions(type)
+
+  if (type === 'INTERCOM') {
+    document.getElementById('extra_intercom').classList.remove('hidden')
+    syncRelayHint()
+  }
+  if (type === 'CAMERA')     document.getElementById('extra_camera').classList.remove('hidden')
+  if (type === 'LPR_CAMERA') {
+    document.getElementById('extra_lpr').classList.remove('hidden')
+  }
+}
+
+/**
+ * Wypełnia podpowiedzi modeli z katalogu sterowników (`GET /devices/drivers`).
+ *
+ * Katalog jest jedynym źródłem prawdy o obsługiwanych modelach — wcześniej
+ * instalator nie miał ich skąd wziąć i wpisywał symbol z pamięci albo (w
+ * kreatorze) dostawał po cichu pierwszy model z listy sterownika. Lista jest
+ * tylko podpowiedzią: pole zostaje tekstowe, bo nowe rewizje sprzętu
+ * pojawiają się szybciej, niż aktualizujemy katalog.
+ */
+let DRIVER_CATALOG = null
+async function populateModelSuggestions(type) {
+  const list = document.getElementById('modelSuggestions')
+  if (!list) return
+  try {
+    if (!DRIVER_CATALOG) {
+      const res = await fetch('/devices/drivers')
+      DRIVER_CATALOG = res.ok ? await res.json() : []
+    }
+    const models = DRIVER_CATALOG
+      .filter((d) => !type || d.type === type)
+      .flatMap((d) => d.models || [])
+    list.innerHTML = [...new Set(models)].map((m) => `<option value="${m}"></option>`).join('')
+  } catch {
+    list.innerHTML = ''   // brak podpowiedzi nie może blokować zapisu
+  }
+}
+
+function populateManufacturers(type) {
+  const sel = document.getElementById('f_manufacturer')
+  sel.innerHTML = `<option value="">— wybierz producenta —</option>` +
+    (MANUFACTURERS[type] || []).map(m => `<option value="${m}">${m}</option>`).join('')
+}
+
+// ── Form submit ────────────────────────────────────────────────────────────────
+async function submitForm(e) {
+  e.preventDefault()
+  const btn = document.getElementById('submitBtn')
+  btn.disabled = true
+  btn.textContent = 'Zapisywanie…'
+
+  const deviceId  = document.getElementById('editDeviceId').value.trim()
+  const type      = document.getElementById('formDeviceType').value
+  const isEdit    = deviceId !== ''
+
+  const config = {
+    name:         getVal('f_name'),
+    manufacturer: getVal('f_manufacturer'),
+    model:        getVal('f_model') || undefined,
+    ipAddress:    getVal('f_ipAddress'),
+    login:        getVal('f_login')    || undefined,
+    password:     getVal('f_password') || undefined,
+  }
+
+  if (type === 'INTERCOM') {
+    const relays = collectRelays()
+    if (relays.length > 0) config.relays = relays
+    const rtspPwd = getVal('f_rtspPassword')
+    if (rtspPwd) config.rtspPassword = rtspPwd
+  }
+  if (type === 'CAMERA') {
+    const ch = getVal('f_channel')
+    const rp = getVal('f_rtspPort')
+    if (ch !== '') config.channel  = parseInt(ch, 10)
+    if (rp !== '') config.rtspPort = parseInt(rp, 10)
+  }
+  if (type === 'LPR_CAMERA') {
+    const ch = getVal('f_lprChannel')
+    if (ch !== '') config.channel = parseInt(ch, 10)
+    // Kto odczytuje tablice: auto (wykryj po modelu) / camera / edge-ocr
+    config.plateSource = getVal('f_plateSource') || 'auto'
+    const linkedId = getVal('f_linkedIntercomDeviceId').trim()
+    if (linkedId) config.linkedIntercomDeviceId = linkedId
+    const relayIdx = getVal('f_linkedRelayIndex')
+    if (relayIdx !== '') config.linkedRelayIndex = parseInt(relayIdx, 10)
+  }
+
+  // Remove undefined keys
+  Object.keys(config).forEach(k => config[k] === undefined && delete config[k])
+
+  try {
+    const url    = isEdit ? `${API}/devices/${deviceId}` : `${API}/devices`
+    const method = isEdit ? 'PATCH' : 'POST'
+    const body   = { type, config }
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.message || `HTTP ${res.status}`)
+    }
+
+    toast(isEdit ? '✅ Urządzenie zaktualizowane' : '✅ Urządzenie dodane', 'ok')
+    closeModal()
+    await loadDevices()
+  } catch (err) {
+    toast(`Błąd: ${err.message}`, 'err')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Zapisz'
+  }
+}
+
+// ── Relay list ────────────────────────────────────────────────────────────────
+function addRelay(index = '', name = '') {
+  const list = document.getElementById('relayList')
+  const row = document.createElement('div')
+  row.className = 'flex items-center gap-2 relay-row'
+  row.innerHTML = `
+    <input type="number" placeholder="Indeks" min="0" value="${index}"
+           class="w-20 rounded-lg px-3 py-2 text-sm relay-index" />
+    <input type="text" placeholder="Nazwa (np. Wejście główne)" value="${escHtml(String(name))}"
+           class="flex-1 rounded-lg px-3 py-2 text-sm relay-name" />
+    <button type="button" onclick="removeRelay(this)"
+            class="text-xl leading-none transition-colors font-bold" style="color: var(--danger-text);">×</button>`
+  list.appendChild(row)
+  syncRelayHint()
+  row.querySelector('.relay-index').focus()
+}
+
+function removeRelay(btn) {
+  btn.closest('.relay-row').remove()
+  syncRelayHint()
+}
+
+function clearRelays() {
+  document.getElementById('relayList').innerHTML = ''
+}
+
+function syncRelayHint() {
+  const rows = document.querySelectorAll('.relay-row')
+  document.getElementById('relayHint').classList.toggle('hidden', rows.length > 0)
+}
+
+function collectRelays() {
+  const rows = document.querySelectorAll('.relay-row')
+  const result = []
+  rows.forEach(row => {
+    const idx  = row.querySelector('.relay-index').value.trim()
+    const name = row.querySelector('.relay-name').value.trim()
+    if (idx !== '') result.push({ index: parseInt(idx, 10), name: name || `Przekaźnik ${idx}` })
+  })
+  return result
+}
+
+// ── Elevator / Akuvox E32 ─────────────────────────────────────────────────────
+
+// State
+let e32Floors = []   // [{id, name, port, openTime}]
+
+// Bootstrap: restore saved config and floors when tab is first loaded
+function initElevator() {
+  const cfg = JSON.parse(localStorage.getItem('e32Config') || '{}')
+  if (cfg.ip)       document.getElementById('e32Ip').value       = cfg.ip
+  if (cfg.port)     document.getElementById('e32Port').value     = cfg.port
+  if (cfg.login)    document.getElementById('e32Login').value    = cfg.login
+  if (cfg.password) document.getElementById('e32Password').value = cfg.password
+
+  const saved = JSON.parse(localStorage.getItem('e32Floors') || '[]')
+  e32Floors = saved
+  renderElevatorFloors()
+}
+
+function saveE32Config() {
+  const cfg = {
+    ip:       document.getElementById('e32Ip').value.trim(),
+    port:     document.getElementById('e32Port').value.trim() || '80',
+    login:    document.getElementById('e32Login').value.trim(),
+    password: document.getElementById('e32Password').value,
+  }
+  if (!cfg.ip) { toast('Podaj adres IP kontrolera E32', 'err'); return }
+  localStorage.setItem('e32Config', JSON.stringify(cfg))
+  toast('✅ Konfiguracja E32 zapisana')
+  elevatorLog('Konfiguracja zapisana — IP: ' + cfg.ip)
+}
+
+async function pingE32(btn) {
+  const cfg = getE32Config()
+  if (!cfg) { toast('Najpierw zapisz konfigurację E32', 'err'); return }
+
+  btn.disabled = true
+  btn.textContent = '⏳ Ping…'
+  setE32Status('testing')
+
+  try {
+    const url = `${API}/elevator/ping`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (res.ok) {
+      const d = await res.json()
+      setE32Status('ok')
+      document.getElementById('e32InfoModel').textContent   = d.model   || 'Akuvox E32'
+      document.getElementById('e32InfoFw').textContent      = d.firmware || '—'
+      document.getElementById('e32InfoRelays').textContent  = d.relays != null ? d.relays : '—'
+      elevatorLog(`Połączono z E32 (${cfg.ip}) — ${d.model || 'Akuvox E32'}`)
+    } else {
+      throw new Error(`HTTP ${res.status}`)
+    }
+  } catch (err) {
+    // Fallback: direct TCP ping via browser (will fail CORS but we try)
+    setE32Status('error')
+    elevatorLog(`Błąd połączenia z E32 (${cfg.ip}): ${err.message}`)
+    toast(`Brak odpowiedzi E32: ${err.message}`, 'err')
+  } finally {
+    btn.disabled = false
+    btn.textContent = '🔌 Ping'
+  }
+}
+
+function setE32Status(state) {
+  const dot  = document.getElementById('e32StatusDot')
+  const text = document.getElementById('e32StatusText')
+  if (state === 'ok') {
+    dot.className  = 'dot dot-green'
+    text.textContent = 'Połączony'
+    text.className = 'text-xs font-medium text-green-600'
+  } else if (state === 'error') {
+    dot.className  = 'dot dot-red'
+    text.textContent = 'Brak połączenia'
+    text.className = 'text-xs font-medium text-red-500'
+  } else {
+    dot.className  = 'dot dot-gray'
+    text.textContent = 'Sprawdzanie…'
+    text.className = 'text-xs font-medium text-gray-500'
+  }
+}
+
+function getE32Config() {
+  const cfg = JSON.parse(localStorage.getItem('e32Config') || '{}')
+  return cfg.ip ? cfg : null
+}
+
+// ── Floor map ────────────────────────────────────────────────────────────────
+
+function addElevatorFloor(floor = null) {
+  const id   = floor?.id   ?? Date.now()
+  const name = floor?.name ?? ''
+  const port = floor?.port ?? ''
+  const time = floor?.openTime ?? 3
+
+  const row = document.createElement('div')
+  row.className = 'grid grid-cols-12 gap-2 items-center floor-row'
+  row.dataset.id = id
+
+  const num = document.querySelectorAll('.floor-row').length + 1
+  row.innerHTML = `
+    <span class="col-span-1 text-xs text-center font-mono" style="color: var(--muted);">${num}</span>
+    <div class="col-span-4">
+      <input type="text" value="${escHtml(name)}" placeholder="np. Parter"
+             class="floor-name w-full rounded-lg px-2 py-1.5 text-sm" />
+    </div>
+    <div class="col-span-3">
+      <input type="number" value="${port}" placeholder="1" min="1" max="64"
+             class="floor-port w-full rounded-lg px-2 py-1.5 text-sm font-mono" />
+    </div>
+    <div class="col-span-3">
+      <div class="flex items-center gap-1">
+        <input type="number" value="${time}" min="1" max="30"
+               class="floor-time w-full rounded-lg px-2 py-1.5 text-sm font-mono" />
+        <span class="text-xs whitespace-nowrap" style="color: var(--muted);">s</span>
+      </div>
+    </div>
+    <div class="col-span-1 flex justify-center">
+      <button type="button" onclick="removeElevatorFloor(this)"
+              class="text-lg leading-none font-bold transition-colors" style="color: var(--danger-text);">×</button>
+    </div>`
+
+  document.getElementById('elevatorFloorList').appendChild(row)
+  syncElevatorFloorHint()
+}
+
+function removeElevatorFloor(btn) {
+  btn.closest('.floor-row').remove()
+  // re-number
+  document.querySelectorAll('.floor-row').forEach((r, i) => {
+    r.querySelector('span.font-mono').textContent = i + 1
+  })
+  syncElevatorFloorHint()
+}
+
+function syncElevatorFloorHint() {
+  const rows = document.querySelectorAll('.floor-row')
+  document.getElementById('elevatorFloorHint').classList.toggle('hidden', rows.length > 0)
+  document.getElementById('e32InfoFloors').textContent = rows.length
+}
+
+function collectElevatorFloors() {
+  const rows = document.querySelectorAll('.floor-row')
+  return Array.from(rows).map(r => ({
+    id:       parseInt(r.dataset.id, 10),
+    name:     r.querySelector('.floor-name').value.trim(),
+    port:     parseInt(r.querySelector('.floor-port').value, 10) || 1,
+    openTime: parseInt(r.querySelector('.floor-time').value, 10) || 3,
+  })).filter(f => f.name)
+}
+
+function renderElevatorFloors() {
+  document.getElementById('elevatorFloorList').innerHTML = ''
+  e32Floors.forEach(f => addElevatorFloor(f))
+  syncElevatorFloorHint()
+}
+
+function saveE32Floors() {
+  e32Floors = collectElevatorFloors()
+  if (e32Floors.length === 0) { toast('Dodaj przynajmniej jedno piętro', 'err'); return }
+  localStorage.setItem('e32Floors', JSON.stringify(e32Floors))
+  toast(`✅ Mapa pięter zapisana (${e32Floors.length} pięter)`)
+  elevatorLog(`Mapa pięter zaktualizowana: ${e32Floors.map(f => f.name).join(', ')}`)
+  renderAccessTableHeaders()
+}
+
+// ── Access table ─────────────────────────────────────────────────────────────
+
+function renderAccessTableHeaders() {
+  const th = document.getElementById('accessFloorHeaders')
+  if (!e32Floors.length) { th.innerHTML = ''; return }
+  th.colSpan = e32Floors.length
+  th.innerHTML = e32Floors.map(f =>
+    `<th class="text-center py-2 px-2 text-xs font-medium min-w-[60px]" style="color: var(--muted);">${escHtml(f.name)}</th>`
+  ).join('')
+}
+
+async function syncE32Access(btn) {
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full mr-1"></span> Synchronizowanie…'
+  elevatorLog('Synchronizacja uprawnień z chmurą GateLynk…')
+
+  try {
+    const res = await fetch(`${API}/elevator/access`, { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    renderAccessRows(data)
+    elevatorLog(`Zsynchronizowano ${data.length} rekordów dostępu`)
+    toast(`✅ Zsynchronizowano ${data.length} rekordów`)
+  } catch (err) {
+    // Demo rows when API not yet available
+    renderAccessRows([])
+    elevatorLog(`Synchronizacja niedostępna: ${err.message}`)
+    toast('Endpoint synchronizacji w przygotowaniu', 'err')
+  } finally {
+    btn.disabled = false
+    btn.innerHTML = '<span>↻</span> Synchronizuj z chmurą'
+  }
+}
+
+function renderAccessRows(rows) {
+  const tbody = document.getElementById('accessTableBody')
+  renderAccessTableHeaders()
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${e32Floors.length + 2}"
+      class="text-center py-8 text-xs" style="color: var(--muted);">
+      Brak danych — zsynchronizuj z chmurą GateLynk po skonfigurowaniu mieszkańców.
+    </td></tr>`
+    return
+  }
+
+  tbody.innerHTML = rows.map(row => {
+    const cells = e32Floors.map(f => {
+      const allowed = (row.floors || []).includes(f.id)
+      return `<td class="text-center py-2 px-2">
+        <input type="checkbox" class="access-cb w-4 h-4 accent-blue-600 cursor-pointer"
+               data-resident="${row.residentId}" data-floor="${f.id}"
+               ${allowed ? 'checked' : ''} onchange="updateE32Access(this)" />
+      </td>`
+    }).join('')
+
+    return `<tr class="transition-colors" style="border-bottom: 1px solid var(--border);">
+      <td class="py-2 px-3">
+        <span class="font-medium text-xs" style="color: var(--text);">${escHtml(row.name)}</span>
+        <span class="text-xs ml-1" style="color: var(--muted);">${escHtml(row.unit || '')}</span>
+      </td>
+      ${cells}
+      <td class="py-2 px-3 text-right">
+        <button onclick="pushE32ResidentAccess(${row.residentId}, this)"
+                class="text-xs font-medium transition-colors" style="color: var(--accent);">Wyślij</button>
+      </td>
+    </tr>`
+  }).join('')
+}
+
+async function updateE32Access(cb) {
+  // optimistic — actual push on "Wyślij"
+}
+
+async function pushE32ResidentAccess(residentId, btn) {
+  btn.textContent = '⏳'
+  const cfg = getE32Config()
+  if (!cfg) { toast('Brak konfiguracji E32', 'err'); btn.textContent = 'Wyślij'; return }
+
+  const checkboxes = document.querySelectorAll(`.access-cb[data-resident="${residentId}"]`)
+  const allowedFloors = Array.from(checkboxes)
+    .filter(c => c.checked)
+    .map(c => parseInt(c.dataset.floor, 10))
+
+  try {
+    const res = await fetch(`${API}/elevator/access/${residentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...cfg, floors: allowedFloors }),
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    toast('✅ Uprawnienia wysłane do E32')
+    elevatorLog(`Uprawnienia mieszkańca #${residentId} zaktualizowane w E32`)
+  } catch (err) {
+    toast(`Błąd wysyłki: ${err.message}`, 'err')
+    elevatorLog(`Błąd wysyłki uprawnień #${residentId}: ${err.message}`)
+  } finally {
+    btn.textContent = 'Wyślij'
+  }
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+
+function elevatorLog(msg) {
+  const log = document.getElementById('elevatorLog')
+  const empty = log.querySelector('.text-center')
+  if (empty) empty.remove()
+
+  const now = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const line = document.createElement('div')
+  line.className = 'flex gap-2 py-0.5'
+  line.innerHTML = `<span class="flex-shrink-0" style="color: var(--muted);">${now}</span><span style="color: var(--text);">${escHtml(msg)}</span>`
+  log.prepend(line)
+
+  // keep max 50 entries
+  while (log.children.length > 50) log.lastChild.remove()
+}
+
+function clearElevatorLog() {
+  document.getElementById('elevatorLog').innerHTML =
+    '<div class="text-center py-4" style="color: var(--muted);">Brak zdarzeń</div>'
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+let settingsInitialized = false
+
+async function initSettings() {
+  await Promise.all([loadSettingsConfig(), loadSettingsSysInfo()])
+}
+
+async function loadSettingsConfig() {
+  try {
+    const res = await fetch(`${API}/activation/config`)
+    const d   = await res.json()
+
+    // Fill URL field
+    document.getElementById('settingsApiUrl').value = d.cloudUrl ?? ''
+
+    // Cloud status
+    const tunnelRes = await fetch(`${API}/tunnel/status`)
+    const tunnel    = await tunnelRes.json()
+    const dot       = document.getElementById('settingsCloudDot')
+    const label     = document.getElementById('settingsCloudLabel')
+    const badge     = document.getElementById('settingsUptimeBadge')
+
+    if (tunnel.connected) {
+      dot.className   = 'dot dot-green'
+      label.textContent = 'Połączono z chmurą'
+      badge.textContent = `Uptime: ${formatUptime(tunnel.uptime)}`
+      badge.classList.remove('hidden')
+    } else {
+      dot.className   = 'dot dot-red'
+      label.textContent = `Brak połączenia — ${d.cloudUrl ?? 'brak URL'}`
+      badge.classList.add('hidden')
+    }
+
+    // Activation status
+    renderActivationStatus(d)
+  } catch (err) {
+    toast('Błąd ładowania konfiguracji: ' + err.message, 'err')
+  }
+}
+
+function renderActivationStatus(d) {
+  const statusDiv   = document.getElementById('settingsActivationStatus')
+  const formDiv     = document.getElementById('settingsActivationForm')
+  const deactivDiv  = document.getElementById('settingsDeactivateWrap')
+
+  // ── Header building badge ──
+  const badge     = document.getElementById('buildingBadge')
+  const bdgName   = document.getElementById('buildingName')
+  if (badge && bdgName) {
+    const bName = d.buildingName || d.building?.name
+    if (d.activated && (bName || d.buildingId)) {
+      bdgName.textContent = bName || `ID ${d.buildingId}`
+      badge.classList.remove('hidden')
+    } else {
+      badge.classList.add('hidden')
+    }
+  }
+
+  if (d.activated) {
+    statusDiv.innerHTML = `
+      <div class="flex items-start gap-3 px-3 py-3 rounded-lg mb-3" style="background: var(--success-soft); border: 1px solid var(--success-soft);">
+        <span class="text-xl mt-0.5">✅</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold" style="color: var(--success-text);">Urządzenie aktywne</p>
+          <div class="mt-1.5 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs w-20 flex-shrink-0" style="color: var(--muted);">Device ID</span>
+              <code class="text-xs px-1.5 py-0.5 rounded font-mono truncate" style="background: var(--card2); color: var(--text);">${escHtml(d.deviceId ?? '—')}</code>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs w-20 flex-shrink-0" style="color: var(--muted);">Building ID</span>
+              <code class="text-xs px-1.5 py-0.5 rounded font-mono" style="background: var(--card2); color: var(--text);">${d.buildingId ?? '—'}</code>
+            </div>
+          </div>
+        </div>
+      </div>`
+    formDiv.classList.add('hidden')
+    deactivDiv.classList.remove('hidden')
+  } else {
+    statusDiv.innerHTML = `
+      <div class="flex items-center gap-3 px-3 py-3 rounded-lg mb-3" style="background: var(--warn-soft); border: 1px solid var(--warn-soft);">
+        <span class="text-xl">⚠️</span>
+        <div>
+          <p class="text-sm font-semibold" style="color: var(--warn-text);">Urządzenie nieaktywne</p>
+          <p class="text-xs mt-0.5" style="color: var(--muted);">Wprowadź kod aktywacyjny poniżej</p>
+        </div>
+      </div>`
+    formDiv.classList.remove('hidden')
+    deactivDiv.classList.add('hidden')
+  }
+}
+
+async function loadSettingsSysInfo() {
+  try {
+    const res = await fetch(`${API}/status/info`)
+    const d   = await res.json()
+    const container = document.getElementById('settingsSysInfo')
+    const rows = [
+      { label: 'Hostname',   value: d.hostname ?? '—' },
+      { label: 'Platforma',  value: `${d.platform ?? '—'} / ${d.arch ?? '—'}` },
+      { label: 'Adres IP',   value: d.ip ?? '—' },
+      { label: 'Wersja',     value: d.version ?? '—' },
+    ]
+    container.innerHTML = rows.map(r => `
+      <div class="rounded-lg px-4 py-3" style="background: var(--card2); border: 1px solid var(--border);">
+        <p class="text-xs mb-0.5" style="color: var(--muted);">${escHtml(r.label)}</p>
+        <p class="text-sm font-semibold font-mono truncate" style="color: var(--text);">${escHtml(String(r.value))}</p>
+      </div>`).join('')
+  } catch { /* ignore */ }
+}
+
+async function saveApiUrl(btn) {
+  const url = document.getElementById('settingsApiUrl').value.trim()
+  if (!url) { toast('Wpisz adres serwera API', 'err'); return }
+
+  try { new URL(url) } catch {
+    toast('Nieprawidłowy format URL', 'err'); return
+  }
+
+  const orig = btn.textContent
+  btn.textContent = 'Zapisywanie…'
+  btn.disabled = true
+
+  try {
+    // Save URL
+    const res = await fetch(`${API}/activation/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloudUrl: url }),
+    })
+    const d = await res.json()
+    if (!d.success) { toast(d.error ?? 'Błąd zapisu', 'err'); return }
+
+    toast('URL zapisany — łączenie z chmurą…')
+
+    // Trigger reconnect
+    await fetch(`${API}/tunnel/reconnect`, { method: 'POST' })
+
+    // Wait 2s then refresh status
+    await new Promise(r => setTimeout(r, 2000))
+    await loadSettingsConfig()
+    checkCloud() // update header
+
+    toast('Konfiguracja zapisana ✓')
+  } catch (err) {
+    toast('Błąd: ' + err.message, 'err')
+  } finally {
+    btn.textContent = orig
+    btn.disabled = false
+  }
+}
+
+async function testApiConnection(btn) {
+  const url = document.getElementById('settingsApiUrl').value.trim()
+  const result = document.getElementById('settingsTestResult')
+
+  if (!url) { toast('Wpisz adres serwera API', 'err'); return }
+
+  const orig = btn.textContent
+  btn.textContent = 'Testowanie…'
+  btn.disabled = true
+  result.classList.add('hidden')
+
+  try {
+    const start = Date.now()
+    // Probe /api/health, fall back to /api if not found
+    let res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(5000) })
+    if (res.status === 404) {
+      res = await fetch(`${url}/api`, { signal: AbortSignal.timeout(5000) })
+    }
+    const ms = Date.now() - start
+    // Any HTTP response (even 4xx) means server is reachable
+    if (res.status < 500) {
+      result.className = 'mt-3 px-3 py-2 rounded-lg text-xs font-medium'
+      result.style.cssText = 'background: var(--success-soft); color: var(--success-text); border: 1px solid var(--success-soft);'
+      result.textContent = `✅ Serwer odpowiada — HTTP ${res.status} (${ms}ms)`
+    } else {
+      result.className = 'mt-3 px-3 py-2 rounded-lg text-xs font-medium'
+      result.style.cssText = 'background: var(--warn-soft); color: var(--warn-text); border: 1px solid var(--warn-soft);'
+      result.textContent = `⚠️ Serwer zwrócił błąd HTTP ${res.status}`
+    }
+  } catch (err) {
+    result.className = 'mt-3 px-3 py-2 rounded-lg text-xs font-medium'
+    result.style.cssText = 'background: var(--danger-soft); color: var(--danger-text); border: 1px solid var(--danger-soft);'
+    result.textContent = `❌ Brak połączenia: ${err.message}`
+  } finally {
+    result.classList.remove('hidden')
+    btn.textContent = orig
+    btn.disabled = false
+  }
+}
+
+function formatActivationCode(input) {
+  // Auto-format as GLEX-XXXX-XXXX
+  let v = input.value.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+  if (v.length > 4)  v = v.slice(0,4) + '-' + v.slice(4)
+  if (v.length > 9)  v = v.slice(0,9) + '-' + v.slice(9)
+  input.value = v.slice(0, 14)
+}
+
+async function activateDevice(btn) {
+  const code = document.getElementById('settingsActivationCode').value.trim()
+  if (code.length < 5) { toast('Wpisz kod aktywacyjny', 'err'); return }
+
+  const orig = btn.innerHTML
+  btn.innerHTML = '<span class="spinner inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span> Aktywowanie…'
+  btn.disabled = true
+
+  try {
+    const res = await fetch(`${API}/activation/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+    const d = await res.json()
+    if (d.success) {
+      toast(`Aktywowano — DeviceID: ${d.deviceId}`)
+      document.getElementById('settingsActivationCode').value = ''
+      // Trigger tunnel reconnect
+      await fetch(`${API}/tunnel/reconnect`, { method: 'POST' })
+      await new Promise(r => setTimeout(r, 1500))
+      await loadSettingsConfig()
+      checkCloud()
+    } else {
+      toast(d.error ?? 'Błąd aktywacji', 'err')
+    }
+  } catch (err) {
+    toast('Błąd: ' + err.message, 'err')
+  } finally {
+    btn.innerHTML = orig
+    btn.disabled = false
+  }
+}
+
+async function deactivateDevice(btn) {
+  if (!confirm('Czy na pewno chcesz dezaktywować to urządzenie?\n\nUrządzenie utraci połączenie z chmurą. Potrzebny będzie nowy kod aktywacyjny.')) return
+
+  const orig = btn.innerHTML
+  btn.innerHTML = 'Dezaktywowanie…'
+  btn.disabled = true
+
+  try {
+    await fetch(`${API}/activation/deactivate`, { method: 'POST' })
+    toast('Urządzenie dezaktywowane')
+    await loadSettingsConfig()
+    checkCloud()
+  } catch (err) {
+    toast('Błąd: ' + err.message, 'err')
+  } finally {
+    btn.innerHTML = orig
+    btn.disabled = false
+  }
+}
+
+function formatUptime(seconds) {
+  if (!seconds) return '0s'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}g ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
+
+// ── Smart Building / KNX helpers ──────────────────────────────────────────────
+function saveKnxUrl() {
+  const url = document.getElementById('knxUrl').value.trim()
+  if (url) localStorage.setItem('knxDashboardUrl', url)
+}
+
+function loadKnxFrame() {
+  const url = document.getElementById('knxUrl').value.trim()
+  if (!url) { toast('Wpisz URL dashboardu KNX', 'err'); return }
+
+  // persist
+  localStorage.setItem('knxDashboardUrl', url)
+
+  const wrap        = document.getElementById('knxFrameWrap')
+  const placeholder = document.getElementById('knxPlaceholder')
+  const loading     = document.getElementById('knxFrameLoading')
+  const frame       = document.getElementById('knxFrame')
+
+  placeholder.classList.add('hidden')
+  wrap.classList.remove('hidden')
+  wrap.style.position = 'relative'
+  loading.classList.remove('hidden')
+  frame.src = url
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function getVal(id) { return document.getElementById(id)?.value?.trim() ?? '' }
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v }
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+let toastTimer
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast')
+  el.textContent = msg
+  el.style.background = type === 'ok' ? '#1e3a5f' : '#dc2626'
+  el.classList.remove('hidden')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 3500)
+}
+
+// ── Relay trigger ─────────────────────────────────────────────────────────────
+async function triggerRelay(deviceId, relayIndex, relayName, btn) {
+  const orig = btn.innerHTML
+  btn.innerHTML = '⏳ Otwieranie…'
+  btn.disabled = true
+
+  try {
+    const res = await fetch(`${API}/devices/${deviceId}/relay/${relayIndex}`, { method: 'POST' })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok) {
+      btn.innerHTML = '✅ Otwarto!'
+      btn.classList.remove('border-amber-300','text-amber-700','bg-amber-50','hover:bg-amber-100')
+      btn.classList.add('border-green-300','text-green-700','bg-green-50')
+      setTimeout(() => {
+        btn.innerHTML = orig
+        btn.disabled = false
+        btn.classList.add('border-amber-300','text-amber-700','bg-amber-50','hover:bg-amber-100')
+        btn.classList.remove('border-green-300','text-green-700','bg-green-50')
+      }, 2500)
+    } else {
+      toast(d.message ?? `Błąd relay ${relayIndex}`, 'err')
+      btn.innerHTML = orig
+      btn.disabled = false
+    }
+  } catch (err) {
+    toast('Błąd: ' + err.message, 'err')
+    btn.innerHTML = orig
+    btn.disabled = false
+  }
+}
+
+// ── Device restart ────────────────────────────────────────────────────────────
+async function restartDevice(deviceId, btn) {
+  const orig = btn.innerHTML
+  btn.innerHTML = '⏳ Restartowanie…'
+  btn.disabled = true
+
+  try {
+    const res = await fetch(`${API}/devices/${deviceId}/restart`, { method: 'POST' })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok) {
+      btn.innerHTML = '✅ Restart wysłany'
+      btn.classList.remove('border-orange-200','text-orange-700','bg-orange-50','hover:bg-orange-100')
+      btn.classList.add('border-green-300','text-green-700','bg-green-50')
+      toast('Restart wysłany — urządzenie uruchomi się ponownie')
+      setTimeout(() => {
+        btn.innerHTML = orig
+        btn.disabled = false
+        btn.classList.add('border-orange-200','text-orange-700','bg-orange-50','hover:bg-orange-100')
+        btn.classList.remove('border-green-300','text-green-700','bg-green-50')
+      }, 4000)
+    } else {
+      toast(d.message ?? 'Błąd restartu', 'err')
+      btn.innerHTML = '❌ Błąd'
+      setTimeout(() => { btn.innerHTML = orig; btn.disabled = false }, 2500)
+    }
+  } catch (err) {
+    toast('Błąd: ' + err.message, 'err')
+    btn.innerHTML = '❌ Błąd'
+    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false }, 2500)
+  }
+}
+
+// ── Video modal ────────────────────────────────────────────────────────────────
+let _videoDeviceId = ''
+let _videoMode = 'snapshot'  // 'snapshot' | 'live'
+
+async function openVideoModal(deviceId, name, ip) {
+  _videoDeviceId = deviceId
+  _videoMode = 'snapshot'
+
+  document.getElementById('videoModalTitle').textContent = `📷 ${name}`
+  document.getElementById('videoModalSubtitle').textContent = ip ? `IP: ${ip}` : ''
+
+  // Reset to snapshot mode UI
+  _showVideoLoading()
+  setActiveVideoBtn('snapshot')
+  document.getElementById('videoModalRefreshBtn').classList.remove('hidden')
+  document.getElementById('videoModalLiveInd').classList.add('hidden')
+
+  document.getElementById('videoModal').classList.remove('hidden')
+  document.body.style.overflow = 'hidden'
+
+  await _fetchSnapshot()
+}
+
+function closeVideoModal() {
+  // Stop live stream by clearing img src
+  const img = document.getElementById('videoModalImg')
+  img.src = ''
+  img.classList.add('hidden')
+
+  document.getElementById('videoModal').classList.add('hidden')
+  document.body.style.overflow = ''
+  _videoDeviceId = ''
+  _videoMode = 'snapshot'
+}
+
+// ── LPR plates modal (read-only view) ───────────────────────────────────────
+let _platesDeviceId = ''
+let _platesTab = 'plates'           // 'plates' | 'reads'
+let _readsSearchTimer = null
+
+async function openPlatesModal(deviceId, deviceName) {
+  _platesDeviceId = deviceId
+  document.getElementById('platesModalSubtitle').textContent = deviceName
+  document.getElementById('platesModal').classList.remove('hidden')
+  document.body.style.overflow = 'hidden'
+  setPlatesModalTab('plates')
+}
+
+function closePlatesModal() {
+  document.getElementById('platesModal').classList.add('hidden')
+  document.body.style.overflow = ''
+  _platesDeviceId = ''
+  _platesTab = 'plates'
+}
+
+function setPlatesModalTab(tab) {
+  _platesTab = tab
+  const platesTab = document.getElementById('platesTab')
+  const readsTab  = document.getElementById('readsTab')
+  const platesBtn = document.getElementById('platesTabBtn')
+  const readsBtn  = document.getElementById('readsTabBtn')
+
+  if (tab === 'plates') {
+    platesTab.classList.remove('hidden')
+    readsTab.classList.add('hidden')
+    platesBtn.style.color = 'var(--accent)'
+    platesBtn.style.background = 'var(--card)'
+    platesBtn.style.border = '1px solid var(--border)'
+    platesBtn.style.borderBottom = 'none'
+    readsBtn.style.color = 'var(--muted)'
+    readsBtn.style.background = 'transparent'
+    readsBtn.style.border = '1px solid transparent'
+    refreshPlatesTab()
+  } else {
+    platesTab.classList.add('hidden')
+    readsTab.classList.remove('hidden')
+    readsBtn.style.color = 'var(--accent)'
+    readsBtn.style.background = 'var(--card)'
+    readsBtn.style.border = '1px solid var(--border)'
+    readsBtn.style.borderBottom = 'none'
+    platesBtn.style.color = 'var(--muted)'
+    platesBtn.style.background = 'transparent'
+    platesBtn.style.border = '1px solid transparent'
+    refreshReadsTab()
+  }
+}
+
+async function refreshPlatesModal() {
+  if (_platesTab === 'plates') return refreshPlatesTab()
+  return refreshReadsTab()
+}
+
+async function refreshPlatesTab() {
+  if (!_platesDeviceId) return
+  const tbody = document.getElementById('platesModalBody')
+  const count = document.getElementById('platesModalCount')
+  tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8" style="color: var(--muted);">Ładowanie…</td></tr>`
+  count.textContent = ''
+
+  try {
+    const res = await fetch(`${API}/lpr/${_platesDeviceId}/plates`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    const plates = data.plates || []
+
+    if (plates.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center py-10" style="color: var(--muted);">
+        Brak tablic na białej liście. Dodawaj je z panelu Cloud (integrator lub admin budynku).
+      </td></tr>`
+    } else {
+      tbody.innerHTML = plates.map(p => `
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td class="px-6 py-2.5 font-mono font-semibold" style="color: var(--text-strong);">${escHtml(p.plate)}</td>
+          <td class="px-4 py-2.5" style="color: var(--text);">${escHtml(p.owner || '—')}</td>
+          <td class="px-4 py-2.5 text-xs" style="color: var(--muted);">${fmtPlateDate(p.validFrom)}</td>
+          <td class="px-4 py-2.5 text-xs" style="color: var(--muted);">${fmtPlateDate(p.validUntil)}</td>
+        </tr>`).join('')
+    }
+    count.textContent = `${plates.length} ${plates.length === 1 ? 'tablica' : plates.length < 5 ? 'tablice' : 'tablic'}`
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8" style="color: var(--danger-text);">
+      Błąd pobierania listy: ${escHtml(err.message)}
+    </td></tr>`
+  }
+}
+
+function onReadsSearchChange() {
+  if (_readsSearchTimer) clearTimeout(_readsSearchTimer)
+  _readsSearchTimer = setTimeout(refreshReadsTab, 250)
+}
+
+async function refreshReadsTab() {
+  if (!_platesDeviceId) return
+  const tbody = document.getElementById('readsModalBody')
+  const count = document.getElementById('platesModalCount')
+  tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8" style="color: var(--muted);">Ładowanie…</td></tr>`
+  count.textContent = ''
+
+  const plateQ   = (document.getElementById('readsSearchInput').value || '').trim()
+  const matchedQ = (document.getElementById('readsMatchedFilter').value || '').trim()
+
+  const qs = new URLSearchParams()
+  if (plateQ)   qs.set('plate', plateQ)
+  if (matchedQ) qs.set('matched', matchedQ)
+  qs.set('limit', '200')
+
+  try {
+    const res = await fetch(`${API}/lpr/${_platesDeviceId}/reads?${qs.toString()}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    const reads = data.reads || []
+
+    if (reads.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10" style="color: var(--muted);">
+        Brak odczytów${plateQ || matchedQ ? ' dla wybranych filtrów' : ''}.
+      </td></tr>`
+    } else {
+      tbody.innerHTML = reads.map(r => {
+        const status = r.matched
+          ? `<span class="text-xs font-medium" style="color: var(--success-text);">✅ Biała lista</span>`
+          : `<span class="text-xs font-medium" style="color: var(--muted);">⛔ Spoza listy</span>`
+        const gate = r.gateOpened
+          ? `<span class="text-xs" style="color: var(--success-text);">🔓 Otwarta</span>`
+          : `<span class="text-xs" style="color: var(--muted);">—${r.reason ? ` (${escHtml(r.reason)})` : ''}</span>`
+
+        // Thumbnail — only if the Edge actually persisted a snapshot. The
+        // admin endpoint returns the filename as `imagePath` (null when the
+        // camera didn't attach a JPEG or the magic-byte check failed).
+        // `openSnapshotLightbox` gets raw values so we can reuse them in the
+        // caption without another fetch.
+        const thumb = r.imagePath
+          ? `<img src="${API}/lpr/reads/${r.id}/image" loading="lazy" decoding="async"
+                  class="rounded cursor-pointer"
+                  style="width: 72px; height: 54px; object-fit: cover; background: var(--card2); border: 1px solid var(--border);"
+                  data-read-id="${r.id}" data-plate="${escHtml(r.plate)}" data-ts="${r.ts}"
+                  onclick="openSnapshotLightbox(this)"
+                  onerror="this.style.display='none'"
+                  alt="Zdjęcie pojazdu ${escHtml(r.plate)}" />`
+          : `<span class="text-xs" style="color: var(--muted);">—</span>`
+
+        // Vehicle column — always render two lines (brand, type) with a
+        // dash fallback so the cell has stable height across rows and the
+        // operator sees a consistent shape. Colour dot is the one thing we
+        // *hide* when missing — an empty swatch looks like a bug.
+        const color = vehicleColorDot(r.vehicleColor)
+        const brand = r.vehicleBrand ? escHtml(r.vehicleBrand) : '—'
+        const type  = vehicleTypePl(r.vehicleType) || '—'
+        const vehicleHtml = `
+          <div class="flex flex-col gap-0.5">
+            <div class="flex items-center gap-1.5">
+              ${color
+                ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color.css};border:1px solid var(--border);" title="${escHtml(color.label)}"></span>`
+                : ''}
+              <span class="font-medium" style="color: ${brand === '—' ? 'var(--muted)' : 'var(--text-strong)'};">${brand}</span>
+            </div>
+            <span class="text-xs" style="color: var(--muted);">${escHtml(type)}</span>
+          </div>`
+
+        return `
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td class="px-6 py-2">${thumb}</td>
+            <td class="px-4 py-2.5 text-xs" style="color: var(--muted);">${fmtReadDateTime(r.ts)}</td>
+            <td class="px-4 py-2.5 font-mono font-semibold" style="color: var(--text-strong);">${escHtml(r.plate)}</td>
+            <td class="px-4 py-2.5">${vehicleHtml}</td>
+            <td class="px-4 py-2.5">${status}</td>
+            <td class="px-4 py-2.5">${gate}</td>
+            <td class="px-4 py-2.5 text-xs" style="color: var(--text);">${escHtml(r.owner || '—')}</td>
+          </tr>`
+      }).join('')
+    }
+    count.textContent = `${reads.length} ${reads.length === 1 ? 'odczyt' : reads.length < 5 ? 'odczyty' : 'odczytów'}`
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8" style="color: var(--danger-text);">
+      Błąd pobierania odczytów: ${escHtml(err.message)}
+    </td></tr>`
+  }
+}
+
+// ── Snapshot lightbox ──────────────────────────────────────────────────────
+// Nested inside the plates modal so ESC unwinds the overlay first, then the
+// modal. The overlay captures clicks; clicks on the inner image/caption
+// container bubble past the close handler via `event.target === currentTarget`.
+// Receives the clicked <img> element. Using `this` + data-* attributes
+// avoids the escape-hell of interpolating strings into an `onclick="…"`
+// attribute — nested quotes or plates containing `"` / `&` / `<` would
+// otherwise break HTML parsing before the handler ever fires.
+function openSnapshotLightbox(imgEl) {
+  const readId = imgEl?.dataset?.readId
+  const plate  = imgEl?.dataset?.plate ?? ''
+  const ts     = Number(imgEl?.dataset?.ts) || Date.now()
+  if (!readId) return
+  const overlay = document.getElementById('snapshotLightbox')
+  const img = document.getElementById('snapshotLightboxImg')
+  const cap = document.getElementById('snapshotLightboxCaption')
+  if (!overlay || !img || !cap) return
+  img.src = `${API}/lpr/reads/${readId}/image`
+  cap.textContent = `${plate} • ${fmtReadDateTime(ts)}`
+  overlay.classList.remove('hidden')
+}
+
+function closeSnapshotLightbox(event) {
+  // Ignore clicks that bubble up from the image itself — only the background
+  // overlay and the explicit × button should dismiss.
+  if (event && event.target && event.target.id === 'snapshotLightboxImg') return
+  const overlay = document.getElementById('snapshotLightbox')
+  if (!overlay) return
+  overlay.classList.add('hidden')
+  const img = document.getElementById('snapshotLightboxImg')
+  if (img) img.src = ''
+}
+
+// PL translation for Hikvision vehicle-type enum. Unknown values are passed
+// through verbatim so the installer still sees something meaningful.
+function vehicleTypePl(t) {
+  if (!t) return ''
+  const k = String(t).toLowerCase()
+  const map = {
+    // Seen in the wild (V5.8.x EU):
+    vehicle:     'Pojazd',
+    suvmpv:      'SUV/MPV',
+    // Broader Hikvision catalog across firmwares:
+    smallcar:    'Osobowy',
+    car:         'Osobowy',
+    saloon:      'Osobowy',
+    suv:         'SUV',
+    mpv:         'MPV',
+    truck:       'Ciężarówka',
+    largetruck:  'Ciężarówka',
+    lorry:       'Ciężarówka',
+    van:         'Dostawczy',
+    minivan:     'Minivan',
+    pickup:      'Pickup',
+    bus:         'Autobus',
+    minibus:     'Minibus',
+    motorcycle:  'Motocykl',
+    bicycle:     'Rower',
+    tricycle:    'Trójkołowiec',
+    other:       'Inny',
+    unknown:     '',
+  }
+  return map[k] ?? String(t)
+}
+
+// Colour → CSS swatch + PL label. Handles the common Hikvision colour names;
+// anything we don't recognise renders without a swatch (brand/type still show).
+function vehicleColorDot(c) {
+  if (!c) return null
+  const k = String(c).toLowerCase()
+  const palette = {
+    white:   { css: '#ffffff', label: 'Biały' },
+    silver:  { css: '#c0c0c0', label: 'Srebrny' },
+    gray:    { css: '#808080', label: 'Szary' },
+    grey:    { css: '#808080', label: 'Szary' },
+    black:   { css: '#111111', label: 'Czarny' },
+    red:     { css: '#dc2626', label: 'Czerwony' },
+    pink:    { css: '#ec4899', label: 'Różowy' },
+    orange:  { css: '#f97316', label: 'Pomarańczowy' },
+    yellow:  { css: '#eab308', label: 'Żółty' },
+    green:   { css: '#16a34a', label: 'Zielony' },
+    blue:    { css: '#2563eb', label: 'Niebieski' },
+    cyan:    { css: '#06b6d4', label: 'Turkusowy' },
+    purple:  { css: '#7c3aed', label: 'Fioletowy' },
+    brown:   { css: '#78350f', label: 'Brązowy' },
+    beige:   { css: '#e7d7b1', label: 'Beżowy' },
+    gold:    { css: '#d4af37', label: 'Złoty' },
+  }
+  return palette[k] ?? { css: 'transparent', label: String(c) }
+}
+
+function fmtPlateDate(ms) {
+  if (!ms) return '—'
+  const d = new Date(ms)
+  if (!isFinite(d.getTime())) return '—'
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+}
+
+function fmtReadDateTime(ms) {
+  if (!ms) return '—'
+  const d = new Date(ms)
+  if (!isFinite(d.getTime())) return '—'
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+async function switchVideoMode(mode) {
+  if (!_videoDeviceId) return
+  _videoMode = mode
+  setActiveVideoBtn(mode)
+
+  if (mode === 'snapshot') {
+    document.getElementById('videoModalRefreshBtn').classList.remove('hidden')
+    document.getElementById('videoModalLiveInd').classList.add('hidden')
+    _showVideoLoading()
+    await _fetchSnapshot()
+  } else {
+    // Live — pipe MJPEG stream
+    document.getElementById('videoModalRefreshBtn').classList.add('hidden')
+    document.getElementById('videoModalNoImg').classList.add('hidden')
+    document.getElementById('videoModalLoading').classList.remove('hidden')
+    document.getElementById('videoModalImg').classList.add('hidden')
+
+    const img = document.getElementById('videoModalImg')
+    img.src = `${API}/devices/${_videoDeviceId}/stream`
+    img.classList.remove('hidden')
+    document.getElementById('videoModalLoading').classList.add('hidden')
+    document.getElementById('videoModalLiveInd').classList.remove('hidden')
+  }
+}
+
+async function refreshVideoSnapshot() {
+  if (!_videoDeviceId || _videoMode !== 'snapshot') return
+  _showVideoLoading()
+  await _fetchSnapshot()
+}
+
+async function _fetchSnapshot() {
+  try {
+    const res = await fetch(`${API}/devices/${_videoDeviceId}/snapshot`)
+    const d = await res.json()
+    if (d.snapshot) {
+      const img = document.getElementById('videoModalImg')
+      img.src = d.snapshot
+      // onload/onerror handlers will show/hide elements
+    } else {
+      _showVideoNoImg()
+    }
+  } catch {
+    _showVideoNoImg()
+  }
+}
+
+function onVideoImgLoaded() {
+  document.getElementById('videoModalLoading').classList.add('hidden')
+  document.getElementById('videoModalNoImg').classList.add('hidden')
+  document.getElementById('videoModalImg').classList.remove('hidden')
+  if (_videoMode === 'live') {
+    document.getElementById('videoModalLiveInd').classList.remove('hidden')
+  }
+}
+
+function onVideoImgError() {
+  if (_videoMode === 'live') return  // stream errors are normal during buffering
+  _showVideoNoImg()
+}
+
+function _showVideoLoading() {
+  document.getElementById('videoModalLoading').classList.remove('hidden')
+  document.getElementById('videoModalImg').classList.add('hidden')
+  document.getElementById('videoModalNoImg').classList.add('hidden')
+  document.getElementById('videoModalLiveInd').classList.add('hidden')
+}
+
+function _showVideoNoImg() {
+  document.getElementById('videoModalLoading').classList.add('hidden')
+  document.getElementById('videoModalImg').classList.add('hidden')
+  document.getElementById('videoModalNoImg').classList.remove('hidden')
+}
+
+function setActiveVideoBtn(mode) {
+  const snapBtn = document.getElementById('videoModalBtnSnap')
+  const liveBtn = document.getElementById('videoModalBtnLive')
+  if (mode === 'snapshot') {
+    snapBtn.classList.add('active-cam')
+    snapBtn.classList.remove('text-gray-500')
+    liveBtn.classList.remove('active-cam')
+    liveBtn.classList.add('text-gray-500')
+  } else {
+    liveBtn.classList.add('active-cam')
+    liveBtn.classList.remove('text-gray-500')
+    snapBtn.classList.remove('active-cam')
+    snapBtn.classList.add('text-gray-500')
+  }
+}
+
+// Close modal on backdrop click
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal()
+})
+
+// Close modals on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeTestModal(); closeVideoModal(); closePlatesModal() } })
+
+// Close test modal on backdrop click
+document.getElementById('testModal').addEventListener('click', function(e) {
+  if (e.target === this) closeTestModal()
+})
+
+// Close video modal on backdrop click
+document.getElementById('videoModal').addEventListener('click', function(e) {
+  if (e.target === this) closeVideoModal()
+})
+
+// ── LOG TAB ────────────────────────────────────────────────────────────────────
+
+let logEventSource = null
+let logPaused = false
+let logNewCount = 0
+let logAllEntries = []
+let logFilterValue = ''
+let logInitialized = false
+
+const LOG_COLORS = {
+  success: { row: 'text-green-400',  badge: 'bg-green-900 text-green-300',  dot: '🟢' },
+  info:    { row: 'text-blue-300',   badge: 'bg-blue-900 text-blue-200',    dot: '🔵' },
+  warning: { row: 'text-yellow-300', badge: 'bg-yellow-900 text-yellow-200',dot: '🟡' },
+  error:   { row: 'text-red-400',    badge: 'bg-red-900 text-red-300',      dot: '🔴' },
+  debug:   { row: 'text-gray-500',   badge: 'bg-gray-800 text-gray-400',    dot: '⚪' },
+}
+
+function initLog() {
+  if (logInitialized) return
+  logInitialized = true
+
+  // Load history first
+  fetch(`${API}/logs`).then(r => r.json()).then(entries => {
+    logAllEntries = entries
+    renderLog()
+  }).catch(() => {})
+
+  // Connect SSE
+  connectLogSSE()
+}
+
+function connectLogSSE() {
+  if (logEventSource) return
+  logEventSource = new EventSource(`${API}/logs/stream`)
+
+  logEventSource.onmessage = (e) => {
+    try {
+      const entry = JSON.parse(e.data)
+      // Skip entries already loaded from history
+      if (logAllEntries.some(x => x.id === entry.id)) return
+      logAllEntries.push(entry)
+      if (logAllEntries.length > 500) logAllEntries.shift()
+
+      if (!logPaused) {
+        appendLogEntry(entry)
+      }
+
+      // Badge on "Logi" tab when user is elsewhere
+      if (currentTab !== 'LOGI') {
+        logNewCount++
+        const badge = document.getElementById('logBadgeTop')
+        if (badge) {
+          badge.textContent = logNewCount > 99 ? '99+' : logNewCount
+          badge.classList.remove('hidden')
+        }
+      }
+    } catch {}
+  }
+
+  logEventSource.onopen = () => {
+    const ind = document.getElementById('logLiveIndicator')
+    if (ind) {
+      ind.innerHTML = '<span class="w-2 h-2 rounded-full animate-pulse" style="background: var(--success);"></span> Live'
+      ind.className = 'flex items-center gap-1.5 text-xs font-medium'
+      ind.style.color = 'var(--success-text)'
+    }
+  }
+
+  logEventSource.onerror = () => {
+    const ind = document.getElementById('logLiveIndicator')
+    if (ind) {
+      ind.innerHTML = '<span class="w-2 h-2 rounded-full" style="background: var(--danger);"></span> Rozłączono — ponawianie…'
+      ind.className = 'flex items-center gap-1.5 text-xs font-medium'
+      ind.style.color = 'var(--danger-text)'
+    }
+  }
+}
+
+function applyLogFilter() {
+  logFilterValue = document.getElementById('logFilter').value
+  renderLog()
+}
+
+function renderLog() {
+  const container = document.getElementById('logEntries')
+  const filtered = logFilterValue
+    ? logAllEntries.filter(e => e.category === logFilterValue)
+    : logAllEntries
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="text-center py-8" style="color: var(--muted);">Brak wpisów dla wybranego filtra</div>'
+  } else {
+    container.innerHTML = filtered.map(buildLogRow).join('')
+  }
+
+  document.getElementById('logEntryCount').textContent = `${filtered.length} wpisów`
+  scrollLogToBottom()
+}
+
+function appendLogEntry(entry) {
+  if (logFilterValue && entry.category !== logFilterValue) return
+
+  // Remove placeholder
+  const placeholder = document.querySelector('#logEntries .text-center')
+  if (placeholder) placeholder.remove()
+
+  const container = document.getElementById('logEntries')
+  container.insertAdjacentHTML('beforeend', buildLogRow(entry))
+
+  // Update count
+  const shown = container.children.length
+  document.getElementById('logEntryCount').textContent = `${shown} wpisów`
+
+  scrollLogToBottom()
+}
+
+// Defense-in-depth (2026-05-14 fix): obcinamy detail w renderze nawet gdy
+// stare entries z buforu Edge przekraczają nasz limit (np. po hot-deploy
+// fix-u backendu, ale Edge jeszcze nie restartowany).
+const LOG_DETAIL_RENDER_LIMIT = 2000
+
+function buildLogRow(entry) {
+  const c = LOG_COLORS[entry.level] || LOG_COLORS.info
+  const time = new Date(entry.ts).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const ms   = new Date(entry.ts).getMilliseconds().toString().padStart(3, '0')
+  let detailHtml = ''
+  if (entry.detail) {
+    const truncated = entry.detail.length > LOG_DETAIL_RENDER_LIMIT
+      ? entry.detail.slice(0, LOG_DETAIL_RENDER_LIMIT) +
+        `\n…(skrócone w UI, ${entry.detail.length} znaków — pełen log w pliku PM2)`
+      : entry.detail
+    detailHtml = `<div class="ml-[120px] mt-0.5 break-all" style="color: var(--muted);">${escHtml(truncated)}</div>`
+  }
+
+  return `<div class="py-1 transition-colors" style="border-bottom: 1px solid rgba(48,54,61,0.4);">
+    <div class="flex items-start gap-2">
+      <span class="shrink-0 tabular-nums" style="color: var(--muted);">${time}<span style="color: var(--dim);">.${ms}</span></span>
+      <span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${c.badge}">${escHtml(entry.category)}</span>
+      <span class="${c.row} break-words">${escHtml(entry.message)}</span>
+    </div>${detailHtml}
+  </div>`
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+}
+
+function scrollLogToBottom() {
+  const wrap = document.getElementById('logContainer')
+  wrap.scrollTop = wrap.scrollHeight
+}
+
+// ── Network Tree ──────────────────────────────────────────────────────────────
+
+let networkTreeData = []
+
+async function loadNetworkTree() {
+  const container = document.getElementById('networkTree')
+  const summary   = document.getElementById('networkSummary')
+  container.innerHTML = `
+    <div class="text-center py-12" style="color: var(--muted);">
+      <svg class="spinner w-8 h-8 mx-auto mb-2" style="color: var(--accent);" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+      </svg>
+      Sprawdzanie statusu urządzeń w sieci LAN…
+    </div>`
+  summary.textContent = 'Sprawdzanie…'
+
+  try {
+    const res = await fetch(`${API}/devices/tree`, { signal: AbortSignal.timeout(15000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    networkTreeData = await res.json()
+    renderNetworkTree()
+  } catch (err) {
+    container.innerHTML = `<div class="text-center py-10 text-sm" style="color: var(--danger-text);">Błąd: ${err.message}</div>`
+    summary.textContent = 'Błąd ładowania'
+  }
+}
+
+async function refreshNetworkTree(btn) {
+  btn.disabled = true
+  btn.textContent = '⏳ Sprawdzanie…'
+  await loadNetworkTree()
+  btn.disabled = false
+  btn.textContent = '🔄 Odśwież status'
+}
+
+function renderNetworkTree() {
+  const container = document.getElementById('networkTree')
+  const summary   = document.getElementById('networkSummary')
+
+  const totalDevices = networkTreeData.reduce((s, g) => s + g.devices.length, 0)
+  const totalOnline  = networkTreeData.reduce((s, g) => s + g.devices.filter(d => d.online).length, 0)
+
+  summary.innerHTML = `
+    <span class="inline-flex items-center gap-1.5">
+      <span class="dot dot-${totalOnline > 0 ? 'green' : 'gray'}"></span>
+      ${totalDevices} urządzeń · ${totalOnline} online
+    </span>`
+
+  if (totalDevices === 0) {
+    container.innerHTML = `
+      <div class="text-center py-14" style="color: var(--muted);">
+        <div class="text-4xl mb-3">📡</div>
+        <p class="font-medium">Brak skonfigurowanych urządzeń</p>
+        <p class="text-sm mt-1">Dodaj urządzenia w zakładkach Dostęp / Monitoring.</p>
+      </div>`
+    return
+  }
+
+  container.innerHTML = networkTreeData.map(group => networkGroupCard(group)).join('')
+}
+
+function networkGroupCard(group) {
+  const onlineCount = group.devices.filter(d => d.online).length
+  const id = `netgroup-${group.type}`
+
+  const devicesHtml = group.devices.map(d => networkDeviceRow(d)).join('')
+
+  const statusStyle = onlineCount === group.devices.length
+    ? 'background: var(--success-soft); color: var(--success-text); border: 1px solid var(--success-soft);'
+    : onlineCount > 0
+      ? 'background: var(--warn-soft); color: var(--warn-text); border: 1px solid var(--warn-soft);'
+      : 'background: var(--danger-soft); color: var(--danger-text); border: 1px solid var(--danger-soft);'
+
+  return `
+    <div class="card overflow-hidden">
+      <button onclick="toggleNetGroup('${id}')"
+              class="w-full flex items-center gap-3 px-5 py-3.5 transition-colors text-left" style="background: var(--card);">
+        <span class="text-xl">${escHtml(group.icon)}</span>
+        <div class="flex-1">
+          <span class="font-semibold" style="color: var(--text);">${escHtml(group.label)}</span>
+          <span class="ml-2 text-sm" style="color: var(--muted);">${group.devices.length} urządzeń</span>
+        </div>
+        <span class="text-xs px-2.5 py-1 rounded-full font-medium" style="${statusStyle}">
+          ${onlineCount}/${group.devices.length} online
+        </span>
+        <span class="text-xs ml-2 chevron-${id}" style="color: var(--muted);">▼</span>
+      </button>
+      <div id="${id}" style="border-top: 1px solid var(--border);">
+        ${devicesHtml}
+      </div>
+    </div>`
+}
+
+function networkDeviceRow(d) {
+  const statusDot = d.online
+    ? `<span class="dot dot-green flex-shrink-0" title="Online"></span>`
+    : `<span class="dot dot-red flex-shrink-0" title="Offline"></span>`
+
+  const ip  = d.ipAddress ? `<span class="font-mono text-xs px-2 py-0.5 rounded" style="background: var(--bg); border: 1px solid var(--border); color: var(--text);">${escHtml(d.ipAddress)}</span>` : ''
+  const mfr = [d.manufacturer, d.model].filter(Boolean).map(escHtml).join(' · ')
+  const mfrHtml = mfr ? `<span class="text-xs" style="color: var(--muted);">${mfr}</span>` : ''
+
+  const relayBtns = (d.relays || []).map(r => `
+    <button onclick="triggerRelay('${d.deviceId}', ${r.index}, '${escHtml(r.name)}', this)"
+            class="btn-open flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium">
+      🔓 ${escHtml(r.name || `Przekaźnik ${r.index}`)}
+    </button>`).join('')
+
+  const restartableTypes = ['INTERCOM','CAMERA','LPR_CAMERA']
+  const videoBtn = restartableTypes.includes(d.type ?? '') ? `
+    <button onclick="openVideoModal('${d.deviceId}', '${escHtml(d.name)}', '${escHtml(d.ipAddress || '')}')"
+            class="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs">
+      📷 Video
+    </button>` : ''
+
+  const restartBtn = restartableTypes.includes(d.type ?? '') ? `
+    <button onclick="restartDevice('${d.deviceId}', this)"
+            class="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs" style="color: var(--warn-text);">
+      🔄 Restart
+    </button>` : ''
+
+  const diagBtn = `
+    <button data-test-btn="${d.deviceId}" onclick="testDevice('${d.deviceId}', this)"
+            class="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs">
+      🧪 Diagnostyka
+    </button>`
+
+  const checkedTime = d.checkedAt
+    ? `<span class="text-xs" style="color: var(--muted);">sprawdzono ${new Date(d.checkedAt).toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>`
+    : ''
+
+  return `
+    <div class="px-5 py-3" style="border-top: 1px solid var(--border);">
+      <div class="flex items-start gap-3">
+        ${statusDot}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium" style="color: var(--text);">${escHtml(d.name)}</span>
+            ${ip}
+            ${mfrHtml}
+          </div>
+          ${checkedTime ? `<div class="mt-0.5">${checkedTime}</div>` : ''}
+        </div>
+        <a href="http://${escHtml(d.ipAddress || '')}/" target="_blank"
+           title="Otwórz panel urządzenia (${escHtml(d.ipAddress || '')})"
+           class="${d.ipAddress ? '' : 'pointer-events-none opacity-30'} btn-ghost p-1.5 text-xs">
+          🔗
+        </a>
+      </div>
+      ${relayBtns || videoBtn || restartBtn || diagBtn ? `
+      <div class="flex items-center gap-2 mt-2.5 flex-wrap">
+        ${relayBtns}${videoBtn}${restartBtn}${diagBtn}
+      </div>` : ''}
+    </div>`
+}
+
+function toggleNetGroup(id) {
+  const el = document.getElementById(id)
+  const chevron = document.querySelector(`.chevron-${id}`)
+  const hidden = el.classList.toggle('hidden')
+  if (chevron) chevron.textContent = hidden ? '▶' : '▼'
+}
+
+function clearLogDisplay() {
+  logAllEntries = []
+  document.getElementById('logEntries').innerHTML =
+    '<div class="text-center py-8" style="color: var(--muted);">Log wyczyszczony</div>'
+  document.getElementById('logEntryCount').textContent = '0 wpisów'
+}
+
+function toggleLogPause() {
+  logPaused = !logPaused
+  const btn = document.getElementById('logPauseBtn')
+  if (logPaused) {
+    btn.textContent = '▶ Wznów'
+    btn.classList.remove('btn-primary')
+    btn.classList.add('btn-ghost')
+  } else {
+    btn.textContent = '⏸ Pauza'
+    btn.classList.remove('btn-ghost')
+    btn.classList.add('btn-primary')
+    renderLog()  // catch up on missed entries
+  }
+}
+</script>
+</body>
+</html>

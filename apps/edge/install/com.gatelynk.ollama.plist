@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Launch Agent — auto-start Ollama serve po loginie usera shc_development.
+
+  INSTALACJA:
+    cp apps/edge/install/com.gatelynk.ollama.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.gatelynk.ollama.plist
+    launchctl start com.gatelynk.ollama
+    # Sprawdź: launchctl list | grep ollama
+    # Logi:   tail -f ~/ollama-launchd.log
+
+  ODINSTALOWANIE:
+    launchctl unload ~/Library/LaunchAgents/com.gatelynk.ollama.plist
+    rm ~/Library/LaunchAgents/com.gatelynk.ollama.plist
+
+  Uwaga: LaunchAgent (per-user) startuje po loginie usera, NIE po boot. Na
+  Mac Mini z auto-login w „System Preferences → Users & Groups → Login Options"
+  to wystarczy. Dla startu po boot bez logowania → LaunchDaemon (wymaga sudo,
+  patrz com.gatelynk.edge.plist).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gatelynk.ollama</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/shc_development/bin/ollama</string>
+        <string>serve</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- Default Ollama nasłuchuje na localhost:11434. Edge i tak żyje na
+             tej samej maszynie, więc nie wystawiamy szerzej. -->
+        <key>OLLAMA_HOST</key>
+        <string>127.0.0.1:11434</string>
+        <!-- Trzymaj model w RAM 60 min po ostatnim queryście — 7B zajmuje
+             ~3 GB RAM cold-load 10s, więc dłuższy keep_alive = mniej cold
+             startów dla typowego użytkownika (kilka pytań ad-hoc rozłożonych
+             w czasie). -->
+        <key>OLLAMA_KEEP_ALIVE</key>
+        <string>60m</string>
+        <!-- Tylko jeden model w pamięci jednocześnie — chronimy 8 GB RAM
+             Mac Mini przed swap-em gdy ktoś niechcąco pobierze drugi model. -->
+        <key>OLLAMA_MAX_LOADED_MODELS</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Auto-start po loginie usera -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Auto-restart gdy crash. Throttle 10s żeby nie spamować przy bug-u. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Logi do home dir, łatwo dostać po SSH -->
+    <key>StandardOutPath</key>
+    <string>/Users/shc_development/ollama-launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/shc_development/ollama-launchd.err.log</string>
+
+    <!-- Nice level — nie kradnij CPU od Edge gdy oba żyją obok -->
+    <key>Nice</key>
+    <integer>5</integer>
+</dict>
+</plist>

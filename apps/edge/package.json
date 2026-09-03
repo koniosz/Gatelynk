@@ -1,0 +1,48 @@
+{
+  "name": "@gatelynk/edge",
+  "version": "0.1.0",
+  "description": "GateLynk Edge — on-premise device gateway",
+  "author": "GateLynk",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main",
+    "dev": "nest start --watch"
+  },
+  "dependencies": {
+    "@gatelynk/device-drivers": "workspace:*",
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.3",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/schedule": "^5.0.1",
+    "aedes": "^0.51.3",
+    "axios": "^1.7.9",
+    "better-sqlite3": "^11.7.0",
+    "bonjour-service": "^1.3.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "cron-parser": "^4.9.0",
+    "ffmpeg-static": "^5.3.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "sharp": "^0.33.5",
+    "uuid": "^11.0.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.3"
+  }
+}

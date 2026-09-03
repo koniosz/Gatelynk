@@ -1,0 +1,79 @@
+/**
+ * GateLynk Edge — Design tokens.
+ * Skopiowane 1:1 z `GateLynk Edge — Handoff dla Claude Code` (sekcja 3).
+ *
+ * Light mode default — `:root`. Dark mode aktywowany przez `[data-theme="dark"]`
+ * (ustawiane w main.tsx z localStorage). Dokument mówi: „Dark mode pierwszorzędny.
+ * Instalatorzy często pracują wieczorem/w nocy."
+ *
+ * Radius rhythm: 4 / 6 / 8 — mniej zaokrąglone niż GateLynk Admin (industrial feel).
+ * Spacing rhythm: 4 / 8 / 12 / 16 / 24.
+ */
+
+:root {
+  --bg: #f4f6f9;
+  --bg-2: #eaedf2;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --border: #dde2ea;
+  --border-strong: #c5ccd6;
+  --ink: #0c1320;
+  --ink-2: #2d3748;
+  --muted: #5f6b7c;
+  --muted-2: #94a0b1;
+
+  --blue: #006fff;
+  --blue-600: #0058cc;
+  --blue-50: #e6f0ff;
+
+  --green: #10ad62;
+  --green-50: #d8f4e7;
+
+  --amber: #b15e00;
+  --amber-50: #fceac9;
+
+  --red: #c52a2a;
+  --red-50: #fbe0de;
+
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 8px;
+
+  /* Cienie — subtelne, industrial */
+  --shadow-1: 0 1px 2px rgba(12, 19, 32, 0.05);
+  --shadow-2: 0 4px 12px rgba(12, 19, 32, 0.08);
+
+  /* Tylko PL — dokument: „Tylko PL (instalator) — nie ma potrzeby EN MVP". */
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #060a12;
+  --bg-2: #0c121d;
+  --surface: #0f1623;
+  --surface-2: #141c2b;
+  --border: #1e2738;
+  --border-strong: #2a3548;
+  --ink: #eef2f8;
+  --ink-2: #c2cbd9;
+  --muted: #7d8a9f;
+  --muted-2: #4f5b6f;
+
+  --blue: #3b8bff;
+  --blue-600: #5b9eff;
+  --blue-50: #142339;
+
+  --green: #2ec27e;
+  --green-50: #0f2920;
+
+  --amber: #e0900a;
+  --amber-50: #2c2010;
+
+  --red: #e5564a;
+  --red-50: #2e1818;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}

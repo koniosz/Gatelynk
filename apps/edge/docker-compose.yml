@@ -1,0 +1,67 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GateLynk Edge — Synology NAS deployment
+#
+# WYMAGANIA:
+#   - DSM 7.x z Container Manager (lub starszy Docker)
+#   - Konto na https://app.gatelynk.pl (do generowania kodu aktywacyjnego)
+#
+# PIERWSZE URUCHOMIENIE:
+#   1. Skopiuj ten plik + .env na Synology (np. /volume1/docker/gatelynk-edge/)
+#   2. Uzupełnij .env (CLOUD_URL, MACHINE_ID)
+#   3. docker compose up -d
+#   4. Otwórz http://<IP-Synology>:4200/activation/status
+#   5. Wprowadź kod aktywacyjny wygenerowany w panelu Superadmin
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  gatelynk-edge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gatelynk/edge:latest
+    container_name: gatelynk-edge
+    restart: unless-stopped
+
+    # HOST MODE — wymagane do komunikacji z urządzeniami w sieci LAN
+    # (domofony, kamery, windy dostępne po IP bez NAT)
+    # Port 4000 i 1883 będą dostępne bezpośrednio na IP Synology.
+    #
+    # Jeśli nie potrzebujesz MQTT lub masz konflikt portów,
+    # zamień na tryb bridge poniżej (zakomentuj network_mode, odkomentuj ports).
+    network_mode: host
+
+    # ── Tryb bridge (alternatywa — zakomentuj network_mode: host powyżej) ──
+    # ports:
+    #   - "4200:4000"   # Panel admin Edge
+    #   - "1883:1883"   # MQTT broker (LAN devices)
+
+    volumes:
+      # Trwały zapis bazy SQLite i tokenów JWT
+      - ./data:/data
+
+    environment:
+      # URL chmury GateLynk — zmień na własną domenę jeśli self-hosted
+      CLOUD_URL: ${CLOUD_URL:-https://api.gatelynk.pl}
+
+      # WAŻNE: stały identyfikator maszyny — używany do derywacji klucza szyfrowania.
+      # Ustaw raz i NIE ZMIENIAJ — zmiana unieważni token i wymusi ponowną aktywację.
+      MACHINE_ID: ${MACHINE_ID:-synology-gatelynk-edge-001}
+
+      PORT: 4000
+      STORE_PATH: /data/store.db
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-files: "5"
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

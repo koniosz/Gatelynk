@@ -7,12 +7,15 @@ import { StoreService } from '../store/store.service'
 import { DeviceRegistryService } from '../devices/device-registry.service'
 import { HikvisionLprService } from '../devices/cameras/hikvision-lpr.service'
 import { IntercomPinService } from '../devices/intercom/intercom-pin.service'
+import { IntercomCallService } from '../devices/intercom/intercom-call.service'
 import { VisionDetectService } from '../devices/cameras/vision-detect.service'
 import { VisionLlmSummarizerService } from '../devices/cameras/vision-llm-summarizer.service'
 import { SyncService } from '../sync/sync.service'
 import { CloudMessage, EdgeMessage, CloudCommand, TunnelAction } from './tunnel.types'
 import { EventLogService } from '../event-log/event-log.service'
 import { KnowledgeService } from '../knowledge/knowledge.service'
+import { readFileSync } from 'fs'
+import { join as pathJoin } from 'path'
 import { AccessPointExecutorService } from '../access-points/access-point-executor.service'
 
 @Injectable()
@@ -35,6 +38,9 @@ export class TunnelService implements OnModuleInit, OnModuleDestroy {
     private eventLog: EventLogService,
     private lpr: HikvisionLprService,
     private intercomPin: IntercomPinService,
+    // Domofon-połączenia (2026-06-13) — orkiestracja SIP↔WebRTC bridge.
+    // Za flagą INTERCOM_CALL_ENABLED. docs/intercom-akuvox-call.md.
+    private intercomCall: IntercomCallService,
     private knowledge: KnowledgeService,
     private vision: VisionDetectService,
     private llm: VisionLlmSummarizerService,
@@ -62,6 +68,14 @@ export class TunnelService implements OnModuleInit, OnModuleDestroy {
     // zwraca false → VisionDetectService zapisuje do event_queue → SyncService
     // flush po reconnect.
     this.vision.setTunnelSend(send)
+    // Domofon-połączenia (2026-06-13) — most SIP↔WebRTC. setTunnelSend wstrzykuje
+    // sendEvent (INTERCOM_CALL_INVITE/SIGNAL/ENDED → Cloud); bootstrap() łączy
+    // MediaBridge (Janus) — TYLKO gdy INTERCOM_CALL_ENABLED=true. Bootstrap leci
+    // tutaj (StoreService już zainicjalizowany — pitfall #18), fire-and-forget.
+    this.intercomCall.setTunnelSend(send)
+    this.intercomCall.bootstrap().catch((err: Error) =>
+      this.logger.warn(`IntercomCall bootstrap failed: ${err.message}`),
+    )
     // Faza B-2: wstrzykujemy push device-config do Cloud mirror.
     // DeviceRegistry woła to po saveDevice/removeDevice (z wizarda).
     this.deviceRegistry.setTunnelPush({
@@ -245,9 +259,31 @@ export class TunnelService implements OnModuleInit, OnModuleDestroy {
       case 'CAMERA_SNAPSHOT':
         return this.deviceRegistry.executeOnDevice('camera', action, payload)
 
+      // VN rollout (2026-07-30) — delta-sync whitelisty MUSI objąć KAŻDĄ
+      // kamerę LPR. `lpr_plates` jest keyed (camera_device_id, plate), a Cloud
+      // (syncPlateToEdge) broadcastuje PLATE_UPSERT/DELETE bez cameraDeviceId.
+      // Stary dispatch przez executeOnDevice brał tylko PIERWSZĄ zarejestrowaną
+      // kamerę — przy 2 kamerach (Wjazd+Wyjazd) nowy pojazd otwierał tylko
+      // Wjazd, a PLATE_DELETE nie blokował Wyjazdu, aż do reconnectu
+      // (PLATE_SYNC_ALL). Wzorzec fan-out jak w PLATE_SYNC_ALL niżej.
+      // Jawny payload.cameraDeviceId zachowuje starą semantykę (1 kamera).
       case 'PLATE_UPSERT':
-      case 'PLATE_DELETE':
-        return this.deviceRegistry.executeOnDevice('lprCamera', action, payload)
+      case 'PLATE_DELETE': {
+        const p = payload ?? {}
+        if (p.cameraDeviceId) {
+          return this.deviceRegistry.executeOnDevice('lprCamera', action, p)
+        }
+        const cameraIds = this.lpr.getDeviceIds()
+        if (cameraIds.length === 0) throw new Error('No LPR camera registered on this Edge')
+        let last: unknown = null
+        for (const cameraDeviceId of cameraIds) {
+          last = await this.lpr.execute(action, { ...p, cameraDeviceId })
+        }
+        this.logger.log(
+          `${action}: plate=${p.plate ?? '?'} applied to ${cameraIds.length} camera(s)`,
+        )
+        return { ...(typeof last === 'object' && last !== null ? last : {}), cameras: cameraIds.length }
+      }
 
       // FAZA 8.h.25 (2026-06-12) — pełen replace-all whitelisty przy
       // reconnect (wzorzec 8.h.2/CAMERA_SYNC_ALL). lpr_plates jest keyed
@@ -333,9 +369,13 @@ export class TunnelService implements OnModuleInit, OnModuleDestroy {
 
       // FAZA b (2026-06-02) — Building config (objectType + features)
       case 'BUILDING_CONFIG_UPDATE':
-        // Edge zapisuje do KV (encrypted) — przyszłe service (np. offline
-        // kurier flow) czytają stąd. Na razie nie ma konsumenta, ale
-        // zapisujemy żeby outbox-replay przy reconnect nie wisiał.
+        // Edge zapisuje do KV (encrypted). Konsument (od 2026-07-30):
+        // HikvisionLprService czyta `features.exitGrace` przez
+        // store.buildingConfigGet() — przepustka wyjazdowa
+        // (docs/exit-grace-pass.md). Cache w LPR service ma TTL 10 s,
+        // więc zmiana z panelu Integratora działa niemal natychmiast.
+        // Sync przy reconnect: EdgeGateway.pushAccessPointSync dosyła
+        // BUILDING_CONFIG_UPDATE razem z resztą SYNC_ALL.
         if (payload?.buildingId && payload?.features) {
           this.store.set(
             `building:${payload.buildingId}:config`,
@@ -343,6 +383,12 @@ export class TunnelService implements OnModuleInit, OnModuleDestroy {
               objectType: payload.objectType,
               features: payload.features,
             }),
+          )
+          const eg = (payload.features as any)?.exitGrace
+          this.logger.log(
+            `BUILDING_CONFIG_UPDATE saved (b#${payload.buildingId}, objectType=${payload.objectType ?? '?'}` +
+            (eg ? `, exitGrace=${eg.enabled ? 'ON' : 'off'}/${eg.minutes ?? '?'}min/${eg.afterExpiry ?? '?'}` : '') +
+            ')',
           )
         }
         return { updated: true }
@@ -446,6 +492,63 @@ export class TunnelService implements OnModuleInit, OnModuleDestroy {
         return { synced: applied }
       }
 
+      /**
+       * Miniatura odczytu tablicy — przesyłana TUNELEM, nie bezpośrednim HTTP.
+       *
+       * Powód (2026-08-07): chmura pobierała zdjęcia łącząc się wprost do Edge
+       * na port 4000. Działało to tylko, dopóki chmura widziała Edge po sieci —
+       * a Edge stoi za NAT-em i łączy się WYCHODZĄCO. Gdy chmura wypadła z sieci
+       * Tailscale, miniatury zniknęły na wszystkich obiektach i nikt tego nie
+       * zauważył przez 8 dni, bo poza miniaturami wszystko działało.
+       *
+       * ⚠️ BEZPIECZEŃSTWO TUNELU: tym samym połączeniem lecą polecenia otwarcia
+       * bramy. Pełna klatka to ~400 KB i mogłaby opóźnić otwarcie szlabanu,
+       * dlatego ZAWSZE zmniejszamy obraz przed wysłaniem (domyślnie 480 px ≈
+       * 25 KB). Pełnego rozmiaru nie wysyłamy tą drogą w ogóle.
+       */
+      case 'LPR_SNAPSHOT_GET': {
+        const p = payload ?? {}
+        const requestId = String(p.requestId ?? '')
+        const edgeReadId = Number(p.edgeReadId)
+        const maxWidth = Math.min(Number(p.maxWidth) || 480, 960)
+
+        const fail = (reason: string) => {
+          this.sendEvent('LPR_SNAPSHOT_DATA', { requestId, ok: false, reason })
+          return { ok: false, reason }
+        }
+        if (!requestId || !Number.isFinite(edgeReadId)) return fail('bad_request')
+
+        const row = this.store.lprGetRead?.(edgeReadId)
+        const filename = row?.imagePath
+        if (!filename) return fail('no_image')
+
+        const full = pathJoin(this.store.lprSnapshotsDir(), filename)
+        let buf: Buffer
+        try {
+          buf = readFileSync(full)
+        } catch {
+          return fail('file_missing')
+        }
+
+        // Zmniejszenie jest OBOWIĄZKOWE — patrz uwaga o bezpieczeństwie wyżej.
+        // Gdy `sharp` jest niedostępny, wolimy nie wysłać nic niż zapchać tunel.
+        try {
+          const sharp = require('sharp')
+          buf = await sharp(buf).resize({ width: maxWidth, withoutEnlargement: true })
+            .jpeg({ quality: 70 }).toBuffer()
+        } catch (e: any) {
+          this.logger.warn(`LPR_SNAPSHOT_GET: brak sharp (${e?.message ?? e}) — pomijam`)
+          return fail('resize_unavailable')
+        }
+
+        this.sendEvent('LPR_SNAPSHOT_DATA', {
+          requestId, ok: true, mime: 'image/jpeg',
+          base64: buf.toString('base64'), bytes: buf.length,
+        })
+        this.logger.debug(`LPR_SNAPSHOT_GET #${edgeReadId} → ${Math.round(buf.length / 1024)} KB`)
+        return { ok: true, bytes: buf.length }
+      }
+
       case 'AI_ENGINE_TEST': {
         const p = payload ?? {}
         const result = await this.vision.testEngineConnection({
@@ -500,6 +603,33 @@ export class TunnelService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn('REBOOT command received — exiting in 3s (launchd will restart)')
         setTimeout(() => process.exit(0), 3000)
         return { rebooting: true }
+
+      // ── Domofon: SIP↔WebRTC call bridge (2026-06-13) ──────────────────────
+      // Cloud→Edge sterowanie połączeniem. Gating w IntercomCallService.enabled
+      // (flaga INTERCOM_CALL_ENABLED). docs/intercom-akuvox-call.md.
+      case 'INTERCOM_CALL_ANSWER':
+        return this.intercomCall.handleAnswer(payload ?? {})
+      case 'INTERCOM_CALL_DECLINE':
+        return this.intercomCall.handleDecline(payload ?? {})
+      case 'INTERCOM_CALL_HANGUP':
+        return this.intercomCall.handleHangup(payload ?? {})
+      case 'INTERCOM_SIGNAL':
+        return this.intercomCall.handleSignal(payload ?? {})
+      case 'INTERCOM_CALL_STATION':
+        return this.intercomCall.handleCallStation(payload ?? {})
+
+      // Multi-station (2026-07-05) — pełen rejestr stacji z Cloud (mirror
+      // building_intercoms → sqlite intercom_bridge). Wzorzec SYNC_ALL jak
+      // RESIDENT_PIN_SYNC_ALL: replace-all w transakcji, idempotentne.
+      // NIE za flagą INTERCOM_CALL_ENABLED — sam rejestr jest nieszkodliwy,
+      // a dzięki temu jest już na miejscu gdy flaga zostanie włączona.
+      case 'INTERCOM_SYNC_ALL': {
+        const items = (payload ?? {}).items
+        if (!Array.isArray(items)) throw new Error('Missing items')
+        this.store.intercomBridgeReplaceAll(items)
+        this.logger.log(`INTERCOM_SYNC_ALL: replaced ${items.length} station(s)`)
+        return { synced: items.length }
+      }
 
       default:
         throw new Error(`Unknown action: ${action}`)

@@ -159,6 +159,7 @@ export type TunnelAction =
   // <url><healthPath>, mierzy ms, zwraca result event `AI_ENGINE_TEST_RESULT`.
   // Payload (opcjonalny override): { urlOverride?, healthPathOverride? }
   | 'AI_ENGINE_TEST'
+  | 'LPR_SNAPSHOT_GET'   // miniatura odczytu tablicy przez tunel (2026-08-07)
   // FAZA 8.h (2026-06-03) — per-camera config update.
   // Cloud → Edge gdy Integrator zmieni role (STANDARD↔LPR) albo
   // aiAnalysisEnabled. Edge zapisuje do `device_config.role` /
@@ -191,6 +192,46 @@ export type TunnelAction =
   // EVT payload (Edge→Cloud, LLM_TEST_RESULT): { ok, ms, statusCode,
   //   error, url, availableModels: string[] }
   | 'LLM_TEST'
+  // ── Domofon: SIP↔WebRTC call bridge (2026-06-13) ────────────────────────
+  // Pełen projekt: docs/intercom-akuvox-call.md. Cała grupa za flagą env
+  // INTERCOM_CALL_ENABLED (default false) — bez niej Edge ignoruje te CMD-y,
+  // a IntercomCallService nie rejestruje się przy bootstrapie.
+  //
+  // INTERCOM_CALL_INVITE  — Edge→Cloud (EVT). Akuvox zadzwonił SIP-em, Janus
+  //   terminuje, Edge rozwiązał kogo wołać (deviceId→unit→residenci).
+  //   Payload: { sessionId, intercomDeviceId, intercomName?, unitId?,
+  //              unitLabel?, residentIds: number[], snapshotUrl? }
+  // INTERCOM_CALL_ANSWER  — Cloud→Edge (CMD). Mieszkaniec odebrał; Edge zleca
+  //   media serverowi przygotowanie WebRTC peera.
+  //   Payload: { sessionId, residentId }
+  // INTERCOM_CALL_DECLINE — Cloud→Edge (CMD). Odrzucenie / timeout. Edge
+  //   wysyła SIP reject/BYE do Akuvoxa.  Payload: { sessionId, residentId }
+  // INTERCOM_SIGNAL       — dwukierunkowo. WebRTC SDP/ICE między iOS a Janusem
+  //   przekazywany przez Cloud relay.
+  //   Payload: { sessionId, kind: 'offer'|'answer'|'ice', sdp?, candidate?,
+  //              from: 'edge'|'app' }
+  // INTERCOM_CALL_HANGUP  — Cloud→Edge (CMD). Rozłączenie z apki/systemu.
+  //   Payload: { sessionId, by: 'app'|'caller'|'system' }
+  // INTERCOM_CALL_ENDED   — Edge→Cloud (EVT). Janus/Akuvox zakończył.
+  //   Payload: { sessionId, endReason }
+  | 'INTERCOM_CALL_INVITE'
+  | 'INTERCOM_CALL_ANSWER'
+  | 'INTERCOM_CALL_DECLINE'
+  | 'INTERCOM_SIGNAL'
+  | 'INTERCOM_CALL_HANGUP'
+  | 'INTERCOM_CALL_STATION'
+  | 'INTERCOM_CALL_ENDED'
+  // ── Multi-station (2026-07-05) ─────────────────────────────────────────
+  // INTERCOM_SYNC_ALL — Cloud→Edge (CMD). Pełen rejestr stacji budynku
+  //   (mirror building_intercoms → sqlite intercom_bridge). Wysyłany przy
+  //   reconnect (pushAccessPointSync) + live po edycji w panelu Integratora.
+  //   Payload: { items: [{ intercomId, buildingId, name, edgeDeviceId,
+  //              ipAddress, bridgeEnabled }] }
+  // INTERCOM_STATION_BUSY — Edge→Cloud (EVT). Janus (1 handle SIP = 1
+  //   aktywne połączenie na budynek) odrzucił równoległe wywołanie z innej
+  //   stacji (486 Busy / missed_call). Payload: { fromUri }
+  | 'INTERCOM_SYNC_ALL'
+  | 'INTERCOM_STATION_BUSY'
 
 // ── Device status ─────────────────────────────────────────────────────────────
 export interface DeviceStatusEntry {

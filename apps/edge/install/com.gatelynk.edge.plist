@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GateLynk Edge — macOS launchd LaunchDaemon.
+
+  Faza 5 follow-up: bez tego LaunchDaemon-a, Edge handler `REBOOT`
+  (apps/edge/src/tunnel/tunnel.service.ts:215) po `process.exit(0)` zostawia
+  Mac Mini bez Edge — admin musiałby ręcznie zSSH-ować i odpalić.
+
+  Z tym plist-em launchd auto-restartuje proces po `KeepAlive=true`. To samo
+  działa po reboot-cie hosta i po crash-u (any non-zero exit).
+
+  Instalacja na Mac Mini:
+    sudo cp com.gatelynk.edge.plist /Library/LaunchDaemons/
+    sudo chown root:wheel /Library/LaunchDaemons/com.gatelynk.edge.plist
+    sudo chmod 644 /Library/LaunchDaemons/com.gatelynk.edge.plist
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.gatelynk.edge.plist
+
+  Sprawdzenie statusu:
+    sudo launchctl print system/com.gatelynk.edge
+
+  Restart manualny (testing):
+    sudo launchctl kickstart -k system/com.gatelynk.edge
+
+  Wyłączenie:
+    sudo launchctl bootout system /Library/LaunchDaemons/com.gatelynk.edge.plist
+
+  Logi:
+    /var/log/gatelynk-edge.log     # stdout
+    /var/log/gatelynk-edge.err.log # stderr
+
+  ─────────────────────────────────────────────────────────────────────────
+  macOS 26 Tahoe (2026-05-16):
+  Pod Tahoe nowe TCC Local Network Privacy egzekwowanie blokuje outbound
+  do RFC1918 dla procesów spawnowanych przez launchd bez Apple-signed
+  parent. Edge dostawał `EHOSTUNREACH errno=-65` natychmiast dla kamer/
+  intercomów (192.168.1.x).
+
+  Fix: uruchamiamy Edge przez `/usr/bin/caffeinate -i node …`. Caffeinate
+  to Apple-codesigned binary z built-in TCC grantem; dziecko Node dziedziczy
+  Local Network permission. Pre-Tahoe to było zbędne, ale nie szkodzi.
+-->
+
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gatelynk.edge</string>
+
+    <!-- macOS 26 Tahoe: caffeinate (Apple-codesigned) jako parent → dziedziczy
+         TCC Local Network permission. Bez tego Edge dostaje EHOSTUNREACH na
+         outbound do RFC1918. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-i</string>
+        <string>/Users/shc_development/.nvm/versions/node/v22.22.2/bin/node</string>
+        <string>/Users/shc_development/gatelynk-edge/dist/main.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/shc_development/gatelynk-edge</string>
+
+    <!-- KeepAlive=true: launchd restartuje proces przy KAŻDYM exit (intencjonalnym
+         od `process.exit(0)` w REBOOT handlerze, crashu, OOM-killu). -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- RunAtLoad: start przy boot-cie hosta. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Throttle restart 10s żeby crash-loop nie zajedzał CPU. Po REBOOT-cie
+         Edge zwykle wstaje w <5s, więc nie powinno wpływać. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/shc_development/gatelynk-edge/logs/edge.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/shc_development/gatelynk-edge/logs/edge.err.log</string>
+
+    <!-- LaunchAgent (user-level, ~/Library/LaunchAgents/) — uruchamiamy w
+         kontekście zalogowanego usera bez `UserName` switching. To kluczowe
+         dla TCC Local Network: user-LaunchAgent dziedziczy TCC od user session,
+         system-LaunchDaemon by tego nie miał.
+
+         Pre-Tahoe to było LaunchDaemon (system-level) — przy upgrade na
+         Tahoe trzeba było zmienić na LaunchAgent + caffeinate wrapper. -->
+
+    <!-- Środowisko: NODE_ENV + jakie kluczowe sekrety. UWAGA: Edge zwykle
+         czyta `.env` z WorkingDirectory, więc tu wystarczy NODE_ENV.
+         Sekrety (TUNNEL_TOKEN itp.) lepiej trzymać w `.env` (chmod 600). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <!-- Edge sqlite live path — bez tego store ląduje w cwd/.gatelynk-edge -->
+        <key>STORE_PATH</key>
+        <string>/Users/shc_development/gatelynk-edge/data/store.db</string>
+        <!-- Self-signed certs intercom/camera są na LAN, akceptujemy. -->
+        <key>NODE_TLS_REJECT_UNAUTHORIZED</key>
+        <string>0</string>
+
+        <!-- ──────────────────────────────────────────────────────────
+             LLM worker (2026-05-18): MacBook Pro M1 Max 64GB pod
+             192.168.1.109:11434 hostuje Ollama z qwen2.5:14b (dense,
+             9GB, Q4_K_M, ~22 tok/s generation). Mac Mini bez własnego
+             Ollama — zbyt mało RAM dla modeli >8B.
+
+             Benchmark dla "Daj 5 ostatnich wjazdów" (single tool call):
+               qwen3:30b-a3b Thinking — 58-216s (thinking dump in content)
+               qwen2.5:32b dense       — 58-69s (mem bandwidth limit M1)
+               qwen2.5:14b dense       — 27s cold / 3-8s warm (cache hit)
+
+             Dlaczego 14b a nie 32b?
+             qwen2.5:32b Q4 = 19GB / 400 GB/s memory bandwidth = 21 tok/s
+             theoretical max na M1 Max. Real-world 12 tok/s (60% peak).
+             Dla user-facing latency 14b daje 2× lepszy UX bez znaczącej
+             utraty quality tool calling (Qwen2.5-14B-Instruct testuje
+             ~85% na BFCL vs ~88% dla 32B).
+
+             Ollama tuning: NUM_PARALLEL=1 (single-user), FLASH_ATTENTION=1,
+             KEEP_ALIVE=24h, KV_CACHE_TYPE=q8_0 — env w
+             ~ai_mac/Library/LaunchAgents/com.gatelynk.ollama.plist.
+
+             Fallback `localhost:11434` gdy MacBook down: assistant.
+             service.ts ma probe na /api/tags + friendly error.
+             ────────────────────────────────────────────────────────── -->
+        <key>OLLAMA_URL</key>
+        <string>http://192.168.1.109:11434</string>
+        <key>GLE_LLM_MODEL</key>
+        <string>qwen2.5:14b</string>
+    </dict>
+</dict>
+</plist>

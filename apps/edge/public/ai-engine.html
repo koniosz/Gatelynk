@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GateLynk Edge — AI Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  <style>
+    :root {
+      --bg:           #0d1117;
+      --bg-elev:      #0f1419;
+      --card:         #161b22;
+      --card2:        #1c2128;
+      --card-hover:   #21262d;
+      --border:       #30363d;
+      --border-soft:  rgba(48,54,61,.5);
+      --text:         #e6edf3;
+      --text-strong:  #ffffff;
+      --muted:        #8b949e;
+      --dim:          #6e7681;
+      --accent:       #2563eb;
+      --accent-h:     #1d4ed8;
+      --accent-soft:  rgba(37,99,235,.18);
+      --success:      #22c55e;
+      --success-soft: rgba(34,197,94,.12);
+      --success-text: #4ade80;
+      --danger:       #ef4444;
+      --danger-soft:  rgba(239,68,68,.12);
+      --danger-text:  #f87171;
+      --warn:         #eab308;
+      --warn-soft:    rgba(234,179,8,.12);
+      --warn-text:    #facc15;
+      --shadow-md:    0 4px 12px rgba(0,0,0,.35);
+      --input-bg:     #1c2128;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+                 min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-h); }
+    .container { max-width: 56rem; margin: 0 auto; padding: 1.5rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 1.5rem; margin-bottom: 1rem; box-shadow: var(--shadow-md); }
+    h1 { color: var(--text-strong); font-weight: 600; margin: 0; }
+    h2 { color: var(--text-strong); font-weight: 600; font-size: 1.05rem; margin: 0 0 0.75rem 0; }
+    label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--text);
+            margin-bottom: 0.35rem; }
+    .field { margin-bottom: 1rem; }
+    .hint { color: var(--muted); font-size: 0.78rem; margin-top: 0.3rem; }
+    input[type=text], input[type=url], input[type=number], select {
+      width: 100%; padding: 0.55rem 0.75rem;
+      background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 0.9rem;
+      font-family: inherit; outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; }
+    .checkbox-row input { width: auto; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 500;
+      cursor: pointer; border: 1px solid transparent; transition: 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-h); border-color: var(--accent-h); }
+    .btn-secondary { background: transparent; color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--card2); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.2rem 0.55rem; border-radius: 4px; font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: var(--success-soft); color: var(--success-text); }
+    .badge-danger  { background: var(--danger-soft); color: var(--danger-text); }
+    .badge-warn    { background: var(--warn-soft); color: var(--warn-text); }
+    .badge-muted   { background: var(--card2); color: var(--muted); border: 1px solid var(--border); }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1.5rem; padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+    code { background: var(--card2); padding: 0.1rem 0.35rem; border-radius: 4px;
+           font-size: 0.85em; color: var(--text-strong); }
+    .test-result {
+      padding: 0.85rem; border-radius: 8px; border: 1px solid;
+      font-size: 0.88rem; margin-top: 0.75rem;
+    }
+    .test-result.ok    { border-color: var(--success); background: var(--success-soft); }
+    .test-result.fail  { border-color: var(--danger); background: var(--danger-soft); }
+    .test-result.warn  { border-color: var(--warn); background: var(--warn-soft); }
+    .spinner { display: inline-block; width: 12px; height: 12px;
+               border: 2px solid var(--muted); border-top-color: var(--text-strong);
+               border-radius: 50%; animation: sp 0.8s linear infinite; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container" x-data="aiEnginePage()" x-init="load()">
+    <div class="topbar">
+      <div>
+        <h1>🤖 AI Engine</h1>
+        <p style="color: var(--muted); margin: 0.25rem 0 0 0; font-size: 0.85rem;">
+          Konfiguracja zewnętrznego YOLO/Vision service (typowo MacBook M1).
+        </p>
+      </div>
+      <div class="actions">
+        <a href="/ui/" class="btn btn-secondary">← Powrót do Edge UI</a>
+      </div>
+    </div>
+
+    <!-- Status / source banner -->
+    <div class="card" x-show="loaded">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <h2>Aktualny stan</h2>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+            <span class="badge" :class="config?.configured ? 'badge-success' : 'badge-muted'">
+              <span x-text="config?.configured ? '✓ Skonfigurowane' : '○ Brak konfiguracji'"></span>
+            </span>
+            <span class="badge badge-muted" x-show="config?.source === 'env'">
+              📄 Auto-migracja z env (<code style="font-size: 0.75em;">YOLO_URL</code>)
+            </span>
+            <span class="badge badge-success" x-show="config?.source === 'cloud'">
+              ☁️ Skonfigurowane z Cloud Integrator
+            </span>
+            <span class="badge badge-warn" x-show="config?.source === 'manual'">
+              🛠️ Edytowane lokalnie (Edge UI)
+            </span>
+            <span class="badge badge-success" x-show="config?.enabled">⚡ Włączone</span>
+            <span class="badge badge-muted" x-show="config && !config.enabled">⏸ Wyłączone</span>
+          </div>
+        </div>
+      </div>
+      <p class="hint" x-show="config?.source === 'env'">
+        💡 Edge wziął URL z zmiennej środowiskowej. Po pierwszym zapisie z Cloud Integrator
+        panel (lub po zapisie tu) — status zmieni się na „Cloud" / „Manual".
+      </p>
+    </div>
+
+    <!-- Form -->
+    <div class="card" x-show="loaded">
+      <h2>Edycja konfiguracji</h2>
+
+      <div class="field">
+        <label for="url">URL serwisu YOLO/Vision <span style="color: var(--danger-text);">*</span></label>
+        <input id="url" type="url" placeholder="http://192.168.1.109:11500"
+               x-model="form.url" :disabled="saving" />
+        <p class="hint">
+          Pełen URL z portem (bez ścieżki). Np. <code>http://192.168.1.109:11500</code>.
+          Edge gada przez HTTP POST <code>/detect</code> z base64 image.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="healthPath">Health path</label>
+          <input id="healthPath" type="text" placeholder="/health"
+                 x-model="form.healthPath" :disabled="saving" />
+          <p class="hint">Ścieżka do GET wywoływana przez „Testuj połączenie".</p>
+        </div>
+
+        <div class="field">
+          <label for="model">Model YOLO</label>
+          <select id="model" x-model="form.model" :disabled="saving">
+            <option value="yolov8n">yolov8n (najszybszy, ~50ms)</option>
+            <option value="yolov8s">yolov8s (zbalansowany)</option>
+            <option value="yolov8m">yolov8m (dokładny, wolniejszy)</option>
+            <option value="yolov11n">yolov11n (nowy nano)</option>
+          </select>
+          <p class="hint">Informacyjne — faktyczny model określa serwis Vision.</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="checkbox-row">
+          <input type="checkbox" x-model="form.enabled" :disabled="saving" />
+          <span>Włączone — VisionDetectService używa tego silnika</span>
+        </label>
+        <p class="hint">
+          Wyłączenie zatrzymuje cykl wizyjny (snapshot co 60s). LPR i inne moduły dalej działają.
+        </p>
+      </div>
+
+      <div class="actions" style="margin-top: 1rem;">
+        <button class="btn btn-secondary" @click="test()" :disabled="testing || saving">
+          <span x-show="!testing">🩺 Testuj YOLO</span>
+          <span x-show="testing"><span class="spinner"></span> Testowanie…</span>
+        </button>
+      </div>
+
+      <!-- Test result -->
+      <div x-show="testResult" class="test-result" :class="testResult?.ok ? 'ok' : 'fail'">
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <strong x-text="testResult?.ok ? '✓ OK' : '✗ FAIL'"></strong>
+          <span x-show="testResult?.ms != null">
+            — czas: <code x-text="testResult?.ms + ' ms'"></code>
+          </span>
+          <span x-show="testResult?.statusCode">
+            HTTP <code x-text="testResult?.statusCode"></code>
+          </span>
+        </div>
+        <div x-show="testResult?.url" class="hint" style="margin-top: 0.25rem;">
+          URL: <code x-text="testResult?.url"></code>
+        </div>
+        <div x-show="testResult?.error" style="color: var(--danger-text); margin-top: 0.5rem;">
+          <strong>Błąd:</strong> <span x-text="testResult?.error"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAZA 8.h.7 (2026-06-08) — LLM Summarizer (Ollama) -->
+    <div class="card" x-show="loaded">
+      <h2>🧠 LLM Summarizer (Ollama)</h2>
+      <p class="hint" style="margin-bottom: 1rem;">
+        Generuje krótkie polskie opisy „co kamera wykryła" (1 zdanie, max 15 słów)
+        dla notable frames przez Ollama. Wymaga zainstalowanego modelu (np. <code>qwen2.5:14b</code>).
+        Domyślnie ON — wyłącz jeśli MacBook nie wyrabia (large model = 5-15s per frame).
+      </p>
+
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="badge" :class="config?.llmUrl ? 'badge-success' : 'badge-muted'">
+          <span x-text="config?.llmUrl ? '✓ Skonfigurowane' : '○ Brak URL'"></span>
+        </span>
+        <span class="badge badge-muted" x-show="config?.llmSource === 'env'">
+          📄 Fallback z env (<code style="font-size: 0.75em;">VISION_LLM_OLLAMA_URL</code>)
+        </span>
+        <span class="badge badge-success" x-show="config?.llmEnabled">⚡ Włączone</span>
+        <span class="badge badge-muted" x-show="config && !config.llmEnabled">⏸ Wyłączone</span>
+      </div>
+
+      <div class="field">
+        <label for="llmUrl">URL Ollama</label>
+        <input id="llmUrl" type="url" placeholder="http://192.168.1.109:11434"
+               x-model="form.llmUrl" :disabled="saving" />
+        <p class="hint">
+          Pełen URL bez ścieżki (Ollama default port 11434). Edge gada przez <code>POST /api/chat</code>.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="llmModel">Model</label>
+          <input id="llmModel" type="text" list="llmModels" placeholder="qwen2.5:14b"
+                 x-model="form.llmModel" :disabled="saving" />
+          <datalist id="llmModels">
+            <template x-for="m in llmAvailableModels" :key="m">
+              <option :value="m"></option>
+            </template>
+            <!-- 🇵🇱 Dedykowane polskiemu (REKOMENDOWANE) -->
+            <option value="SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M">Bielik 11B v2.3 (PL, ⭐ rekomendowany)</option>
+            <!-- 🆕 Qwen3 (lepszy PL niż 2.5) -->
+            <option value="qwen3:30b-a3b">qwen3:30b-a3b (MoE, szybki + dobry PL)</option>
+            <option value="qwen3:14b">qwen3:14b</option>
+            <option value="qwen3:32b">qwen3:32b</option>
+            <!-- 🌍 Multilingual (Cohere) -->
+            <option value="aya-expanse:8b">aya-expanse:8b (~5GB, multilingual)</option>
+            <option value="aya:35b">aya:35b (flagship multilingual)</option>
+            <!-- 📦 General purpose -->
+            <option value="qwen2.5:14b">qwen2.5:14b (~9GB)</option>
+            <option value="qwen2.5:7b">qwen2.5:7b (~5GB)</option>
+            <option value="qwen2.5:3b">qwen2.5:3b (~2GB)</option>
+            <option value="llama3.2:3b">llama3.2:3b (~2GB)</option>
+            <option value="llama3.1:8b">llama3.1:8b (~5GB)</option>
+            <option value="mistral:7b">mistral:7b (~4GB)</option>
+            <option value="gemma2:9b">gemma2:9b (~5.5GB)</option>
+            <option value="phi3.5:3.8b">phi3.5:3.8b (~2.3GB)</option>
+          </datalist>
+          <p class="hint">
+            ⭐ <strong>Dla polskiego polecam:</strong> Bielik 11B (dedykowany PL, SpeakLeash)
+            lub Qwen3 30b-a3b (MoE, masz już zainstalowany).
+            Pobierz: <code>ollama pull SpeakLeash/bielik-11b-v2.3-instruct</code>
+          </p>
+        </div>
+
+        <div class="field" style="display: flex; flex-direction: column; justify-content: flex-end;">
+          <label class="checkbox-row" style="margin-top: 1.6rem;">
+            <input type="checkbox" x-model="form.llmEnabled" :disabled="saving" />
+            <span>Włączony — generuj summary dla notable frames</span>
+          </label>
+          <p class="hint" style="margin-top: 0.3rem;">
+            Wyłączenie zatrzymuje cron co 30s. Detekcje YOLO dalej działają.
+          </p>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top: 1rem;">
+        <button class="btn btn-secondary" @click="testLlm()" :disabled="llmTesting || saving">
+          <span x-show="!llmTesting">🩺 Testuj LLM (pobierz listę modeli)</span>
+          <span x-show="llmTesting"><span class="spinner"></span> Testowanie…</span>
+        </button>
+      </div>
+
+      <!-- LLM test result -->
+      <div x-show="llmTestResult" class="test-result"
+           :class="llmTestResult?.ok ? 'ok' : 'fail'">
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <strong x-text="llmTestResult?.ok ? '✓ OK' : '✗ FAIL'"></strong>
+          <span x-show="llmTestResult?.ms != null">
+            — czas: <code x-text="llmTestResult?.ms + ' ms'"></code>
+          </span>
+        </div>
+        <div x-show="llmTestResult?.error" style="color: var(--danger-text); margin-top: 0.5rem;">
+          <strong>Błąd:</strong> <span x-text="llmTestResult?.error"></span>
+        </div>
+        <div x-show="llmTestResult?.availableModels && llmTestResult.availableModels.length > 0"
+             style="margin-top: 0.5rem;">
+          <strong>Zainstalowane modele:</strong>
+          <div style="display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem;">
+            <template x-for="m in llmTestResult?.availableModels" :key="m">
+              <span class="badge badge-muted" style="cursor: pointer;"
+                    @click="form.llmModel = m"
+                    :title="'Klik = wybierz model: ' + m">
+                <code x-text="m" style="background: transparent;"></code>
+              </span>
+            </template>
+          </div>
+          <p class="hint" style="margin-top: 0.3rem;">Klik na model → wstaw w polu wyżej.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wspólny przycisk zapisz (YOLO + LLM razem) -->
+    <div class="card" x-show="loaded">
+      <div class="actions">
+        <button class="btn btn-primary" @click="save()" :disabled="saving || testing || llmTesting || !form.url"
+                style="font-size: 1rem; padding: 0.75rem 1.5rem;">
+          <span x-show="!saving">💾 Zapisz wszystko (YOLO + LLM)</span>
+          <span x-show="saving"><span class="spinner"></span> Zapisywanie…</span>
+        </button>
+      </div>
+      <!-- Save result -->
+      <div x-show="saveResult" class="test-result"
+           :class="saveResult?.ok ? 'ok' : 'fail'" style="margin-top: 0.75rem;">
+        <strong x-text="saveResult?.ok ? '✓ Zapisano' : '✗ Błąd zapisu'"></strong>
+        <span x-show="saveResult?.ok"> — Cloud zostanie zsynchronizowany przy reconnect tunel.</span>
+        <span x-show="saveResult?.error" x-text="' — ' + saveResult.error"></span>
+      </div>
+    </div>
+
+    <!-- Info card -->
+    <div class="card">
+      <h2>Jak to działa?</h2>
+      <ul style="color: var(--muted); font-size: 0.88rem; padding-left: 1.2rem; margin: 0;">
+        <li><strong>Lokalna edycja</strong> (ta strona) — natychmiastowy zapis do Edge sqlite,
+            VisionDetectService czyta dynamicznie przy każdym 60-sekundowym cyklu.</li>
+        <li><strong>Cloud Integrator</strong> (<code>gatelynk-web.fly.dev/integrator</code>)
+            — preferowane miejsce dla integratora wielobudynkowego.
+            Cloud emit <code>AI_ENGINE_CONFIG_UPDATE</code> przez tunel → Edge nadpisuje swoją row.</li>
+        <li><strong>Auto-migracja z env</strong> — Edge przy starcie sprawdza
+            <code>YOLO_URL</code> env var. Jeśli sqlite jest pusty — kopiuje URL z env
+            jako fallback. Po pierwszym świadomym zapisie status zmienia się na „Manual"/„Cloud".</li>
+        <li><strong>Edge → Cloud sync</strong> — przy każdym reconnect tunela Edge raportuje
+            swój aktualny config. Cloud upsert <em>tylko gdy brak row</em> — user-set
+            z Cloud Integrator zawsze wygrywa.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    function aiEnginePage() {
+      return {
+        loaded: false,
+        saving: false,
+        testing: false,
+        llmTesting: false,
+        config: null,
+        form: {
+          url: '', healthPath: '/health', model: 'yolov8n', enabled: true,
+          // FAZA 8.h.7 — LLM fields
+          llmUrl: '', llmModel: 'qwen2.5:14b', llmEnabled: true,
+        },
+        testResult: null,
+        llmTestResult: null,
+        llmAvailableModels: [],
+        saveResult: null,
+
+        async load() {
+          try {
+            const r = await fetch('/ai-engine')
+            const data = await r.json()
+            this.config = data
+            this.form.url = data.url ?? data.envFallbackUrl ?? ''
+            this.form.healthPath = data.healthPath || '/health'
+            this.form.model = data.model || 'yolov8n'
+            this.form.enabled = data.enabled !== false
+            // LLM
+            this.form.llmUrl = data.llmUrl ?? data.llmEnvFallbackUrl ?? ''
+            this.form.llmModel = data.llmModel || 'qwen2.5:14b'
+            this.form.llmEnabled = data.llmEnabled !== false
+          } catch (err) {
+            this.saveResult = { ok: false, error: 'Nie można pobrać aktualnego stanu: ' + err.message }
+          } finally {
+            this.loaded = true
+          }
+        },
+
+        async test() {
+          this.testResult = null
+          this.testing = true
+          try {
+            const r = await fetch('/ai-engine/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: this.form.url, healthPath: this.form.healthPath }),
+            })
+            this.testResult = await r.json()
+          } catch (err) {
+            this.testResult = { ok: false, error: err.message, ms: null, statusCode: null, url: '' }
+          } finally {
+            this.testing = false
+          }
+        },
+
+        async testLlm() {
+          this.llmTestResult = null
+          this.llmTesting = true
+          try {
+            const r = await fetch('/ai-engine/test-llm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: this.form.llmUrl }),
+            })
+            this.llmTestResult = await r.json()
+            // Cache list of available models for datalist autocomplete.
+            if (this.llmTestResult?.availableModels?.length) {
+              this.llmAvailableModels = this.llmTestResult.availableModels
+            }
+          } catch (err) {
+            this.llmTestResult = { ok: false, error: err.message, ms: null, statusCode: null, url: '' }
+          } finally {
+            this.llmTesting = false
+          }
+        },
+
+        async save() {
+          this.saveResult = null
+          this.saving = true
+          try {
+            const r = await fetch('/ai-engine', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.form),
+            })
+            this.saveResult = await r.json()
+            if (this.saveResult.ok) {
+              await this.load()
+            }
+          } catch (err) {
+            this.saveResult = { ok: false, error: err.message }
+          } finally {
+            this.saving = false
+          }
+        },
+      }
+    }
+  </script>
+</body>
+</html>
