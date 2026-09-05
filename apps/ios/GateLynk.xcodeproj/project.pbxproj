@@ -116,6 +116,8 @@
 		AA000000000000000000FF27 /* GlassAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1C /* GlassAppIntents.swift */; };
 		AA000000000000000000FF28 /* GlassCalendarSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1D /* GlassCalendarSheet.swift */; };
 		AA000000000000000000FF29 /* GlassPushContentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1E /* GlassPushContentSheet.swift */; };
+		AA000000000000000000FF2A /* GlassAdminHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1F /* GlassAdminHomeView.swift */; };
+		AA000000000000000000FF2B /* GlassAdminSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE20 /* GlassAdminSheets.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -243,6 +245,8 @@
 		AA000000000000000000EE1C /* GlassAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAppIntents.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE1D /* GlassCalendarSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCalendarSheet.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE1E /* GlassPushContentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPushContentSheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE1F /* GlassAdminHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAdminHomeView.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE20 /* GlassAdminSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAdminSheets.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -526,6 +530,7 @@
 				AA000000000000000000EE06 /* SlideToOpen.swift */,
 				AA000000000000000000EE07 /* GlassAssistantCard.swift */,
 				AA000000000000000000EE18 /* GlassAccessDeck.swift */,
+				AA000000000000000000EE1F /* GlassAdminHomeView.swift */,
 				AA000000000000000000DD0B /* Sheets */,
 			);
 			path = Views;
@@ -547,6 +552,7 @@
 				AA000000000000000000EE11 /* GlassMoreSheet.swift */,
 				AA000000000000000000EE1D /* GlassCalendarSheet.swift */,
 				AA000000000000000000EE1E /* GlassPushContentSheet.swift */,
+				AA000000000000000000EE20 /* GlassAdminSheets.swift */,
 				AA000000000000000000EE16 /* GlassComingSoon.swift */,
 				AA000000000000000000EE17 /* GlassHistorySheet.swift */,
 				AA000000000000000000EE19 /* GlassCameraSheet.swift */,
@@ -812,6 +818,8 @@
 				AA000000000000000000FF27 /* GlassAppIntents.swift in Sources */,
 				AA000000000000000000FF28 /* GlassCalendarSheet.swift in Sources */,
 				AA000000000000000000FF29 /* GlassPushContentSheet.swift in Sources */,
+				AA000000000000000000FF2A /* GlassAdminHomeView.swift in Sources */,
+				AA000000000000000000FF2B /* GlassAdminSheets.swift in Sources */,
 				AA000000000000000000FF02 /* GlassTheme.swift in Sources */,
 				AA000000000000000000FF03 /* GlassBackground.swift in Sources */,
 				AA000000000000000000FF04 /* GlassLoginView.swift in Sources */,

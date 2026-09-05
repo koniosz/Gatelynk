@@ -84,7 +84,7 @@ struct GlassLoginView: View {
             }
             .padding(.top, 4)
 
-            Text("Konto mieszkańca")
+            Text("Konto mieszkańca lub administratora osiedla")
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.5))
                 .padding(.top, 2)
@@ -214,8 +214,20 @@ struct GlassLoginView: View {
             if case .buildingChoice(let choices) = result {
                 buildingChoices = choices
             }
-        } catch {
-            errorMessage = error.localizedDescription
+        } catch let residentError {
+            // 2026-09-06: jedno pole logowania dla mieszkańca I administratora
+            // osiedla. Gdy konto mieszkańca odrzuci — próbujemy building-admin
+            // (GlassHomeView pokaże wtedy kafelki administratora). Przy podwójnej
+            // porażce pokazujemy pierwotny błąd, bo to najczęstszy przypadek.
+            do {
+                try await auth.login(
+                    email: email.trimmingCharacters(in: .whitespaces),
+                    password: password,
+                    as: .buildingAdmin
+                )
+            } catch {
+                errorMessage = residentError.localizedDescription
+            }
         }
         isBusy = false
     }

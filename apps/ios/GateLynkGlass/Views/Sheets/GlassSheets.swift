@@ -45,6 +45,14 @@ enum GlassSheetKind: Identifiable, Equatable {
     /// poranny brief / przypomnienie o kubłach. Route z AppDelegate;
     /// Kronika dociąga pełną wersję z `/resident/assistant/chronicle`.
     case pushContent(ContentPushRoute)
+    /// Tryb administratora osiedla (2026-09-06) — kafelki konta building-admin
+    /// (GlassAdminHomeView). Parametr = buildingId wybranego obiektu.
+    case adminSituations(Int)
+    case adminTickets(Int)
+    case adminArrears(Int)
+    case adminPlates(Int)
+    case adminDevices(Int)
+    case adminChronicle(Int)
 
     var id: String {
         switch self {
@@ -67,6 +75,12 @@ enum GlassSheetKind: Identifiable, Equatable {
         case .properties: return "properties"
         case .guestEvent(let r): return "guestEvent-\(r.id)"
         case .pushContent(let r): return "pushContent-\(r.id)"
+        case .adminSituations(let b): return "adminSituations-\(b)"
+        case .adminTickets(let b): return "adminTickets-\(b)"
+        case .adminArrears(let b): return "adminArrears-\(b)"
+        case .adminPlates(let b): return "adminPlates-\(b)"
+        case .adminDevices(let b): return "adminDevices-\(b)"
+        case .adminChronicle(let b): return "adminChronicle-\(b)"
         }
     }
 }

@@ -81,6 +81,12 @@ struct GlassHomeView: View {
                     if loadFailed { offlineBanner }
                     tabBar
                     sheetHost(maxHeight: geo.size.height * 0.8)
+                } else if case .buildingAdmin(let admin) = auth.role {
+                    // 2026-09-06: administrator osiedla dostaje własny zestaw
+                    // kafelków (Zdarzenia / Zgłoszenia / Zaległości / Tablice /
+                    // Urządzenia / Kronika) — wspólny host sheetów i toastów.
+                    GlassAdminHomeView(admin: admin) { activeSheet = $0 }
+                    sheetHost(maxHeight: geo.size.height * 0.85)
                 } else {
                     wrongRoleNotice
                 }
@@ -89,6 +95,10 @@ struct GlassHomeView: View {
             }
         }
         .task {
+            // Ładowanie /resident/* tylko dla mieszkańca — administrator ma
+            // własne dane w GlassAdminHomeView (token BA nie przejdzie
+            // przez jwt-resident).
+            guard isResident else { return }
             await loadAll()
             // Zimny start z pusha ticket_reply — didReceive poleciał zanim
             // GlassHomeView istniał (a przy wylogowaniu: zanim user się
@@ -885,6 +895,18 @@ struct GlassHomeView: View {
             GlassGuestEventSheet(route: route, onClose: { activeSheet = nil })
         case .pushContent(let route):
             GlassPushContentSheet(route: route, onClose: { activeSheet = nil })
+        case .adminSituations(let b):
+            GlassAdminSituationsSheet(buildingId: b, onClose: { activeSheet = nil })
+        case .adminTickets(let b):
+            GlassAdminTicketsSheet(buildingId: b, onClose: { activeSheet = nil })
+        case .adminArrears(let b):
+            GlassAdminArrearsSheet(buildingId: b, onClose: { activeSheet = nil })
+        case .adminPlates(let b):
+            GlassAdminPlatesSheet(buildingId: b, onClose: { activeSheet = nil })
+        case .adminDevices(let b):
+            GlassAdminDevicesSheet(buildingId: b, onClose: { activeSheet = nil })
+        case .adminChronicle(let b):
+            GlassAdminChronicleSheet(buildingId: b, onClose: { activeSheet = nil })
         }
     }
 
