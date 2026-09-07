@@ -935,9 +935,19 @@ być rozłączony godzinami i nie wiemy.
 ```bash
 # Wymaga lokalnego Postgres na :5432
 createdb gatelynk_test
-DATABASE_URL_TEST="postgresql://user@localhost:5432/gatelynk_test" \
-  pnpm --filter @gatelynk/api test:e2e
+cd apps/api && NODE_OPTIONS=--experimental-vm-modules \
+  DATABASE_URL="postgresql://konradsz@localhost:5432/gatelynk_test" \
+  DATABASE_URL_TEST="postgresql://konradsz@localhost:5432/gatelynk_test" \
+  npx jest --config ./test/jest-e2e.json --runInBand --forceExit
 ```
+Dwie pułapki (2026-09-07): (1) `AppModule` czyta `DATABASE_URL` z `apps/api/.env`
+(baza dev), a seed/reset używa `DATABASE_URL_TEST` — bez nadpisania OBU
+zmiennych logowanie w testach zwraca 401, bo konta są w innej bazie;
+(2) `BuildingAdminService.login` robi `await import('bcrypt')` — pod Jestem
+bez `--experimental-vm-modules` to 500 „dynamic import callback".
+Znany dług: `vehicle-approval-flow` asercja outbox PLATE_UPSERT pada, bo
+`seedFullBuilding` nie tworzy aktywowanego `EdgeDevice` (outbox pisze
+1 wiersz per Edge → 0 wierszy).
 
 **Pułapki:**
 1. `globalPrefix='/api'` musi być ustawione w `app.init()` w testach (jak
