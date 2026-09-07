@@ -789,6 +789,8 @@ model Unit {
 
   unitResidents      UnitResident[]
   invitations        Invitation[]
+  // 2026-09-07 — pojazdy przypisane bezpośrednio do lokalu.
+  vehicles           Vehicle[]
   // 2026-08-09 — zaproszenia domowników do tego lokalu.
   householdInvitations HouseholdInvitation[]
   parcels            Parcel[]
@@ -1306,6 +1308,13 @@ model Vehicle {
   // Nullable: building-wide service vehicles have no owning resident.
   residentId      Int?
   resident        Resident?     @relation(fields: [residentId], references: [id])
+  // 2026-09-07 — przypisanie do LOKALU, niezależne od mieszkańca: dom na
+  // osiedlu, mieszkanie bez konta w apce, auto „wspólne" gospodarstwa.
+  // Dla kind=RESIDENT wymagane residentId LUB unitId (walidacja w serwisach).
+  // Etykieta lokalu dla Edge (`unit_label`) liczona najpierw z unitId,
+  // dopiero potem z unit_residents mieszkańca — patrz common/unit-label.ts.
+  unitId          Int?
+  unit            Unit?         @relation(fields: [unitId], references: [id], onDelete: SetNull)
   kind            VehicleKind   @default(RESIDENT)
   make            String
   model           String?
@@ -1356,6 +1365,7 @@ model Vehicle {
   @@unique([buildingId, licensePlate]) // Faza 7.5 — DB-level guard
   @@index([buildingId, kind])
   @@index([buildingId, status])
+  @@index([buildingId, unitId])
   @@map("vehicles")
 }
 

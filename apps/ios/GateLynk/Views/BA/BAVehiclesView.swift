@@ -114,6 +114,12 @@ struct BAVehiclesView: View {
             } else if let r = v.resident {
                 Text(r.fullName).font(.caption).foregroundStyle(.blue)
             }
+            // 2026-09-07 — lokal przypisany wprost do pojazdu.
+            if let u = v.unit {
+                Label("Lokal \(u.displayLabel)", systemImage: "house")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             // Powód odrzucenia (jeśli REJECTED).
             if v.effectiveStatus == .rejected, let reason = v.rejectionReason, !reason.isEmpty {
                 Text("Powód: \(reason)")

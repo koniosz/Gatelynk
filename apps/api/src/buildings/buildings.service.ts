@@ -55,7 +55,9 @@ export class CreateLprCameraDto {
 }
 
 export class CreateVehicleDto {
-  @IsInt() residentId: number
+  // 2026-09-07: mieszkaniec LUB lokal (co najmniej jedno z dwóch).
+  @IsOptional() @IsInt() residentId?: number
+  @IsOptional() @IsInt() unitId?: number
   @IsString() make: string
   @IsOptional() @IsString() model?: string
   @IsString() color: string
@@ -64,6 +66,7 @@ export class CreateVehicleDto {
 
 export class UpdateVehicleDto {
   @IsOptional() @IsInt() residentId?: number
+  @IsOptional() @IsInt() unitId?: number
   @IsOptional() @IsString() make?: string
   @IsOptional() @IsString() model?: string
   @IsOptional() @IsString() color?: string
@@ -717,11 +720,26 @@ export class BuildingsService {
   async createVehicle(buildingId: number, adminId: number, dto: CreateVehicleDto) {
     const building = await this.prisma.building.findFirst({ where: { id: buildingId, adminId } })
     if (!building) throw new NotFoundException('Budynek nie istnieje')
-    const resident = await this.prisma.resident.findFirst({ where: { id: dto.residentId, buildingId } })
-    if (!resident) throw new NotFoundException('Mieszkaniec nie istnieje')
+    if (!dto.residentId && !dto.unitId) throw new BadRequestException('Wskaż mieszkańca lub lokal')
+    if (dto.residentId) {
+      const resident = await this.prisma.resident.findFirst({ where: { id: dto.residentId, buildingId } })
+      if (!resident) throw new NotFoundException('Mieszkaniec nie istnieje')
+    }
+    if (dto.unitId) {
+      const unit = await this.prisma.unit.findFirst({ where: { id: dto.unitId, buildingId } })
+      if (!unit) throw new NotFoundException('Lokal nie istnieje')
+    }
     return this.prisma.vehicle.create({
-      data: { buildingId, residentId: dto.residentId, make: dto.make, model: dto.model, color: dto.color, licensePlate: dto.licensePlate },
-      include: { resident: { select: { id: true, firstName: true, lastName: true } } },
+      data: {
+        buildingId,
+        residentId: dto.residentId ?? null,
+        unitId: dto.unitId ?? null,
+        make: dto.make, model: dto.model, color: dto.color, licensePlate: dto.licensePlate,
+      },
+      include: {
+        resident: { select: { id: true, firstName: true, lastName: true } },
+        unit: { select: { id: true, number: true } },
+      },
     })
   }
 
@@ -730,10 +748,17 @@ export class BuildingsService {
     if (!building) throw new NotFoundException('Budynek nie istnieje')
     const vehicle = await this.prisma.vehicle.findFirst({ where: { id: vehicleId, buildingId } })
     if (!vehicle) throw new NotFoundException('Pojazd nie istnieje')
+    if (dto.unitId) {
+      const unit = await this.prisma.unit.findFirst({ where: { id: dto.unitId, buildingId } })
+      if (!unit) throw new NotFoundException('Lokal nie istnieje')
+    }
     return this.prisma.vehicle.update({
       where: { id: vehicleId },
       data: dto,
-      include: { resident: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        resident: { select: { id: true, firstName: true, lastName: true } },
+        unit: { select: { id: true, number: true } },
+      },
     })
   }
 

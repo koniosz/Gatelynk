@@ -45,6 +45,10 @@ export interface LprRead {
   unitId: number | null
   unitNumber: string | null
   unitFloor: number | null
+  // 2026-09-07 — lokal przypisany WPROST do pojazdu (unitId wyżej może
+  // pochodzić z lokalu mieszkańca). Używane do preselekcji trybu „Lokal".
+  vehicleUnitId?: number | null
+  vehicleUnitLabel?: string | null
   // Atrybucja gościa (2026-08-13): odczyt bez pojazdu w rejestrze, tablica
   // z aktywnego w chwili odczytu zaproszenia.
   guestName?: string | null

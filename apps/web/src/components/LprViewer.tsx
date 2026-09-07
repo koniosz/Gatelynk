@@ -21,6 +21,7 @@ import {
   ownerDisplay, vehicleTypePl,
 } from '@/lib/lpr'
 import { TagPicker, TagChips } from '@/components/TagPicker'
+import { formatUnitLabel } from '@/lib/unit-label'
 
 export interface LprViewerProps {
   reads: LprRead[]
@@ -39,6 +40,12 @@ export interface LprViewerProps {
   buildVehicleUrl: (vehicleId: number) => string
   /** GET listy mieszkańców budynku. */
   buildResidentsUrl: () => string
+  /**
+   * GET listy lokali budynku (2026-09-07) — tryb „Lokal" w identyfikacji:
+   * tablica przypisana do lokalu zamiast / obok mieszkańca. Opcjonalny —
+   * bez niego formularz działa jak dotąd (mieszkaniec / usługa).
+   */
+  buildUnitsUrl?: () => string
   /** GET autocomplete'a nazw serwisów w budynku. */
   buildServiceNamesUrl: () => string
   /** GET autocomplete'a tagów już użytych w budynku. */
@@ -148,6 +155,7 @@ export function LprViewer(props: LprViewerProps) {
             buildVehiclesUrl={props.buildVehiclesUrl}
             buildVehicleUrl={props.buildVehicleUrl}
             buildResidentsUrl={props.buildResidentsUrl}
+            buildUnitsUrl={props.buildUnitsUrl}
             buildServiceNamesUrl={props.buildServiceNamesUrl}
             buildVehicleTagsUrl={props.buildVehicleTagsUrl}
             onSaved={props.onSaved}
@@ -205,10 +213,11 @@ function ViewerImage({
 
 // ── Side panel ──────────────────────────────────────────────────────────────
 function SidePanel({
-  read, apiClient, buildVehiclesUrl, buildVehicleUrl, buildResidentsUrl, buildServiceNamesUrl, buildVehicleTagsUrl, onSaved,
+  read, apiClient, buildVehiclesUrl, buildVehicleUrl, buildResidentsUrl, buildUnitsUrl, buildServiceNamesUrl, buildVehicleTagsUrl, onSaved,
 }: {
   read: LprRead
   apiClient: AxiosInstance
+  buildUnitsUrl?: () => string
   buildVehiclesUrl: () => string
   buildVehicleUrl: (vehicleId: number) => string
   buildResidentsUrl: () => string
@@ -312,6 +321,7 @@ function SidePanel({
           buildVehiclesUrl={buildVehiclesUrl}
           buildVehicleUrl={buildVehicleUrl}
           buildResidentsUrl={buildResidentsUrl}
+          buildUnitsUrl={buildUnitsUrl}
           buildServiceNamesUrl={buildServiceNamesUrl}
           buildVehicleTagsUrl={buildVehicleTagsUrl}
           onSaved={onSaved}
@@ -323,16 +333,27 @@ function SidePanel({
 }
 
 // ── Identify form ───────────────────────────────────────────────────────────
-type IdentifyMode = 'RESIDENT' | 'SERVICE'
+// 2026-09-07: trzy tryby — Mieszkaniec / Lokal / Usługa. „Lokal" przypisuje
+// tablicę wprost do lokalu (dom na osiedlu, mieszkanie bez konta w apce);
+// w trybach Mieszkaniec i Usługa lokal jest opcjonalnym dopełnieniem.
+type IdentifyMode = 'RESIDENT' | 'UNIT' | 'SERVICE'
+
+interface UnitOption {
+  id: number
+  number: string
+  street?: string | null
+  stairwell?: { name: string } | null
+}
 
 function IdentifyForm({
-  read, apiClient, buildVehiclesUrl, buildVehicleUrl, buildResidentsUrl, buildServiceNamesUrl, buildVehicleTagsUrl, onSaved, onCancel,
+  read, apiClient, buildVehiclesUrl, buildVehicleUrl, buildResidentsUrl, buildUnitsUrl, buildServiceNamesUrl, buildVehicleTagsUrl, onSaved, onCancel,
 }: {
   read: LprRead
   apiClient: AxiosInstance
   buildVehiclesUrl: () => string
   buildVehicleUrl: (vehicleId: number) => string
   buildResidentsUrl: () => string
+  buildUnitsUrl?: () => string
   buildServiceNamesUrl: () => string
   buildVehicleTagsUrl: () => string
   onSaved?: () => void
@@ -340,8 +361,11 @@ function IdentifyForm({
 }) {
   const [mode, setMode] = useState<IdentifyMode>('RESIDENT')
   const [residents, setResidents] = useState<any[]>([])
+  const [units, setUnits] = useState<UnitOption[]>([])
   const [serviceNames, setServiceNames] = useState<string[]>([])
   const [residentId, setResidentId] = useState<string>('')
+  const [unitId, setUnitId] = useState<string>('')
+  const [unitSearch, setUnitSearch] = useState('')
   const [kind, setKind] = useState<VehicleKind>('DELIVERY')
   const [serviceName, setServiceName] = useState<string>('')
   const [make, setMake] = useState<string>('')
@@ -361,6 +385,21 @@ function IdentifyForm({
     setModel(read.vehicleModel ?? '')
     setColor(read.vehicleColorStored ?? read.vehicleColor ?? '')
     setTags(read.vehicleTags ?? [])
+    // Edycja istniejącego wpisu: odtwórz przypisanie i tryb (mieszkaniec /
+    // lokal / usługa), żeby „Zmień klasyfikację" nie zerowało pól.
+    if (read.vehicleId) {
+      setResidentId(read.residentId ? String(read.residentId) : '')
+      setUnitId(read.vehicleUnitId ? String(read.vehicleUnitId) : '')
+      if (read.vehicleKind && read.vehicleKind !== 'RESIDENT') {
+        setMode('SERVICE')
+        setKind(read.vehicleKind)
+        setServiceName(read.vehicleServiceName ?? '')
+      } else if (!read.residentId && read.vehicleUnitId) {
+        setMode('UNIT')
+      } else {
+        setMode('RESIDENT')
+      }
+    }
   }, [read])
 
   useEffect(() => {
@@ -370,7 +409,18 @@ function IdentifyForm({
     apiClient.get(buildServiceNamesUrl())
       .then((r) => setServiceNames(r.data as string[]))
       .catch(() => { /* best-effort */ })
-  }, [apiClient, buildResidentsUrl, buildServiceNamesUrl])
+    if (buildUnitsUrl) {
+      apiClient.get(buildUnitsUrl())
+        .then((r) => setUnits(r.data as UnitOption[]))
+        .catch(() => { /* best-effort — bez lokali tryb „Lokal" pokaże pustą listę */ })
+    }
+  }, [apiClient, buildResidentsUrl, buildUnitsUrl, buildServiceNamesUrl])
+
+  const filteredUnits = useMemo(() => {
+    const q = unitSearch.trim().toLowerCase()
+    if (!q) return units
+    return units.filter((u) => formatUnitLabel(u).toLowerCase().includes(q))
+  }, [units, unitSearch])
 
   const filteredResidents = useMemo(() => {
     const q = residentSearch.trim().toLowerCase()
@@ -397,6 +447,8 @@ function IdentifyForm({
       if (!residentId) { setError('Wybierz mieszkańca'); return }
       if (!make.trim()) { setError('Podaj markę'); return }
       if (!color.trim()) { setError('Podaj kolor'); return }
+    } else if (mode === 'UNIT') {
+      if (!unitId) { setError('Wybierz lokal'); return }
     } else {
       if (!serviceName.trim()) { setError('Podaj nazwę firmy/serwisu'); return }
     }
@@ -407,9 +459,14 @@ function IdentifyForm({
       // edycji literówki tworzyło drugi wpis z tą samą tablicą („Rangę ROver"
       // + „Range Rover" obok siebie). Backend ma duplicate-guard, ale UI
       // powinno wysyłać prawidłową semantykę REST.
+      // residentId/unitId: przy PATCH-u jawne `null` odpina (undefined =
+      // „bez zmian" po stronie API — zmiana mieszkaniec→lokal musiałaby
+      // zostawić starego mieszkańca).
+      const clear = read.vehicleId ? null : undefined
       const payload = {
-        kind: mode === 'RESIDENT' ? 'RESIDENT' : kind,
-        residentId: residentId ? Number(residentId) : undefined,
+        kind: mode === 'SERVICE' ? kind : 'RESIDENT',
+        residentId: mode !== 'UNIT' && residentId ? Number(residentId) : clear,
+        unitId: unitId ? Number(unitId) : clear,
         make: (make.trim() || read.vehicleBrand || '—'),
         model: model.trim() || undefined,
         color: (color.trim() || '—'),
@@ -439,11 +496,12 @@ function IdentifyForm({
         {read.vehicleId ? 'Zmień klasyfikację' : 'Sklasyfikuj pojazd'}
       </div>
 
-      <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
+      <div className={`grid ${buildUnitsUrl ? 'grid-cols-3' : 'grid-cols-2'} gap-1 rounded-lg bg-gray-100 p-1`}>
         {([
           ['RESIDENT', '👤 Mieszkaniec'],
+          ...(buildUnitsUrl ? ([['UNIT', '🏠 Lokal']] as const) : []),
           ['SERVICE',  '🚛 Usługa'],
-        ] as const).map(([key, label]) => (
+        ] as ReadonlyArray<readonly [IdentifyMode, string]>).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -485,7 +543,28 @@ function IdentifyForm({
               </option>
             ))}
           </select>
+          {buildUnitsUrl && (
+            <UnitPicker
+              label="Lokal"
+              optional
+              units={filteredUnits}
+              search={unitSearch}
+              onSearch={setUnitSearch}
+              value={unitId}
+              onChange={setUnitId}
+            />
+          )}
         </div>
+      ) : mode === 'UNIT' ? (
+        <UnitPicker
+          label="Lokal"
+          units={filteredUnits}
+          search={unitSearch}
+          onSearch={setUnitSearch}
+          value={unitId}
+          onChange={setUnitId}
+          size={5}
+        />
       ) : (
         <>
           <div>
@@ -568,6 +647,17 @@ function IdentifyForm({
               ))}
             </select>
           </div>
+          {buildUnitsUrl && (
+            <UnitPicker
+              label="Lokal"
+              optional
+              units={filteredUnits}
+              search={unitSearch}
+              onSearch={setUnitSearch}
+              value={unitId}
+              onChange={setUnitId}
+            />
+          )}
         </>
       )}
 
@@ -665,5 +755,48 @@ function IdentifyForm({
         </button>
       </div>
     </form>
+  )
+}
+
+// ── Wybór lokalu (2026-09-07) ───────────────────────────────────────────────
+// Wspólny picker dla trybu „Lokal" (wymagany) i dopełnienia w trybach
+// Mieszkaniec / Usługa (opcjonalny). Lista z API to surowe lokale —
+// etykietę składa `formatUnitLabel` (ten sam format co Edge `unit_label`).
+function UnitPicker({
+  label, optional, units, search, onSearch, value, onChange, size,
+}: {
+  label: string
+  optional?: boolean
+  units: UnitOption[]
+  search: string
+  onSearch: (v: string) => void
+  value: string
+  onChange: (v: string) => void
+  size?: number
+}) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+        {label} {optional && <span className="text-gray-300">(opcj.)</span>}
+      </label>
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        placeholder="Szukaj lokalu…"
+        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+      />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        size={size}
+        className="mt-2 w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+      >
+        <option value="">{optional ? '— brak —' : '— wybierz lokal —'}</option>
+        {units.map((u) => (
+          <option key={u.id} value={u.id}>{formatUnitLabel(u)}</option>
+        ))}
+      </select>
+    </div>
   )
 }

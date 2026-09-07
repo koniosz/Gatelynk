@@ -545,6 +545,7 @@ export default function BaV2LprReadsPage() {
           buildVehiclesUrl={() => `/building-admin/buildings/${buildingId}/vehicles`}
           buildVehicleUrl={(id) => `/building-admin/buildings/${buildingId}/vehicles/${id}`}
           buildResidentsUrl={() => `/building-admin/buildings/${buildingId}/residents`}
+          buildUnitsUrl={() => `/building-admin/buildings/${buildingId}/units`}
           buildServiceNamesUrl={() => `/building-admin/buildings/${buildingId}/vehicle-service-names`}
           buildVehicleTagsUrl={() => `/building-admin/buildings/${buildingId}/vehicle-tags`}
           onClose={() => setViewerIndex(null)}

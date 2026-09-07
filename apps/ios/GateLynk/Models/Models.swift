@@ -247,6 +247,10 @@ struct Vehicle: Decodable, Identifiable {
     /// przypisanego mieszkańca). Dla typowych aut mieszkańców zawsze wypełnione.
     let residentId: Int?
     let resident: SimpleResident?
+    /// 2026-09-07 — lokal przypisany WPROST do pojazdu (obok lub zamiast
+    /// mieszkańca). Starsze backendy nie zwracają → nil.
+    let unitId: Int?
+    let unit: VehicleUnitRef?
 
     /// Nowe pola — mogą być puste w odpowiedziach ze starszego backendu.
     let kind: VehicleKind?
@@ -278,6 +282,15 @@ struct SimpleResident: Decodable {
     let firstName: String
     let lastName: String
     var fullName: String { "\(firstName) \(lastName)" }
+}
+
+/// Lokal przypisany do pojazdu (2026-09-07). `label` z API — „B/15A",
+/// „Kwiatowa 5", „Niewinna 4/2" (wspólny format common/unit-label.ts).
+struct VehicleUnitRef: Decodable {
+    let id: Int
+    let number: String
+    let label: String?
+    var displayLabel: String { label ?? number }
 }
 
 // MARK: - Guest (Faza 2 bety Villa Natura)

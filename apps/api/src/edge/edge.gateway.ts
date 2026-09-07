@@ -3,6 +3,7 @@ import { HttpAdapterHost, ModuleRef } from '@nestjs/core'
 import { Interval } from '@nestjs/schedule'
 import * as WebSocket from 'ws'
 import * as http from 'http'
+import { formatUnitLabel } from '../common/unit-label'
 import { EdgeService } from './edge.service'
 import { EdgeOutboxService } from './edge-outbox.service'
 import { LprReadsService } from '../lpr-reads/lpr-reads.service'
@@ -1284,14 +1285,19 @@ export class EdgeGateway implements OnModuleInit {
       licensePlate: string; kind: string; serviceName: string | null;
       make: string | null; model: string | null; color: string | null;
       tags: string[]; validFrom: Date | null; validTo: Date | null;
-      unitNumber: string | null; stairwellName: string | null;
+      unitNumber: string | null; stairwellName: string | null; unitStreet: string | null;
+      ownUnitNumber: string | null; ownStairwellName: string | null; ownUnitStreet: string | null;
     }>>`
       SELECT v."licensePlate", v.kind::text AS kind, v."serviceName",
              v.make, v.model, v.color,
              COALESCE(v.tags, '{}') AS tags,
              v."validFrom", v."validTo",
-             u.number AS "unitNumber", s.name AS "stairwellName"
+             u.number AS "unitNumber", s.name AS "stairwellName", u.street AS "unitStreet",
+             ou.number AS "ownUnitNumber", os.name AS "ownStairwellName", ou.street AS "ownUnitStreet"
         FROM "vehicles" v
+        -- 2026-09-07: lokal przypisany WPROST do pojazdu (wygrywa nad lokalem mieszkańca)
+        LEFT JOIN "units" ou ON ou.id = v."unitId"
+        LEFT JOIN "stairwells" os ON os.id = ou."stairwellId"
         LEFT JOIN LATERAL (
           SELECT ur."unitId"
             FROM "unit_residents" ur
@@ -1339,9 +1345,13 @@ export class EdgeGateway implements OnModuleInit {
       if (v.model) extraTags.push(v.model)
       if (v.color) extraTags.push(v.color)
       const tags = Array.from(new Set([...extraTags, ...(Array.isArray(v.tags) ? v.tags : [])]))
-      const unitLabel = v.kind === 'RESIDENT' && v.unitNumber
-        ? (v.stairwellName ? `${v.stairwellName}/${v.unitNumber}` : v.unitNumber)
-        : null
+      // Jawny lokal pojazdu (dowolny kind) > lokal mieszkańca (tylko RESIDENT) —
+      // ta sama reguła co BuildingAdminService.vehicleUnitLabel.
+      const unitLabel = v.ownUnitNumber
+        ? formatUnitLabel({ number: v.ownUnitNumber, street: v.ownUnitStreet, stairwellName: v.ownStairwellName })
+        : (v.kind === 'RESIDENT' && v.unitNumber
+          ? formatUnitLabel({ number: v.unitNumber, street: v.unitStreet, stairwellName: v.stairwellName })
+          : null)
       items.push({
         plate: v.licensePlate,
         owner: isService && v.serviceName ? v.serviceName : '',

@@ -191,6 +191,7 @@ export default function ConciergeLprReadsPage() {
           buildVehiclesUrl={() => '/concierge/building/vehicles'}
           buildVehicleUrl={(id) => `/concierge/building/vehicles/${id}`}
           buildResidentsUrl={() => '/concierge/building/residents'}
+          buildUnitsUrl={() => '/concierge/building/units'}
           buildServiceNamesUrl={() => '/concierge/building/vehicle-service-names'}
           buildVehicleTagsUrl={() => '/concierge/building/vehicle-tags'}
           onClose={() => setViewerIndex(null)}

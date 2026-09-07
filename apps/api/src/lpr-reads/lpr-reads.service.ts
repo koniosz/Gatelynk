@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import { Interval } from '@nestjs/schedule'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { unitLabelSql } from '../common/unit-label'
 import { GuestsValidationService } from '../guests/guests-validation.service'
 import { AccessEventsService } from '../access-events/access-events.service'
 import { PushService } from '../push/push.service'
@@ -630,6 +631,7 @@ export class LprReadsService {
         OR res."firstName" ILIKE ${qLike}
         OR res."lastName" ILIKE ${qLike}
         OR cu.unit_number ILIKE ${qLike}
+        OR vu.number ILIKE ${qLike}
       )`)
     }
 
@@ -796,6 +798,10 @@ export interface ReadRow {
   unitId: number | null
   unitNumber: string | null
   unitFloor: number | null
+  // 2026-09-07 — lokal przypisany WPROST do pojazdu (unitId wyżej może być
+  // lokalem mieszkańca z unit_residents). Label wg common/unit-label.ts.
+  vehicleUnitId: number | null
+  vehicleUnitLabel: string | null
   // Atrybucja gościa (2026-08-13) — wypełnione tylko, gdy odczyt nie ma
   // pojazdu w rejestrze, a tablica należała do aktywnego w chwili odczytu
   // zaproszenia. Panel pokazuje wtedy „Gość lokalu X" zamiast „nieznany".
@@ -837,9 +843,11 @@ const READ_SELECT = Prisma.sql`
   res.id              AS "residentId",
   res."firstName"     AS "residentFirstName",
   res."lastName"      AS "residentLastName",
-  cu.unit_id          AS "unitId",
-  cu.unit_number      AS "unitNumber",
-  cu.unit_floor       AS "unitFloor",
+  COALESCE(vu.id, cu.unit_id)         AS "unitId",
+  COALESCE(vu.number, cu.unit_number) AS "unitNumber",
+  COALESCE(vu.floor, cu.unit_floor)   AS "unitFloor",
+  vu.id               AS "vehicleUnitId",
+  ${unitLabelSql('vu', 'vus')} AS "vehicleUnitLabel",
   gst.guest_name         AS "guestName",
   gst.guest_unit_number  AS "guestUnitLabel"
 `
@@ -862,6 +870,10 @@ const VEHICLE_JOIN = Prisma.sql`
   LEFT JOIN "vehicles"  v   ON v."licensePlate" = r.plate
                             AND v."buildingId"  = r."buildingId"
   LEFT JOIN "residents" res ON res.id = v."residentId"
+  -- 2026-09-07: lokal przypisany WPROST do pojazdu — wygrywa nad lokalem
+  -- mieszkańca (COALESCE w READ_SELECT), bo to jawna decyzja administratora.
+  LEFT JOIN "units"      vu  ON vu.id = v."unitId"
+  LEFT JOIN "stairwells" vus ON vus.id = vu."stairwellId"
   LEFT JOIN LATERAL (
     SELECT u.id       AS unit_id,
            u.number   AS unit_number,

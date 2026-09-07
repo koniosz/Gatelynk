@@ -1156,6 +1156,7 @@ export default function BaV2VisionPage() {
           buildVehiclesUrl={() => `/building-admin/buildings/${buildingId}/vehicles`}
           buildVehicleUrl={(id) => `/building-admin/buildings/${buildingId}/vehicles/${id}`}
           buildResidentsUrl={() => `/building-admin/buildings/${buildingId}/residents`}
+          buildUnitsUrl={() => `/building-admin/buildings/${buildingId}/units`}
           buildServiceNamesUrl={() => `/building-admin/buildings/${buildingId}/vehicle-service-names`}
           buildVehicleTagsUrl={() => `/building-admin/buildings/${buildingId}/vehicle-tags`}
           onClose={() => setIdentifyReads(null)}

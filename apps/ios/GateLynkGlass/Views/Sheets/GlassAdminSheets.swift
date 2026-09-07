@@ -119,6 +119,18 @@ struct BALprRead: Decodable, Identifiable {
     let hasImage: Bool?
     let vehicleBrand: String?
     let vehicleColor: String?
+    // Wzbogacenie identyfikacją (2026-09-07) — te same pola co panel web:
+    // pojazd z rejestru (jeśli tablica znana), mieszkaniec, lokal.
+    let vehicleId: Int?
+    let vehicleKind: String?
+    let vehicleServiceName: String?
+    let residentId: Int?
+    /// Lokal wyświetlany (jawny lokal pojazdu albo lokal mieszkańca).
+    let unitNumber: String?
+    /// Lokal przypisany WPROST do pojazdu — do preselekcji trybu „Lokal".
+    let vehicleUnitId: Int?
+    let vehicleUnitLabel: String?
+    let guestName: String?
 }
 
 struct BALprReadsResponse: Decodable {
@@ -685,10 +697,32 @@ struct GlassAdminPlatesSheet: View {
     @State private var reads: [BALprRead] = []
     @State private var loading = true
     @State private var filter = "all"
+    /// Odczyt wybrany do identyfikacji (2026-09-07) — panel zamiast listy.
+    @State private var identifying: BALprRead?
 
     var body: some View {
+        if let read = identifying {
+            GlassAdminIdentifyView(
+                buildingId: buildingId,
+                read: read,
+                onDone: {
+                    identifying = nil
+                    Task { await load() }
+                },
+                onCancel: { identifying = nil }
+            )
+        } else {
+            listBody
+        }
+    }
+
+    private var listBody: some View {
         VStack(spacing: 10) {
             GlassSheetHeader(kicker: "Administrator", title: "Odczyty tablic", onClose: onClose)
+            Text("Dotknij odczyt, aby przypisać pojazd do mieszkańca lub lokalu.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(maxWidth: .infinity, alignment: .leading)
             BAChipRow(items: [("all", "Wszystkie"), ("matched", "Rozpoznane"), ("unknown", "Nieznane")], selected: $filter)
                 .onChange(of: filter) { _, _ in Task { await load() } }
             if loading {
@@ -732,13 +766,30 @@ struct GlassAdminPlatesSheet: View {
                                 .foregroundStyle(GlassColor.success)
                         }
                     }
-                    Text([r.matched ? (r.owner ?? "z rejestru") : "nieznany", BAFormat.dayTime(r.ts)].joined(separator: " · "))
+                    Text([whoLabel(r), BAFormat.dayTime(r.ts)].joined(separator: " · "))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.white.opacity(0.6))
                 }
                 Spacer(minLength: 0)
+                Image(systemName: r.vehicleId == nil ? "person.crop.circle.badge.plus" : "pencil.circle")
+                    .font(.system(size: 16))
+                    .foregroundStyle(r.vehicleId == nil ? GlassColor.accentLight : .white.opacity(0.4))
             }
+            .contentShape(Rectangle())
+            .onTapGesture { identifying = r }
         }
+    }
+
+    /// Kto/co stoi za odczytem: lokal (jawny lub mieszkańca) > gość > usługa > nieznany.
+    private func whoLabel(_ r: BALprRead) -> String {
+        if let label = r.vehicleUnitLabel ?? r.unitNumber, !label.isEmpty {
+            return "lokal \(label)"
+        }
+        if let g = r.guestName, !g.isEmpty { return "gość: \(g)" }
+        if let s = r.vehicleServiceName, !s.isEmpty { return s }
+        if let o = r.owner, !o.isEmpty { return o }
+        if r.vehicleId != nil { return "w rejestrze" }
+        return "nieznany"
     }
 
     private func load() async {
@@ -752,6 +803,353 @@ struct GlassAdminPlatesSheet: View {
             reads = res.reads
         }
         loading = false
+    }
+}
+
+// MARK: - Identyfikacja pojazdu z odczytu (2026-09-07)
+//
+// Administrator z telefonu przypisuje tablicę do MIESZKAŃCA, LOKALU albo
+// USŁUGI — te same endpointy co modal „Identyfikuj" w panelu web
+// (POST / PATCH /building-admin/buildings/:id/vehicles). Lokal jest
+// pełnoprawnym adresatem: dom na osiedlu bez konta w apce, auto wspólne
+// gospodarstwa. W trybach Mieszkaniec i Usługa lokal to opcjonalne dopełnienie.
+
+struct BAResidentLite: Decodable, Identifiable {
+    let id: Int
+    let firstName: String
+    let lastName: String
+    var fullName: String { "\(firstName) \(lastName)" }
+}
+
+struct BAUnitLite: Decodable, Identifiable {
+    struct Stairwell: Decodable { let name: String }
+    let id: Int
+    let number: String
+    let street: String?
+    let stairwell: Stairwell?
+
+    /// Format jak common/unit-label.ts: „B/15A", „Kwiatowa 5", „Niewinna 4/2".
+    var label: String {
+        let st = (street ?? "").trimmingCharacters(in: .whitespaces)
+        let base = st.isEmpty ? number : "\(st) \(number)"
+        let sw = (stairwell?.name ?? "").trimmingCharacters(in: .whitespaces)
+        return sw.isEmpty ? base : "\(sw)/\(base)"
+    }
+}
+
+private struct BAAnyResponse: Decodable {}
+
+struct GlassAdminIdentifyView: View {
+    enum Mode: Hashable { case resident, unit, service }
+
+    let buildingId: Int
+    let read: BALprRead
+    let onDone: () -> Void
+    let onCancel: () -> Void
+
+    @State private var mode: Mode
+    @State private var residents: [BAResidentLite] = []
+    @State private var units: [BAUnitLite] = []
+    @State private var residentSearch = ""
+    @State private var unitSearch = ""
+    @State private var residentId: Int?
+    @State private var unitId: Int?
+    @State private var kind: String
+    @State private var serviceName: String
+    @State private var make: String
+    @State private var color: String
+    @State private var saving = false
+    @State private var errorText: String?
+
+    private static let serviceKinds: [(String, String)] = [
+        ("DELIVERY", "Kurier"), ("SERVICE", "Serwis"),
+        ("EMERGENCY", "Uprzywilej."), ("PUBLIC", "Komunalny"),
+    ]
+
+    init(buildingId: Int, read: BALprRead, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.buildingId = buildingId
+        self.read = read
+        self.onDone = onDone
+        self.onCancel = onCancel
+        // Edycja istniejącego wpisu odtwarza tryb i przypisanie; nowy odczyt
+        // startuje od mieszkańca z marką/kolorem podpowiedzianymi przez kamerę.
+        let vk = read.vehicleKind ?? "RESIDENT"
+        let initialMode: Mode
+        if read.vehicleId != nil && vk != "RESIDENT" {
+            initialMode = .service
+        } else if read.vehicleId != nil && read.residentId == nil && read.vehicleUnitId != nil {
+            initialMode = .unit
+        } else {
+            initialMode = .resident
+        }
+        _mode = State(initialValue: initialMode)
+        _residentId = State(initialValue: read.residentId)
+        _unitId = State(initialValue: read.vehicleUnitId)
+        _kind = State(initialValue: vk == "RESIDENT" ? "DELIVERY" : vk)
+        _serviceName = State(initialValue: read.vehicleServiceName ?? "")
+        let brand = read.vehicleBrand ?? ""
+        _make = State(initialValue: brand.hasPrefix("#") ? "" : brand)
+        _color = State(initialValue: read.vehicleColor ?? "")
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            GlassSheetHeader(
+                kicker: read.vehicleId == nil ? "Identyfikacja pojazdu" : "Zmiana przypisania",
+                title: read.plate,
+                onClose: onCancel
+            )
+
+            BAChipRow(
+                items: [(Mode.resident, "Mieszkaniec"), (.unit, "Lokal"), (.service, "Usługa")],
+                selected: $mode
+            )
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    switch mode {
+                    case .resident:
+                        picker(
+                            title: "Mieszkaniec",
+                            items: filteredResidents.map { ($0.id, $0.fullName) },
+                            search: $residentSearch, selected: $residentId
+                        )
+                        picker(
+                            title: "Lokal", optional: true,
+                            items: filteredUnits.map { ($0.id, $0.label) },
+                            search: $unitSearch, selected: $unitId
+                        )
+                    case .unit:
+                        picker(
+                            title: "Lokal",
+                            items: filteredUnits.map { ($0.id, $0.label) },
+                            search: $unitSearch, selected: $unitId
+                        )
+                    case .service:
+                        serviceSection
+                        picker(
+                            title: "Lokal", optional: true,
+                            items: filteredUnits.map { ($0.id, $0.label) },
+                            search: $unitSearch, selected: $unitId
+                        )
+                    }
+
+                    vehicleFields
+
+                    if let errorText {
+                        Text(errorText)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(GlassColor.dangerSoft)
+                    }
+                }
+                .padding(.bottom, 8)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+
+            GlassButton(
+                title: read.vehicleId == nil ? "Zapisz pojazd" : "Zapisz zmiany",
+                busyText: "Zapisywanie…",
+                isBusy: saving
+            ) {
+                Task { await save() }
+            }
+        }
+        .task { await load() }
+    }
+
+    // MARK: Sekcje
+
+    private var filteredResidents: [BAResidentLite] {
+        let q = residentSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return residents }
+        return residents.filter { $0.fullName.lowercased().contains(q) }
+    }
+
+    private var filteredUnits: [BAUnitLite] {
+        let q = unitSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return units }
+        return units.filter { $0.label.lowercased().contains(q) }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 10.5, weight: .bold))
+            .tracking(1.0)
+            .foregroundStyle(.white.opacity(0.55))
+    }
+
+    private func glassField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField("", text: text, prompt: Text(placeholder).foregroundStyle(.white.opacity(0.4)))
+            .font(.system(size: 14))
+            .foregroundStyle(.white)
+            .tint(GlassColor.accentLight)
+            .autocorrectionDisabled()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            }
+    }
+
+    /// Lista wyboru z wyszukiwarką. Opcjonalna (dopełnienie) pokazuje bez
+    /// filtra tylko kilka pozycji, żeby nie zalewać ekranu 55 domami.
+    private func picker(
+        title: String,
+        optional: Bool = false,
+        items: [(Int, String)],
+        search: Binding<String>,
+        selected: Binding<Int?>
+    ) -> some View {
+        let limit = optional && search.wrappedValue.isEmpty ? 5 : 40
+        let selectedLabel = items.first { $0.0 == selected.wrappedValue }?.1
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                sectionLabel(optional ? "\(title) (opcjonalnie)" : title)
+                Spacer()
+                if let selectedLabel {
+                    Text(selectedLabel)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(GlassColor.success)
+                        .lineLimit(1)
+                }
+            }
+            glassField("Szukaj…", text: search)
+            VStack(spacing: 4) {
+                if optional && selected.wrappedValue != nil {
+                    choiceRow(label: "— brak lokalu —", isSelected: false) { selected.wrappedValue = nil }
+                }
+                ForEach(Array(items.prefix(limit)), id: \.0) { item in
+                    choiceRow(label: item.1, isSelected: selected.wrappedValue == item.0) {
+                        selected.wrappedValue = selected.wrappedValue == item.0 ? nil : item.0
+                    }
+                }
+                if items.isEmpty {
+                    Text("Brak wyników")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.vertical, 6)
+                } else if items.count > limit {
+                    Text("… i \(items.count - limit) więcej — zawęź wyszukiwaniem")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    private func choiceRow(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 13.5, weight: isSelected ? .bold : .regular))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(GlassColor.success)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(isSelected ? 0.16 : 0.07))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var serviceSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionLabel("Kategoria")
+            BAChipRow(items: Self.serviceKinds, selected: $kind)
+            sectionLabel("Firma / usługa")
+            glassField("np. InPost, MPO, Ogrodnicy", text: $serviceName)
+        }
+    }
+
+    private var vehicleFields: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionLabel("Marka i kolor")
+            HStack(spacing: 8) {
+                glassField("Marka", text: $make)
+                glassField("Kolor", text: $color)
+            }
+        }
+    }
+
+    // MARK: Dane
+
+    private func load() async {
+        async let r: [BAResidentLite]? = try? APIClient.shared.get("/building-admin/buildings/\(buildingId)/residents")
+        async let u: [BAUnitLite]? = try? APIClient.shared.get("/building-admin/buildings/\(buildingId)/units")
+        residents = (await r) ?? []
+        units = (await u) ?? []
+    }
+
+    /// Body POST/PATCH. residentId/unitId kodowane JAWNIE (także null) —
+    /// przy PATCH-u null odpina, a brak klucza znaczyłby „bez zmian".
+    private struct VehicleBody: Encodable {
+        let kind: String
+        let residentId: Int?
+        let unitId: Int?
+        let make: String
+        let color: String
+        let licensePlate: String?
+        let serviceName: String?
+
+        enum CodingKeys: String, CodingKey { case kind, residentId, unitId, make, color, licensePlate, serviceName }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(kind, forKey: .kind)
+            try c.encode(residentId, forKey: .residentId)
+            try c.encode(unitId, forKey: .unitId)
+            try c.encode(make, forKey: .make)
+            try c.encode(color, forKey: .color)
+            try c.encodeIfPresent(licensePlate, forKey: .licensePlate)
+            try c.encodeIfPresent(serviceName, forKey: .serviceName)
+        }
+    }
+
+    private func save() async {
+        errorText = nil
+        let svc = serviceName.trimmingCharacters(in: .whitespaces)
+        switch mode {
+        case .resident: if residentId == nil { errorText = "Wybierz mieszkańca"; return }
+        case .unit: if unitId == nil { errorText = "Wybierz lokal"; return }
+        case .service: if svc.isEmpty { errorText = "Podaj nazwę firmy / usługi"; return }
+        }
+        saving = true
+        defer { saving = false }
+
+        let mk = make.trimmingCharacters(in: .whitespaces)
+        let cl = color.trimmingCharacters(in: .whitespaces)
+        let body = VehicleBody(
+            kind: mode == .service ? kind : "RESIDENT",
+            residentId: mode == .unit ? nil : residentId,
+            unitId: unitId,
+            make: mk.isEmpty ? "—" : mk,
+            color: cl.isEmpty ? "—" : cl,
+            licensePlate: read.vehicleId == nil ? read.plate : nil,
+            serviceName: mode == .service ? svc : nil
+        )
+        do {
+            if let vid = read.vehicleId {
+                let _: BAAnyResponse = try await APIClient.shared.patch(
+                    "/building-admin/buildings/\(buildingId)/vehicles/\(vid)", body: body
+                )
+            } else {
+                let _: BAAnyResponse = try await APIClient.shared.post(
+                    "/building-admin/buildings/\(buildingId)/vehicles", body: body
+                )
+            }
+            onDone()
+        } catch {
+            errorText = error.localizedDescription
+        }
     }
 }
 

@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt'
 import { Prisma } from '@prisma/client'
 import * as crypto from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { formatUnitLabel } from '../common/unit-label'
 import { MailService } from '../mail/mail.service'
 import { PushService } from '../push/push.service'
 import { EdgeGateway } from '../edge/edge.gateway'
@@ -61,6 +62,8 @@ export class ConciergeCreateVehicleDto {
   // residentId is optional: building-wide services (kind != RESIDENT) don't
   // need a resident. For resident cars the service layer still enforces it.
   @IsOptional() @IsInt() residentId?: number
+  // 2026-09-07 — lokal (zamiast lub obok mieszkańca). RESIDENT: residentId LUB unitId.
+  @IsOptional() @IsInt() unitId?: number | null
   @IsOptional() @IsIn(VEHICLE_KINDS) kind?: VehicleKindStr
   @IsString() make: string
   @IsOptional() @IsString() model?: string
@@ -77,6 +80,8 @@ export class ConciergeUpdateVehicleDto {
   // BaUpdateVehicleDto, używane głównie przy „Identyfikuj…" w panelu LPR
   // (poprawienie literówki, zmiana właściciela, dorzucenie tagu).
   @IsOptional() @IsInt() residentId?: number
+  // undefined = bez zmian, null = odpięcie lokalu, liczba = nowy lokal.
+  @IsOptional() @IsInt() unitId?: number | null
   @IsOptional() @IsIn(VEHICLE_KINDS) kind?: VehicleKindStr
   @IsOptional() @IsString() make?: string
   @IsOptional() @IsString() model?: string
@@ -685,8 +690,9 @@ export class ConciergeService {
     const plate = (dto.licensePlate ?? '').trim().toUpperCase()
     if (!plate) throw new BadRequestException('Tablica nie może być pusta')
     const kind: VehicleKindStr = dto.kind ?? 'RESIDENT'
-    if (kind === 'RESIDENT' && !dto.residentId) {
-      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca')
+    // 2026-09-07: mieszkaniec, lokal albo oboje (parity z BA.createVehicle).
+    if (kind === 'RESIDENT' && !dto.residentId && !dto.unitId) {
+      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca lub lokalu')
     }
     if (kind !== 'RESIDENT' && !dto.serviceName?.trim()) {
       throw new BadRequestException('Dla pojazdu usługowego podaj nazwę firmy/serwisu')
@@ -700,6 +706,7 @@ export class ConciergeService {
       })
       if (!resident) throw new NotFoundException('Mieszkaniec nie istnieje')
     }
+    const unitId = await this.resolveVehicleUnitId(buildingId, dto.unitId)
 
     // Duplicate-guard: ta sama tablica nie może istnieć dwa razy w obrębie
     // budynku (poprzednio blokowało tylko różny residentId — co pozwalało
@@ -719,11 +726,12 @@ export class ConciergeService {
     const tags = sanitizeTags(dto.tags)
     const [row] = await this.prisma.$queryRaw<{ id: number }[]>`
       INSERT INTO "vehicles"
-        ("buildingId", "residentId", "kind", "make", "model", "color",
+        ("buildingId", "residentId", "unitId", "kind", "make", "model", "color",
          "licensePlate", "serviceName", "notes", "tags")
       VALUES (
         ${buildingId},
         ${resident?.id ?? null},
+        ${unitId},
         ${kind}::"VehicleKind",
         ${dto.make},
         ${dto.model ?? null},
@@ -736,13 +744,62 @@ export class ConciergeService {
       RETURNING id
     `
 
-    this.edgeGateway.sendToBuilding(buildingId, 'PLATE_UPSERT', {
-      plate,
-      owner: ownerForEdge(kind, resident, dto.serviceName),
-    })
-
     const rows = await this.prisma.$queryRaw<VehicleRow[]>`${vehicleSelectSql(Prisma.sql`v.id = ${row.id}`, Prisma.sql`v.id ASC`)}`
-    return rows[0]
+    const created = rows[0]
+    // 2026-09-07: pełny payload jak w BA (kind/tags/unitLabel, owner bez PII)
+    // zamiast samego `owner` z nazwiskiem — Edge pokazuje lokal, nie osobę.
+    this.edgeGateway.sendToBuilding(buildingId, 'PLATE_UPSERT', await this.plateSyncPayload(created))
+    return created
+  }
+
+  /** 2026-09-07 — waliduje lokal z DTO; null/undefined = brak przypisania. */
+  private async resolveVehicleUnitId(
+    buildingId: number,
+    unitId: number | null | undefined,
+  ): Promise<number | null> {
+    if (unitId === null || unitId === undefined) return null
+    const u = await this.prisma.unit.findFirst({ where: { id: unitId, buildingId }, select: { id: true } })
+    if (!u) throw new NotFoundException('Lokal nie istnieje')
+    return u.id
+  }
+
+  /**
+   * Payload PLATE_UPSERT — ta sama semantyka co `BuildingAdminService.
+   * buildPlateSyncPayload`: kind, tagi (+serviceName/marka/model/kolor dla
+   * asystenta), `unitLabel` (jawny lokal pojazdu, dla RESIDENT fallback na
+   * lokal mieszkańca), owner tylko dla usług (bez PII).
+   */
+  private async plateSyncPayload(v: VehicleRow): Promise<Record<string, any>> {
+    const isService = v.kind === 'SERVICE' || v.kind === 'DELIVERY'
+    const extra: string[] = []
+    if (isService && v.serviceName) extra.push(v.serviceName)
+    if (v.make) extra.push(v.make)
+    if (v.model) extra.push(v.model)
+    if (v.color) extra.push(v.color)
+    let unitLabel: string | null = v.unit?.label ?? null
+    if (!unitLabel && v.kind === 'RESIDENT' && v.residentId) {
+      const rows = await this.prisma.$queryRaw<Array<{ number: string; street: string | null; stairwell: string | null }>>`
+        SELECT u.number, u.street, s.name AS stairwell
+          FROM "unit_residents" ur
+          JOIN "units" u ON u.id = ur."unitId"
+          LEFT JOIN "stairwells" s ON s.id = u."stairwellId"
+         WHERE ur."residentId" = ${v.residentId}
+           AND (ur."untilDate" IS NULL OR ur."untilDate" > NOW())
+         ORDER BY ur."sinceDate" DESC
+         LIMIT 1
+      `.catch(() => [] as any[])
+      const r = rows[0]
+      if (r) unitLabel = formatUnitLabel({ number: r.number, street: r.street, stairwellName: r.stairwell })
+    }
+    return {
+      plate: v.licensePlate,
+      owner: isService && v.serviceName ? v.serviceName : '',
+      kind: v.kind,
+      tags: Array.from(new Set([...extra, ...(Array.isArray(v.tags) ? v.tags : [])])),
+      unitLabel,
+      ...(v.validFrom ? { validFrom: v.validFrom.toISOString() } : {}),
+      ...(v.validTo ? { validUntil: v.validTo.toISOString() } : {}),
+    }
   }
 
   /**
@@ -785,8 +842,13 @@ export class ConciergeService {
         residentId = dto.residentId
       }
     }
-    if (nextKind === 'RESIDENT' && !residentId) {
-      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca')
+    // 2026-09-07 — lokal: undefined = bez zmian, null = odpięcie, liczba = walidacja.
+    let unitId: number | null = vehicle.unitId
+    if (dto.unitId !== undefined) {
+      unitId = await this.resolveVehicleUnitId(buildingId, dto.unitId)
+    }
+    if (nextKind === 'RESIDENT' && !residentId && !unitId) {
+      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca lub lokalu')
     }
 
     // Duplicate-guard przy zmianie tablicy: nie pozwalamy „przepisać" tablicy
@@ -811,6 +873,7 @@ export class ConciergeService {
     await this.prisma.$executeRaw`
       UPDATE "vehicles" SET
         "residentId"   = ${residentId},
+        "unitId"       = ${unitId},
         "kind"         = ${nextKind}::"VehicleKind",
         "make"         = ${dto.make ?? vehicle.make},
         "model"        = ${dto.model ?? vehicle.model},
@@ -832,11 +895,12 @@ export class ConciergeService {
     const updated = updatedRows[0]
     if (!updated) throw new NotFoundException('Pojazd nie istnieje')
 
+    // Zmiana tablicy: stara musi zniknąć z allowlisty (parity z BA.updateVehicle).
+    if (wasApproved && nextPlate !== vehicle.licensePlate) {
+      this.edgeGateway.sendToBuilding(buildingId, 'PLATE_DELETE', { plate: vehicle.licensePlate })
+    }
     if (wasApproved) {
-      this.edgeGateway.sendToBuilding(buildingId, 'PLATE_UPSERT', {
-        plate: nextPlate,
-        owner: ownerForEdge(nextKind, updated.resident, updated.serviceName ?? undefined),
-      })
+      this.edgeGateway.sendToBuilding(buildingId, 'PLATE_UPSERT', await this.plateSyncPayload(updated))
     }
     return updated
   }

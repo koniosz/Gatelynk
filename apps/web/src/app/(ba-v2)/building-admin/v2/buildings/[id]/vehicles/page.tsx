@@ -34,6 +34,7 @@ import { ResidentDrawer } from "@/components/ba-v2/ResidentDrawer";
 import { TagPicker } from "@/components/TagPicker";
 import { LazyLprThumbnail } from "@/components/LazyLprThumbnail";
 import { BUILDING_TZ } from "@/lib/building-time";
+import { formatUnitLabel } from "@/lib/unit-label";
 
 type VehicleStatus = "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED" | "EXPIRED";
 type VehicleKind = "RESIDENT" | "SERVICE" | "DELIVERY" | "EMERGENCY" | "PUBLIC";
@@ -48,6 +49,9 @@ interface Vehicle {
   rejectionReason?: string | null;
   resident?: { id: number; firstName: string; lastName: string } | null;
   residentId?: number | null;
+  // 2026-09-07 — lokal przypisany WPROST do pojazdu (obok/zamiast mieszkańca).
+  unitId?: number | null;
+  unit?: { id: number; number: string; label?: string | null } | null;
   kind?: VehicleKind | null;
   serviceName?: string | null;
   notes?: string | null;
@@ -61,6 +65,14 @@ interface Resident {
   id: number;
   firstName: string;
   lastName: string;
+}
+
+/** Lokal do pickera (GET /units zwraca pełny obiekt — bierzemy minimum). */
+interface UnitLite {
+  id: number;
+  number: string;
+  street?: string | null;
+  stairwell?: { name: string } | null;
 }
 
 interface GuestLite {
@@ -137,6 +149,7 @@ export default function VehiclesPage() {
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
+  const [units, setUnits] = useState<UnitLite[]>([]);
   const [guests, setGuests] = useState<GuestLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -155,16 +168,20 @@ export default function VehiclesPage() {
     if (!Number.isFinite(buildingId)) return;
     setLoading(true);
     try {
-      const [vRes, rRes, gRes] = await Promise.all([
+      const [vRes, rRes, gRes, uRes] = await Promise.all([
         buildingAdminApi.get<Vehicle[]>(`/building-admin/buildings/${buildingId}/vehicles`),
         buildingAdminApi.get<Resident[]>(`/building-admin/buildings/${buildingId}/residents`),
         buildingAdminApi
           .get<GuestLite[]>(`/building-admin/buildings/${buildingId}/guests`)
           .catch(() => ({ data: [] as GuestLite[] })),
+        buildingAdminApi
+          .get<UnitLite[]>(`/building-admin/buildings/${buildingId}/units`)
+          .catch(() => ({ data: [] as UnitLite[] })),
       ]);
       setVehicles(vRes.data);
       setResidents(rRes.data);
       setGuests(gRes.data);
+      setUnits(uRes.data);
       return vRes.data;
     } finally {
       setLoading(false);
@@ -506,6 +523,7 @@ export default function VehiclesPage() {
         <AddVehicleForm
           buildingId={buildingId}
           residents={residents}
+          units={units}
           onDone={async () => {
             setShowAdd(false);
             await load();
@@ -625,6 +643,7 @@ export default function VehiclesPage() {
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>
                     {v.color}
                     {v.resident ? ` · ${v.resident.firstName} ${v.resident.lastName}` : null}
+                    {v.unit ? ` · lokal ${v.unit.label ?? v.unit.number}` : null}
                     {v.serviceName ? ` · ${v.serviceName}` : null}
                     {v.validTo ? ` · do ${new Date(v.validTo).toLocaleDateString("pl-PL", { timeZone: BUILDING_TZ })}` : null}
                   </div>
@@ -691,6 +710,7 @@ export default function VehiclesPage() {
             buildingId={buildingId}
             vehicle={sel}
             residents={residents}
+            units={units}
             onSaved={() => void refreshSel(sel.id)}
           />
         ) : null}
@@ -704,11 +724,13 @@ function VehicleDetails({
   buildingId,
   vehicle,
   residents,
+  units,
   onSaved,
 }: {
   buildingId: number;
   vehicle: Vehicle;
   residents: Resident[];
+  units: UnitLite[];
   onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -717,6 +739,7 @@ function VehicleDetails({
 
   const [eKind, setEKind] = useState<VehicleKind>((vehicle.kind ?? "RESIDENT") as VehicleKind);
   const [eResidentId, setEResidentId] = useState(String(vehicle.resident?.id ?? vehicle.residentId ?? ""));
+  const [eUnitId, setEUnitId] = useState(String(vehicle.unit?.id ?? vehicle.unitId ?? ""));
   const [eServiceName, setEServiceName] = useState(vehicle.serviceName ?? "");
   const [eMake, setEMake] = useState(vehicle.make ?? "");
   const [eModel, setEModel] = useState(vehicle.model ?? "");
@@ -741,8 +764,8 @@ function VehicleDetails({
 
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (eKind === "RESIDENT" && !eResidentId) {
-      setError("Samochód mieszkańca wymaga wskazania mieszkańca");
+    if (eKind === "RESIDENT" && !eResidentId && !eUnitId) {
+      setError("Samochód mieszkańca wymaga wskazania mieszkańca lub lokalu");
       return;
     }
     setBusy(true);
@@ -750,7 +773,9 @@ function VehicleDetails({
     try {
       await buildingAdminApi.patch(`/building-admin/buildings/${buildingId}/vehicles/${vehicle.id}`, {
         kind: eKind,
-        residentId: eKind === "RESIDENT" ? Number(eResidentId) : null,
+        residentId: eKind === "RESIDENT" && eResidentId ? Number(eResidentId) : null,
+        // null = odpięcie lokalu (undefined zostawiłoby stary).
+        unitId: eUnitId ? Number(eUnitId) : null,
         make: eMake.trim() || "—",
         model: eModel.trim() || undefined,
         color: eColor.trim() || "—",
@@ -788,8 +813,8 @@ function VehicleDetails({
         </Field>
         {eKind === "RESIDENT" ? (
           <Field label="Mieszkaniec">
-            <select className="ba-input" required value={eResidentId} onChange={(e) => setEResidentId(e.target.value)}>
-              <option value="">— Wybierz mieszkańca —</option>
+            <select className="ba-input" value={eResidentId} onChange={(e) => setEResidentId(e.target.value)}>
+              <option value="">— brak (auto przypisane tylko do lokalu) —</option>
               {residents.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.firstName} {r.lastName}
@@ -807,6 +832,18 @@ function VehicleDetails({
             />
           </Field>
         )}
+        {/* 2026-09-07 — lokal: dla auta mieszkańca wymagany, gdy brak mieszkańca;
+            dla usług opcjonalne dopełnienie („sprzątaczka lokalu 5"). */}
+        <Field label={eKind === "RESIDENT" ? "Lokal" : "Lokal (opcjonalnie)"}>
+          <select className="ba-input" value={eUnitId} onChange={(e) => setEUnitId(e.target.value)}>
+            <option value="">— brak —</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {formatUnitLabel(u)}
+              </option>
+            ))}
+          </select>
+        </Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Field label="Tablica">
             <input
@@ -888,6 +925,12 @@ function VehicleDetails({
             <div className="v">
               {vehicle.resident.firstName} {vehicle.resident.lastName}
             </div>
+          </div>
+        ) : null}
+        {vehicle.unit ? (
+          <div className="ba-kv">
+            <div className="k">Lokal</div>
+            <div className="v">{vehicle.unit.label ?? vehicle.unit.number}</div>
           </div>
         ) : null}
         {vehicle.serviceName ? (
@@ -1296,16 +1339,19 @@ function VehicleFooter({
 function AddVehicleForm({
   buildingId,
   residents,
+  units,
   onDone,
   onCancel,
 }: {
   buildingId: number;
   residents: Resident[];
+  units: UnitLite[];
   onDone: () => Promise<void>;
   onCancel: () => void;
 }) {
   const [kind, setKind] = useState<VehicleKind>("RESIDENT");
   const [residentId, setResidentId] = useState("");
+  const [unitId, setUnitId] = useState("");
   const [serviceName, setServiceName] = useState("");
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
@@ -1316,8 +1362,8 @@ function AddVehicleForm({
 
   const onAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (kind === "RESIDENT" && !residentId) {
-      setError("Wybierz mieszkańca");
+    if (kind === "RESIDENT" && !residentId && !unitId) {
+      setError("Wybierz mieszkańca lub lokal");
       return;
     }
     setBusy(true);
@@ -1325,7 +1371,8 @@ function AddVehicleForm({
     try {
       await buildingAdminApi.post(`/building-admin/buildings/${buildingId}/vehicles`, {
         kind,
-        residentId: kind === "RESIDENT" ? Number(residentId) : undefined,
+        residentId: kind === "RESIDENT" && residentId ? Number(residentId) : undefined,
+        unitId: unitId ? Number(unitId) : undefined,
         serviceName: kind !== "RESIDENT" && serviceName.trim() ? serviceName.trim() : undefined,
         make: make.trim() || "—",
         model: model.trim() || undefined,
@@ -1360,8 +1407,8 @@ function AddVehicleForm({
         </Field>
         {kind === "RESIDENT" ? (
           <Field label="Mieszkaniec">
-            <select required className="ba-input" value={residentId} onChange={(e) => setResidentId(e.target.value)}>
-              <option value="">— Wybierz mieszkańca —</option>
+            <select className="ba-input" value={residentId} onChange={(e) => setResidentId(e.target.value)}>
+              <option value="">— brak (tylko lokal) —</option>
               {residents.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.firstName} {r.lastName}
@@ -1379,6 +1426,16 @@ function AddVehicleForm({
             />
           </Field>
         )}
+        <Field label={kind === "RESIDENT" ? "Lokal" : "Lokal (opcjonalnie)"}>
+          <select className="ba-input" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+            <option value="">— brak —</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {formatUnitLabel(u)}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Tablica">
           <input
             required

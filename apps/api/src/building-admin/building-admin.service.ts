@@ -28,6 +28,7 @@ const edgeDispatcher: Dispatcher | undefined = process.env.TS_HTTP_PROXY
 import { MailService } from '../mail/mail.service'
 import { getGuestsHistoryFor } from '../guest-events/guest-history.helper'
 import { sortUnits, compareNatural } from '../common/natural-sort'
+import { formatUnitLabel, unitLabelSql } from '../common/unit-label'
 import { normalizeTicketPhoto } from '../common/ticket-photo'
 import { findDriver, certifiedFor } from '@gatelynk/device-drivers'
 import { StairwellIntercomDto } from '../buildings/buildings.service'
@@ -205,6 +206,8 @@ export class BaCreateVehicleDto {
   // have no owning resident. Service-level validation then ensures
   // RESIDENT cars always carry a residentId.
   @IsOptional() @IsInt() residentId?: number
+  // 2026-09-07 — lokal (zamiast lub obok mieszkańca). RESIDENT: residentId LUB unitId.
+  @IsOptional() @IsInt() unitId?: number | null
   @IsOptional() @IsIn(VEHICLE_KINDS) kind?: VehicleKindStr
   @IsString() make: string
   @IsOptional() @IsString() model?: string
@@ -219,6 +222,8 @@ export class BaCreateVehicleDto {
 
 export class BaUpdateVehicleDto {
   @IsOptional() @IsInt() residentId?: number
+  // undefined = bez zmian, null = odpięcie lokalu, liczba = nowy lokal.
+  @IsOptional() @IsInt() unitId?: number | null
   @IsOptional() @IsIn(VEHICLE_KINDS) kind?: VehicleKindStr
   @IsOptional() @IsString() make?: string
   @IsOptional() @IsString() model?: string
@@ -2104,8 +2109,10 @@ export class BuildingAdminService {
     // pojazdy mogą, ale nie muszą mieć przypisanego mieszkańca — dzięki
     // temu admin może wpisać ogólnego dostawcę usług (np. śmieciarkę), a
     // mieszkaniec może też oznaczyć „moja sprzątaczka" zachowując ownership.
-    if (kind === 'RESIDENT' && !dto.residentId) {
-      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca')
+    // 2026-09-07: auto mieszkańca może wskazywać mieszkańca, lokal albo oboje
+    // (dom na osiedlu bez konta w apce, auto wspólne gospodarstwa).
+    if (kind === 'RESIDENT' && !dto.residentId && !dto.unitId) {
+      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca lub lokalu')
     }
     let resident: { id: number; firstName: string; lastName: string } | null = null
     if (dto.residentId) {
@@ -2115,6 +2122,7 @@ export class BuildingAdminService {
       })
       if (!resident) throw new NotFoundException('Mieszkaniec nie istnieje')
     }
+    const unitId = await this.resolveVehicleUnitId(buildingId, dto.unitId)
     if (kind !== 'RESIDENT' && !dto.serviceName?.trim()) {
       throw new BadRequestException('Dla pojazdu usługowego podaj nazwę firmy/serwisu')
     }
@@ -2138,11 +2146,12 @@ export class BuildingAdminService {
     const tags = sanitizeTags(dto.tags)
     const [row] = await this.prisma.$queryRaw<{ id: number }[]>`
       INSERT INTO "vehicles"
-        ("buildingId", "residentId", "kind", "make", "model", "color",
+        ("buildingId", "residentId", "unitId", "kind", "make", "model", "color",
          "licensePlate", "serviceName", "notes", "tags")
       VALUES (
         ${buildingId},
         ${resident?.id ?? null},
+        ${unitId},
         ${kind}::"VehicleKind",
         ${dto.make},
         ${dto.model ?? null},
@@ -2184,14 +2193,20 @@ export class BuildingAdminService {
         residentId = dto.residentId
       }
     }
-    if (nextKind === 'RESIDENT' && !residentId) {
-      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca')
+    // 2026-09-07 — lokal: undefined = bez zmian, null = odpięcie, liczba = walidacja.
+    let unitId: number | null = vehicle.unitId
+    if (dto.unitId !== undefined) {
+      unitId = await this.resolveVehicleUnitId(buildingId, dto.unitId)
+    }
+    if (nextKind === 'RESIDENT' && !residentId && !unitId) {
+      throw new BadRequestException('Samochód mieszkańca wymaga wskazania mieszkańca lub lokalu')
     }
 
     const nextTags = dto.tags !== undefined ? sanitizeTags(dto.tags) : vehicle.tags
     await this.prisma.$executeRaw`
       UPDATE "vehicles" SET
         "residentId"   = ${residentId},
+        "unitId"       = ${unitId},
         "kind"         = ${nextKind}::"VehicleKind",
         "make"         = ${dto.make ?? vehicle.make},
         "model"        = ${dto.model ?? vehicle.model},
@@ -2986,12 +3001,55 @@ export class BuildingAdminService {
    * Edge (apps/edge) pokazuje to w panelu LPR-reads zamiast nazwiska — patrz
    * privacy fix z 2026-05-15.
    */
+  /** 2026-09-07 — waliduje lokal z DTO; null/undefined = brak przypisania. */
+  private async resolveVehicleUnitId(
+    buildingId: number,
+    unitId: number | null | undefined,
+  ): Promise<number | null> {
+    if (unitId === null || unitId === undefined) return null
+    const u = await this.prisma.unit.findFirst({ where: { id: unitId, buildingId }, select: { id: true } })
+    if (!u) throw new NotFoundException('Lokal nie istnieje')
+    return u.id
+  }
+
+  /** Etykieta lokalu po id — format z common/unit-label.ts. */
+  private async unitLabelById(unitId: number | null | undefined): Promise<string | null> {
+    if (!unitId) return null
+    try {
+      const u = await this.prisma.unit.findUnique({
+        where: { id: unitId },
+        select: { number: true, street: true, stairwell: { select: { name: true } } },
+      })
+      return u
+        ? formatUnitLabel({ number: u.number, street: u.street, stairwellName: u.stairwell?.name ?? null })
+        : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Lokal pojazdu dla Edge (`unit_label`): jawne `unitId` wygrywa; w drugiej
+   * kolejności lokal mieszkańca z unit_residents — ale tylko dla aut
+   * mieszkańców, żeby „moja sprzątaczka" bez lokalu nie dostała adresu
+   * z przypadku.
+   */
+  private async vehicleUnitLabel(v: {
+    kind: string
+    residentId: number | null
+    unitId?: number | null
+  }): Promise<string | null> {
+    const explicit = await this.unitLabelById(v.unitId)
+    if (explicit) return explicit
+    return v.kind === 'RESIDENT' ? this.computeUnitLabel(v.residentId) : null
+  }
+
   private async computeUnitLabel(residentId: number | null): Promise<string | null> {
     if (!residentId) return null
     try {
       // Bierzemy najnowszy aktywny UnitResident pivot, joinujemy units + stairwells.
-      const rows = await this.prisma.$queryRaw<Array<{ unit_number: string; stairwell_name: string | null }>>`
-        SELECT u.number AS unit_number, s.name AS stairwell_name
+      const rows = await this.prisma.$queryRaw<Array<{ unit_number: string; unit_street: string | null; stairwell_name: string | null }>>`
+        SELECT u.number AS unit_number, u.street AS unit_street, s.name AS stairwell_name
           FROM "unit_residents" ur
           JOIN "units" u ON u.id = ur."unitId"
           LEFT JOIN "stairwells" s ON s.id = u."stairwellId"
@@ -3002,9 +3060,7 @@ export class BuildingAdminService {
       `
       const r = rows[0]
       if (!r) return null
-      return r.stairwell_name
-        ? `${r.stairwell_name}/${r.unit_number}`
-        : r.unit_number
+      return formatUnitLabel({ number: r.unit_number, street: r.unit_street, stairwellName: r.stairwell_name })
     } catch (err: any) {
       // Defensive — gdyby join padł, nie blokujemy syncu. Edge dostanie null
       // i pokaże tablicę bez unit-label-a (akceptowalne, gorsza UX ale działa).
@@ -3028,6 +3084,7 @@ export class BuildingAdminService {
     licensePlate: string
     kind: string
     residentId: number | null
+    unitId?: number | null
     serviceName: string | null
     make?: string | null
     model?: string | null
@@ -3044,9 +3101,8 @@ export class BuildingAdminService {
     validFrom: Date | null
     validTo: Date | null
   }> {
-    const unitLabel = vehicle.kind === 'RESIDENT'
-      ? await this.computeUnitLabel(vehicle.residentId)
-      : null
+    // 2026-09-07: jawny lokal pojazdu > lokal mieszkańca (tylko RESIDENT).
+    const unitLabel = await this.vehicleUnitLabel(vehicle)
 
     // tags rozszerzone: prefiksowane przez serviceName (dla SERVICE/DELIVERY),
     // plus marka, model, kolor — żeby asystent AI na Edge mógł odpowiedzieć
@@ -3789,6 +3845,8 @@ export interface VehicleRow {
   id: number
   buildingId: number
   residentId: number | null
+  // 2026-09-07 — lokal przypisany bezpośrednio (niezależnie od mieszkańca).
+  unitId: number | null
   kind: string                          // VehicleKind enum as plain text
   make: string
   model: string | null
@@ -3812,6 +3870,9 @@ export interface VehicleRow {
   approvedAt: Date | null
   rejectionReason: string | null
   resident: { id: number; firstName: string; lastName: string } | null
+  // Lokal z jawnego `unitId` — `label` wg common/unit-label.ts („B/15A",
+  // „Kwiatowa 5", „Niewinna 4/2"). Null gdy pojazd nie ma przypisanego lokalu.
+  unit: { id: number; number: string; label: string } | null
 }
 
 /**
@@ -3821,7 +3882,7 @@ export interface VehicleRow {
  */
 export function vehicleSelectSql(where: Prisma.Sql, orderBy: Prisma.Sql) {
   return Prisma.sql`
-    SELECT v.id, v."buildingId", v."residentId", v.kind::text AS kind,
+    SELECT v.id, v."buildingId", v."residentId", v."unitId", v.kind::text AS kind,
            v.make, v.model, v.color, v."licensePlate",
            v."serviceName", v.notes, v.photo, v."notifyOnUse",
            COALESCE(v.tags, '{}') AS tags,
@@ -3835,9 +3896,18 @@ export function vehicleSelectSql(where: Prisma.Sql, orderBy: Prisma.Sql) {
                   'firstName', res."firstName",
                   'lastName', res."lastName"
                 )
-           END AS resident
+           END AS resident,
+           CASE WHEN un.id IS NULL THEN NULL
+                ELSE jsonb_build_object(
+                  'id', un.id,
+                  'number', un.number,
+                  'label', ${unitLabelSql('un', 'st')}
+                )
+           END AS unit
       FROM "vehicles" v
       LEFT JOIN "residents" res ON res.id = v."residentId"
+      LEFT JOIN "units" un ON un.id = v."unitId"
+      LEFT JOIN "stairwells" st ON st.id = un."stairwellId"
      WHERE ${where}
      ORDER BY ${orderBy}
   `
