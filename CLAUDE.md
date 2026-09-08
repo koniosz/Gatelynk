@@ -2082,3 +2082,29 @@ Naprawione:
 
 Wszystkie konstanty mają polskie labels w `*_LABELS` mapach — UI bierze stamtąd
 żeby nie hardkodować w komponentach.
+
+## Mapa osiedla w panelu BA (2026-09-08)
+
+Wytyczne: paczka `gatelynk-mapa-villa-natura` (render + `konfiguracja-budynkow.json`,
+28 obszarów, 55 miejsc). Zasady: przypisanie = (osiedle, obszar `buildings[].id`,
+część A/B) → **ID lokalu z bazy** (nigdy adres); A/B to obszary na rysunku, NIE
+numery /1 i /2; Budynek 16 ma tylko A. Nieczytelne adresy zostają puste.
+
+- **DB:** `estate_maps` (1 per Building: `imageUrl`, canvas, `config` JSON) i
+  `estate_map_slots` (UNIQUE `(buildingId, mapBuildingId, slot)` + UNIQUE `unitId`).
+- **API** `apps/api/src/estate-map/` — `GET/PUT /building-admin/buildings/:id/estate-map`,
+  `PUT/DELETE …/estate-map/slots/:mapBuildingId/:slot`. Zamiana atomowa w
+  `$transaction` + `pg_advisory_xact_lock(ns::int, buildingId::int)` (**rzutuj
+  na int — Prisma wysyła liczby jako bigint i funkcja „nie istnieje"**).
+  Konflikty: `expectedUnitId` ≠ stan bazy → 409 `STALE`; zajęte miejsce bez
+  `replace` → 409 `SLOT_OCCUPIED`; lokal gdzie indziej bez `move` → 409
+  `UNIT_ASSIGNED_ELSEWHERE`; wyścig na UNIQUE → 409 `RACE`. Testy:
+  `test/estate-map.e2e-spec.ts` (12, w tym równoległe żądania dwóch adminów).
+- **Web:** zakładka „Mapa osiedla" (`v2/buildings/[id]/map`), komponent
+  `components/ba-v2/estate-map/EstateMapView.tsx` (obszary w % canvasu, zoom
+  przez szerokość plane, bez transformów). Konfiguracja Villa Natura bundlowana
+  w `apps/web/public/estate-maps/` — pierwszy start: przycisk „Użyj wbudowanej
+  mapy" (PUT config). Podmiana konfiguracji usuwa przypisania do nieistniejących
+  obszarów i raportuje `removedAssignments`.
+- Bramy na mapie są tylko informacyjne (`connection: null` w paczce) — powiązanie
+  z access-pointami to osobny krok.
