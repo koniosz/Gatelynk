@@ -29,6 +29,7 @@ import { BuildingKnowledgeModule } from './building-knowledge/building-knowledge
 import { AnomalyEventsModule } from './anomaly-events/anomaly-events.module'
 import { ResidentsImportModule } from './residents-import/residents-import.module'
 import { AkuvoxDirectoryModule } from './akuvox-directory/akuvox-directory.module'
+import { EstateMapModule } from './estate-map/estate-map.module'
 
 @Module({
   imports: [
@@ -110,6 +111,8 @@ import { AkuvoxDirectoryModule } from './akuvox-directory/akuvox-directory.modul
     // AKUVOX_PROVISIONING_SYNC / AKUVOX_DIRECTORY_WRITE_API (defaulty w
     // AkuvoxDirectoryConfigService); AKUVOX_CRED_KEY = klucz AES-256-GCM.
     AkuvoxDirectoryModule,
+    // Mapa osiedla (2026-09-08) — render + przypisania miejsc na mapie do lokali.
+    EstateMapModule,
   ],
   // AppController wystawia `/api/health` (Fly health check oczekuje 200 — bez
   // tego Fly proxy zwraca [PR01] na zewnątrz i sygnatura z `flyctl checks list`

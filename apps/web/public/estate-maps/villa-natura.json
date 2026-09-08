@@ -1,0 +1,496 @@
+{
+  "name": "Osiedle Villa Natura",
+  "imageUrl": "/estate-maps/villa-natura.jpg",
+  "canvas": {
+    "width": 1954,
+    "height": 805
+  },
+  "geometryStatus": "Konfiguracja koncepcyjna — obszary dopasowane do renderu, bez georeferencji",
+  "addressStatus": "Odczytane z referencji; sprawdzić w bazie osiedla. Puste adresy wymagają przypisania.",
+  "buildings": [
+    {
+      "id": "north-16",
+      "label": "Budynek 16",
+      "street": "",
+      "number": "16",
+      "unitCount": 1,
+      "x": 164,
+      "y": 223,
+      "w": 91,
+      "h": 107,
+      "a": -29,
+      "slots": [
+        "A"
+      ]
+    },
+    {
+      "id": "north-14",
+      "label": "Komfortowa 14",
+      "street": "Komfortowa",
+      "number": "14",
+      "unitCount": 2,
+      "x": 322,
+      "y": 211,
+      "w": 141,
+      "h": 92,
+      "a": -15,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "north-03",
+      "label": "Budynek B03 · adres do przypisania",
+      "street": "",
+      "number": "",
+      "unitCount": 2,
+      "x": 517,
+      "y": 170,
+      "w": 146,
+      "h": 85,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "north-04",
+      "label": "Budynek B04 · adres do przypisania",
+      "street": "",
+      "number": "",
+      "unitCount": 2,
+      "x": 712,
+      "y": 155,
+      "w": 145,
+      "h": 84,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "north-05",
+      "label": "Budynek B05 · adres do przypisania",
+      "street": "",
+      "number": "",
+      "unitCount": 2,
+      "x": 908,
+      "y": 149,
+      "w": 145,
+      "h": 86,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "north-6",
+      "label": "Komfortowa 6",
+      "street": "Komfortowa",
+      "number": "6",
+      "unitCount": 2,
+      "x": 1097,
+      "y": 147,
+      "w": 148,
+      "h": 81,
+      "a": -1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "north-4",
+      "label": "Komfortowa 4",
+      "street": "Komfortowa",
+      "number": "4",
+      "unitCount": 2,
+      "x": 1288,
+      "y": 143,
+      "w": 143,
+      "h": 82,
+      "a": -1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "north-2",
+      "label": "Komfortowa 2",
+      "street": "Komfortowa",
+      "number": "2",
+      "unitCount": 2,
+      "x": 1474,
+      "y": 138,
+      "w": 145,
+      "h": 83,
+      "a": -1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-7",
+      "label": "Komfortowa 7",
+      "street": "Komfortowa",
+      "number": "7",
+      "unitCount": 2,
+      "x": 596,
+      "y": 322,
+      "w": 141,
+      "h": 80,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-5",
+      "label": "Komfortowa 5",
+      "street": "Komfortowa",
+      "number": "5",
+      "unitCount": 2,
+      "x": 831,
+      "y": 317,
+      "w": 143,
+      "h": 84,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-3",
+      "label": "Komfortowa 3",
+      "street": "Komfortowa",
+      "number": "3",
+      "unitCount": 2,
+      "x": 1066,
+      "y": 308,
+      "w": 143,
+      "h": 85,
+      "a": -1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-1",
+      "label": "Komfortowa 1",
+      "street": "Komfortowa",
+      "number": "1",
+      "unitCount": 2,
+      "x": 1297,
+      "y": 303,
+      "w": 140,
+      "h": 84,
+      "a": -1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-12",
+      "label": "Niewinna 12",
+      "street": "Niewinna",
+      "number": "12",
+      "unitCount": 2,
+      "x": 662,
+      "y": 465,
+      "w": 140,
+      "h": 81,
+      "a": 9,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-10",
+      "label": "Niewinna 10",
+      "street": "Niewinna",
+      "number": "10",
+      "unitCount": 2,
+      "x": 870,
+      "y": 466,
+      "w": 139,
+      "h": 84,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-8",
+      "label": "Niewinna 8",
+      "street": "Niewinna",
+      "number": "8",
+      "unitCount": 2,
+      "x": 1085,
+      "y": 461,
+      "w": 142,
+      "h": 79,
+      "a": -1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-6",
+      "label": "Niewinna 6",
+      "street": "Niewinna",
+      "number": "6",
+      "unitCount": 2,
+      "x": 1300,
+      "y": 451,
+      "w": 140,
+      "h": 81,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "inner-east",
+      "label": "Budynek B17 · adres do przypisania",
+      "street": "",
+      "number": "",
+      "unitCount": 2,
+      "x": 1492,
+      "y": 312,
+      "w": 128,
+      "h": 83,
+      "a": -64,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-1",
+      "label": "Niewinna 1",
+      "street": "Niewinna",
+      "number": "1",
+      "unitCount": 2,
+      "x": 1809,
+      "y": 93,
+      "w": 139,
+      "h": 81,
+      "a": 0,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-3",
+      "label": "Niewinna 3",
+      "street": "Niewinna",
+      "number": "3",
+      "unitCount": 2,
+      "x": 1760,
+      "y": 243,
+      "w": 153,
+      "h": 85,
+      "a": 9,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-east",
+      "label": "Budynek B20 · adres do przypisania",
+      "street": "",
+      "number": "",
+      "unitCount": 2,
+      "x": 1640,
+      "y": 418,
+      "w": 180,
+      "h": 89,
+      "a": -62,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-7",
+      "label": "Niewinna 7",
+      "street": "Niewinna",
+      "number": "7",
+      "unitCount": 2,
+      "x": 1549,
+      "y": 601,
+      "w": 150,
+      "h": 88,
+      "a": 42,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-9",
+      "label": "Niewinna 9",
+      "street": "Niewinna",
+      "number": "9",
+      "unitCount": 2,
+      "x": 1417,
+      "y": 647,
+      "w": 133,
+      "h": 85,
+      "a": 66,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-11",
+      "label": "Niewinna 11",
+      "street": "Niewinna",
+      "number": "11",
+      "unitCount": 2,
+      "x": 1233,
+      "y": 631,
+      "w": 142,
+      "h": 82,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-13",
+      "label": "Niewinna 13",
+      "street": "Niewinna",
+      "number": "13",
+      "unitCount": 2,
+      "x": 1036,
+      "y": 641,
+      "w": 143,
+      "h": 80,
+      "a": -1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-15",
+      "label": "Niewinna 15",
+      "street": "Niewinna",
+      "number": "15",
+      "unitCount": 2,
+      "x": 843,
+      "y": 647,
+      "w": 143,
+      "h": 82,
+      "a": -2,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-17",
+      "label": "Niewinna 17",
+      "street": "Niewinna",
+      "number": "17",
+      "unitCount": 2,
+      "x": 644,
+      "y": 653,
+      "w": 143,
+      "h": 84,
+      "a": 1,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-19",
+      "label": "Niewinna 19",
+      "street": "Niewinna",
+      "number": "19",
+      "unitCount": 2,
+      "x": 477,
+      "y": 547,
+      "w": 142,
+      "h": 82,
+      "a": 48,
+      "slots": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "outer-21",
+      "label": "Niewinna 21",
+      "street": "Niewinna",
+      "number": "21",
+      "unitCount": 2,
+      "x": 351,
+      "y": 406,
+      "w": 141,
+      "h": 84,
+      "a": 41,
+      "slots": [
+        "A",
+        "B"
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "in",
+      "name": "Brama wjazdowa",
+      "x": 0.797163,
+      "y": 0.088447
+    },
+    {
+      "id": "out",
+      "name": "Brama wyjazdowa",
+      "x": 0.841027,
+      "y": 0.088447
+    },
+    {
+      "id": "fire",
+      "name": "Brama pożarowa",
+      "x": 0.090808,
+      "y": 0.475057
+    }
+  ],
+  "streets": [
+    {
+      "label": "Przestronna",
+      "x": 942,
+      "y": 52
+    },
+    {
+      "label": "Komfortowa",
+      "x": 965,
+      "y": 254
+    },
+    {
+      "label": "Niewinna",
+      "x": 986,
+      "y": 556
+    }
+  ]
+}

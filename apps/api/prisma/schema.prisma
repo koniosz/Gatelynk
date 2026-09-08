@@ -197,6 +197,9 @@ model Building {
 
   unitTypes                UnitType[]
   units                    Unit[]
+  // 2026-09-08 — mapa osiedla + przypisania lokali do miejsc na mapie.
+  estateMap                EstateMap?
+  estateMapSlots           EstateMapSlot[]
   residents                Resident[]
   stairwells               Stairwell[]
   lprCameras               LprCamera[]
@@ -791,6 +794,8 @@ model Unit {
   invitations        Invitation[]
   // 2026-09-07 — pojazdy przypisane bezpośrednio do lokalu.
   vehicles           Vehicle[]
+  // 2026-09-08 — miejsce lokalu na mapie osiedla (max 1).
+  estateMapSlot      EstateMapSlot?
   // 2026-08-09 — zaproszenia domowników do tego lokalu.
   householdInvitations HouseholdInvitation[]
   parcels            Parcel[]
@@ -1921,4 +1926,45 @@ model AkuvoxSyncRun {
 
   @@index([deviceId, createdAt(sort: Desc)])
   @@map("akuvox_sync_runs")
+}
+
+// ─── MAPA OSIEDLA (2026-09-08) ────────────────────────────────────────────────
+//
+// Interaktywna mapa osiedla w panelu BA: render + obszary budynków z konfiguracji
+// (patrz apps/api/src/estate-map). Przypisanie „miejsce na mapie → lokal z bazy"
+// trzymamy po ID lokalu (nigdy po adresie). Części A/B to oznaczenia obszarów na
+// rysunku, NIE numery /1 i /2 — administrator sam wskazuje, który lokal gdzie.
+
+model EstateMap {
+  id           Int      @id @default(autoincrement())
+  buildingId   Int      @unique
+  building     Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  name         String
+  imageUrl     String
+  canvasWidth  Int
+  canvasHeight Int
+  // { buildings: [{id,label,street,number,unitCount,x,y,w,h,a,slots}], gates: [...], streets?: [...] }
+  config       Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("estate_maps")
+}
+
+model EstateMapSlot {
+  id            Int      @id @default(autoincrement())
+  buildingId    Int
+  building      Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  // `config.buildings[].id` z EstateMap tego osiedla, np. "outer-7".
+  mapBuildingId String
+  // "A" | "B" — część budynku na rysunku.
+  slot          String
+  unitId        Int      @unique
+  unit          Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  assignedById  Int?
+  assignedAt    DateTime @default(now())
+
+  @@unique([buildingId, mapBuildingId, slot])
+  @@index([buildingId])
+  @@map("estate_map_slots")
 }

@@ -35,6 +35,7 @@ import {
   Truck,
   BookOpen,
   BookUser,
+  Map as MapIcon,
 } from "lucide-react";
 import { useBaLang } from "./LangProvider";
 import { buildingAdminApi, clearBaToken } from "@/lib/building-admin-api";
@@ -56,6 +57,8 @@ interface TreeBuilding {
 const BUILDING_FUNCTIONS: { tab: string; label: string; icon: typeof Home }[] = [
   { tab: "overview", label: "Przegląd", icon: Home },
   { tab: "units", label: "Lokale", icon: LayoutGrid },
+  // Mapa osiedla (2026-09-08) — render + przypisania lokali do domów na mapie.
+  { tab: "map", label: "Mapa osiedla", icon: MapIcon },
   // Grupy kontaktowe (2026-07-30) — grupowanie lokali na ekran domofonu Akuvox.
   { tab: "contact-groups", label: "Grupy kontaktowe", icon: BookUser },
   { tab: "residents", label: "Mieszkańcy", icon: Users },
