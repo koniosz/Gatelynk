@@ -302,6 +302,10 @@ function SidePanel({
         Brama:{' '}
         {read.gateOpened ? (
           <span className="text-green-700 font-medium">✓ otwarta</span>
+        ) : read.reason === 'probable_match' ? (
+          <span className="text-blue-700">prawdopodobne dopasowanie (odczyt niepewny), nie otwarto</span>
+        ) : read.reason === 'unconfirmed' ? (
+          <span className="text-amber-600">odczyt niepotwierdzony (1 klatka / niski próg)</span>
         ) : read.matched ? (
           <span className="text-amber-600">przypisana, nie otwarto</span>
         ) : (

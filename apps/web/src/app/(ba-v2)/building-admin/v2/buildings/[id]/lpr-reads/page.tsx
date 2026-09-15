@@ -729,6 +729,16 @@ function ReadRow({
       <div>
         {r.gateOpened ? (
           <span className="ba-pill green">✓ otwarta</span>
+        ) : r.reason === "probable_match" ? (
+          // 2026-09-15: odczyt niepewny (1 klatka / niski próg) dopasowany do
+          // rejestru na Edge — brama celowo NIE otwierana, ale przejazd jest.
+          <span className="ba-pill blue" title="Odczyt niepewny dopasowany do rejestru — brama nieotwierana">
+            prawdopodobny · nie otwarto
+          </span>
+        ) : r.reason === "unconfirmed" ? (
+          <span className="ba-pill amber" title="Tablica z jednej klatki lub poniżej progu, bez dopasowania do rejestru">
+            odczyt niepotwierdzony
+          </span>
         ) : r.matched ? (
           <span className="ba-pill amber">nie otwarto</span>
         ) : (

@@ -96,13 +96,28 @@ type LprHost = {
     plate: string,
     extra?: Record<string, any>,
   ): Promise<any>
+  /** 2026-09-15 — odczyt niepotwierdzony (1 klatka / poniżej progu). */
+  handleUncertainRead?(
+    cameraDeviceId: string,
+    plate: string,
+    extra: Record<string, any>,
+  ): Promise<any>
 }
+
+/**
+ * Niepotwierdzony odczyt czeka tyle, zanim trafi do `handleUncertainRead` —
+ * jeśli w tym czasie ta sama kamera da PEWNY odczyt (drugi alert tego samego
+ * przejazdu), niepotwierdzony jest anulowany zamiast dublować wpis.
+ */
+const UNCERTAIN_HOLD_MS = 8_000
 
 @Injectable()
 export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LprAlertStreamService.name)
   private readonly streams = new Map<string, StreamState>()
   private host?: LprHost
+  /** Wstrzymane niepotwierdzone odczyty per kamera (patrz UNCERTAIN_HOLD_MS). */
+  private readonly pendingUncertain = new Map<string, NodeJS.Timeout>()
 
   /**
    * Zależność jest JEDNOKIERUNKOWA: my znamy serwis LPR, on nas nie —
@@ -144,6 +159,7 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy() {
     for (const id of [...this.streams.keys()]) this.stop(id)
+    for (const id of [...this.pendingUncertain.keys()]) this.cancelUncertain(id)
   }
 
   // ── Połączenie ze strumieniem ───────────────────────────────────────────
@@ -347,21 +363,30 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
         return
       }
 
+      // 2026-09-15: odczyty niepotwierdzone NIE giną — po 8 s trafiają do
+      // `handleUncertainRead` (rejestr: dopasowanie łagodne → „prawdopodobny",
+      // inaczej wpis „niepotwierdzony"). Bramy to nie otwiera.
       if (agreedFrames < MIN_AGREED_FRAMES) {
         this.logger.log(
           `[${cameraDeviceId}] odczyt z jednej klatki: ${best.plate} ` +
-          `(pewność ${best.confidence.toFixed(2)}) — za mało potwierdzeń, pominięty`,
+          `(pewność ${best.confidence.toFixed(2)}) — za mało potwierdzeń, wstrzymany jako niepotwierdzony`,
         )
+        this.scheduleUncertain(cameraDeviceId, best, agreedFrames, candidates, {
+          image: frames[this.bestFrameFor(best.plate, perFrame, frames.length)],
+          vehicleBrand: brand?.brand,
+        })
         return
       }
 
       if (best.confidence < MIN_CONFIDENCE) {
-        // Świadomie NIE przekazujemy dalej — ale zostawiamy ślad, bo to
-        // najcenniejszy materiał do strojenia progu na obiekcie.
         this.logger.log(
           `[${cameraDeviceId}] odczyt poniżej progu: ${best.plate} ` +
-          `(pewność ${best.confidence.toFixed(2)}, ${agreedFrames}/${frames.length} klatek) — pominięty`,
+          `(pewność ${best.confidence.toFixed(2)}, ${agreedFrames}/${frames.length} klatek) — wstrzymany jako niepotwierdzony`,
         )
+        this.scheduleUncertain(cameraDeviceId, best, agreedFrames, candidates, {
+          image: frames[this.bestFrameFor(best.plate, perFrame, frames.length)],
+          vehicleBrand: brand?.brand,
+        })
         return
       }
 
@@ -369,6 +394,9 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
         `[${cameraDeviceId}] 🚗 tablica ${best.plate} ` +
         `(pewność ${best.confidence.toFixed(2)}, zgodnych klatek ${agreedFrames}/${frames.length}, ${ocr.ms} ms)`,
       )
+
+      // Pewny odczyt unieważnia wstrzymany niepotwierdzony z tej kamery.
+      this.cancelUncertain(cameraDeviceId)
 
       await this.host?.handleAnprEvent(cameraDeviceId, best.plate, {
         confidence: best.confidence,
@@ -381,6 +409,38 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
       })
     } finally {
       await Promise.all(tmpFiles.map((f) => fs.unlink(f).catch(() => {})))
+    }
+  }
+
+  /** Wstrzymuje niepotwierdzony odczyt; poprzedni wstrzymany z tej kamery zastępuje. */
+  private scheduleUncertain(
+    cameraDeviceId: string,
+    best: { plate: string; confidence: number },
+    agreedFrames: number,
+    candidates: Array<{ plate: string; confidence: number }>,
+    extra: { image?: Buffer | null; vehicleBrand?: string },
+  ) {
+    if (!this.host?.handleUncertainRead) return
+    this.cancelUncertain(cameraDeviceId)
+    const timer = setTimeout(() => {
+      this.pendingUncertain.delete(cameraDeviceId)
+      this.host?.handleUncertainRead?.(cameraDeviceId, best.plate, {
+        confidence: best.confidence,
+        agreedFrames,
+        candidates: candidates.map((c) => c.plate),
+        image: extra.image ?? null,
+        vehicleBrand: extra.vehicleBrand,
+        source: 'edge-ocr',
+      }).catch((e: any) => this.logger.warn(`[${cameraDeviceId}] niepotwierdzony odczyt nieobsłużony: ${e?.message ?? e}`))
+    }, UNCERTAIN_HOLD_MS)
+    this.pendingUncertain.set(cameraDeviceId, timer)
+  }
+
+  private cancelUncertain(cameraDeviceId: string) {
+    const t = this.pendingUncertain.get(cameraDeviceId)
+    if (t) {
+      clearTimeout(t)
+      this.pendingUncertain.delete(cameraDeviceId)
     }
   }
 

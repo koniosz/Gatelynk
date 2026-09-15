@@ -2108,3 +2108,29 @@ numery /1 i /2; Budynek 16 ma tylko A. Nieczytelne adresy zostają puste.
   obszarów i raportuje `removedAssignments`.
 - Bramy na mapie są tylko informacyjne (`connection: null` w paczce) — powiązanie
   z access-pointami to osobny krok.
+
+## LPR: odczyty niepotwierdzone i dopasowanie łagodne (2026-09-15)
+
+Incydent VN 13.09 17:51: mieszkaniec (WE387YT) wjechał tuż za poprzednim autem
+przez otwartą bramę, kamera zebrała 1 czytelną klatkę i odczytała „WE38711"
+(Y→1, T→1). Reguła `MIN_AGREED_FRAMES=2` w `lpr-alertstream.service.ts`
+odrzucała taki odczyt CAŁKOWICIE — bez wpisu w `lpr_reads`, bez Cloud, bez
+pusha; w panelu przejazd nie istniał.
+
+- **Odczyt niepotwierdzony** (1 klatka / poniżej `MIN_CONFIDENCE`) jest
+  wstrzymywany 8 s (`UNCERTAIN_HOLD_MS`) i anulowany, jeśli ta kamera da w tym
+  czasie pewny odczyt; inaczej trafia do `HikvisionLprService.handleUncertainRead`.
+- **Dopasowanie łagodne** (`plate-fuzzy.util.ts`, testy node:test w
+  `plate-fuzzy.util.spec.ts`): koszt 1 za znak z tej samej klasy pomyłek OCR
+  (szersze klasy niż ścisłe `OCR_EQUIV_SETS`: m.in. 1/I/L/T/Y/7), twarda
+  różnica = odrzucenie; budżet 2 dla tablic 7-znakowych, 1 dla krótszych;
+  DOKŁADNIE jedna tablica z rejestru w budżecie, inaczej niejednoznaczność.
+  Sprawdzane też w `handleAnprEvent` po fail ścisłego OCR-fuzzy.
+- **Wynik:** dopasowanie → read `matched=1, gate_opened=0, reason=probable_match`
+  (Cloud push „🚗 Prawdopodobnie Twój pojazd wjechał … kamera odczytała X",
+  panel: pill „prawdopodobny · nie otwarto"); brak dopasowania i pewność ≥0.5 →
+  read `matched=0, reason=unconfirmed` (panel: „odczyt niepotwierdzony", Cloud
+  nie pushuje). **Brama NIGDY nie otwiera się z dopasowania łagodnego** —
+  otwiera ją wyłącznie odczyt ścisły lub ścisły OCR-fuzzy.
+- Payload `LPR_READ` ma nowe pole `ocrRaw` (surowy odczyt); starszy Cloud je
+  ignoruje. Wdrożone na oba Edge (VN + Villa Natura) 2026-09-15.

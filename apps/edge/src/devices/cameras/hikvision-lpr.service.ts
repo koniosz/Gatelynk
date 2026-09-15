@@ -12,6 +12,7 @@ import { IntercomService } from '../intercom/intercom.service'
 import { IntercomPinService } from '../intercom/intercom-pin.service'
 import { EventLogService } from '../../event-log/event-log.service'
 import { VisionDetectService } from './vision-detect.service'
+import { lenientPlateMatch } from './plate-fuzzy.util'
 // 2026-07-30 — Przepustka wyjazdowa (exit grace pass): czysta logika decyzji
 // wydzielona do testowalnego modułu (docs/exit-grace-pass.md).
 import {
@@ -495,6 +496,27 @@ export class HikvisionLprService {
         })
         plate = fuzzy.plate
         match = fuzzy.match
+      }
+    }
+
+    // 2026-09-15 — ŁAGODNE dopasowanie do rejestru (tylko powiadomienie i
+    // historia, BEZ otwierania): odczyt potwierdzony klatkami, ale z pomyłką
+    // OCR spoza ścisłych klas (np. WE38711 zamiast WE387YT). Bramę otwiera
+    // wyłącznie odczyt ścisły lub ścisły OCR-fuzzy — patrz plate-fuzzy.util.
+    if (!match) {
+      const lenient = this.tryLenientMatch(cameraDeviceId, [plate])
+      if (lenient) {
+        this.eventLog.info('LPR', `🔎 Odczyt ${plate} dopasowany łagodnie → ${lenient.plate} (bez otwierania bramy)`, {
+          cameraDeviceId, rawPlate: plate, correctedPlate: lenient.plate, cost: lenient.cost,
+        })
+        return this.finalizeRead(cameraDeviceId, lenient.plate, {
+          matched: true, opened: false, reason: 'probable_match',
+          owner: lenient.match.owner ?? null,
+          unitLabel: lenient.match.unitLabel ?? null,
+          kind: lenient.match.kind ?? null,
+          tags: lenient.match.tags ?? [],
+          extra: { ...extra, ocrRaw: plate },
+        })
       }
     }
 
@@ -1017,6 +1039,8 @@ export class HikvisionLprService {
         vehicleSubtype?: string
         image?: Buffer | null
         rawXml?: string
+        /** 2026-09-15 — surowy odczyt OCR przy dopasowaniu łagodnym / niepotwierdzonym. */
+        ocrRaw?: string
       }
       /**
        * 2026-07-30 — meta przepustki wyjazdowej (reason exit_pass /
@@ -1113,6 +1137,9 @@ export class HikvisionLprService {
       hasImage: !!imagePath,
       edgeReadId,
       ts,
+      // Surowy odczyt OCR dla reason=probable_match/unconfirmed (treść pusha
+      // „kamera odczytała …"); undefined dla zwykłych odczytów.
+      ocrRaw: res.extra?.ocrRaw,
       // Meta przepustki wyjazdowej (undefined dla zwykłych odczytów — JSON
       // stringify pomija pole, starszy Cloud po prostu je zignoruje).
       exitPass: res.exitPass,
@@ -1625,6 +1652,126 @@ export class HikvisionLprService {
       variants = next
     }
     return variants.filter((v) => v !== plate).slice(0, maxVariants)
+  }
+
+  /**
+   * Odczyt NIEPOTWIERDZONY z alertStreamu (2026-09-15) — jedna klatka albo
+   * pewność poniżej progu. Dotąd lądował tylko w logu, więc przejazd
+   * mieszkańca „za poprzednim autem" (VN 13.09 17:51: WE387YT odczytane
+   * z jednej klatki jako WE38711) nie istniał ani w panelu, ani w pushu.
+   *
+   * Zasady:
+   *   • rejestr ma pierwszeństwo: ścisły → OCR-fuzzy → ŁAGODNY (plate-fuzzy.util,
+   *     dokładnie jedna tablica z whitelisty kamery) → read `matched=1,
+   *     reason=probable_match` (push „prawdopodobnie", BEZ otwierania bramy),
+   *   • bez dopasowania: read `matched=0, reason=unconfirmed` gdy pewność ≥ 0.5
+   *     (ślad w panelu + materiał dla korelatora tailgatingu),
+   *   • dedup: ta sama tablica na tej kamerze w 30 s → pomijamy; alertStream
+   *     dodatkowo wstrzymuje niepotwierdzone 8 s i anuluje, gdy w tym czasie
+   *     nadejdzie pewny odczyt z tej kamery.
+   */
+  async handleUncertainRead(
+    cameraDeviceId: string,
+    rawPlate: string,
+    extra: {
+      confidence?: number
+      agreedFrames?: number
+      candidates?: string[]
+      image?: Buffer | null
+      direction?: string
+      vehicleBrand?: string
+    },
+  ) {
+    const raw = this.normalizePlate(rawPlate)
+    if (!raw) return null
+    const dev = this.devices.get(cameraDeviceId)
+    if (!dev) return null
+
+    const candidates = Array.from(new Set(
+      [raw, ...(extra.candidates ?? []).map((c) => this.normalizePlate(c))].filter(Boolean),
+    ))
+
+    let plate: string | null = null
+    let match: ReturnType<StoreService['lprMatchPlate']> = null
+    for (const c of candidates) {
+      match = this.store.lprMatchPlate(cameraDeviceId, c)
+      if (match) { plate = c; break }
+      const fz = this.tryOcrFuzzyMatch(cameraDeviceId, c)
+      if (fz) { plate = fz.plate; match = fz.match; break }
+    }
+    if (!match) {
+      const lenient = this.tryLenientMatch(cameraDeviceId, candidates)
+      if (lenient) { plate = lenient.plate; match = lenient.match }
+    }
+
+    const now = Date.now()
+    const key = `${cameraDeviceId}:${plate ?? raw}`
+    if (now - (this.lastUncertain.get(key) ?? 0) < 30_000) {
+      this.logger.debug(`[${cameraDeviceId}] niepotwierdzony odczyt ${raw} — duplikat w 30 s, pomijam`)
+      return null
+    }
+    if (plate && now - (this.lastTrigger.get(key) ?? 0) < (dev.config.rateLimitMs ?? 10_000)) {
+      this.logger.debug(`[${cameraDeviceId}] niepotwierdzony odczyt ${raw} → ${plate} tuż po pewnym odczycie, pomijam`)
+      return null
+    }
+    this.lastUncertain.set(key, now)
+
+    const conf = extra.confidence ?? 0
+    if (match && plate) {
+      this.eventLog.info('LPR', `🔎 Niepewny odczyt ${raw} dopasowany do rejestru → ${plate} (bez otwierania bramy)`, {
+        cameraDeviceId, rawPlate: raw, correctedPlate: plate, confidence: conf, agreedFrames: extra.agreedFrames,
+      })
+      return this.finalizeRead(cameraDeviceId, plate, {
+        matched: true, opened: false, reason: 'probable_match',
+        owner: match.owner ?? null,
+        unitLabel: match.unitLabel ?? null,
+        kind: match.kind ?? null,
+        tags: match.tags ?? [],
+        extra: {
+          confidence: conf, direction: extra.direction, image: extra.image,
+          vehicleBrand: extra.vehicleBrand, ocrRaw: raw,
+        },
+      })
+    }
+
+    if (conf < 0.5) {
+      this.logger.debug(`[${cameraDeviceId}] niepotwierdzony odczyt ${raw} (pewność ${conf.toFixed(2)}) poniżej 0.5 — bez wpisu`)
+      return null
+    }
+    this.eventLog.info('LPR', `❔ Niepotwierdzony odczyt ${raw} (pewność ${conf.toFixed(2)}) — zapisany bez dopasowania`, {
+      cameraDeviceId, confidence: conf, agreedFrames: extra.agreedFrames,
+    })
+    return this.finalizeRead(cameraDeviceId, raw, {
+      matched: false, opened: false, reason: 'unconfirmed',
+      extra: {
+        confidence: conf, direction: extra.direction, image: extra.image,
+        vehicleBrand: extra.vehicleBrand, ocrRaw: raw,
+      },
+    })
+  }
+
+  /** Dedup niepotwierdzonych odczytów: `${camera}:${plate}` → ts ostatniego wpisu. */
+  private readonly lastUncertain = new Map<string, number>()
+
+  /**
+   * Łagodne dopasowanie do rejestru kamery (plate-fuzzy.util) + kontrola
+   * ważności wpisu (goście mają okna). Niejednoznaczność = brak dopasowania.
+   */
+  private tryLenientMatch(
+    cameraDeviceId: string,
+    candidates: string[],
+  ): { plate: string; raw: string; cost: number; match: NonNullable<ReturnType<StoreService['lprMatchPlate']>> } | null {
+    const whitelist = this.store.lprListPlates(cameraDeviceId).map((p) => p.plate)
+    if (!whitelist.length) return null
+    const res = lenientPlateMatch(candidates, whitelist)
+    if (res.ambiguous) {
+      this.logger.log(`[${cameraDeviceId}] łagodne dopasowanie ${candidates.join('/')} niejednoznaczne — pomijam`)
+      return null
+    }
+    if (!res.match) return null
+    const match = this.store.lprMatchPlate(cameraDeviceId, res.match.plate)
+    if (!match) return null
+    return { plate: res.match.plate, raw: res.match.raw, cost: res.match.cost, match }
   }
 
   /**

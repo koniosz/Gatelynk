@@ -151,6 +151,8 @@ export class LprReadsService {
       ts?: number
       /** 2026-07-30 — przepustka wyjazdowa (reason exit_pass/overstay/overstay_denied). */
       exitPass?: ExitPassMeta | null
+      /** 2026-09-15 — surowy odczyt OCR przy reason=probable_match/unconfirmed. */
+      ocrRaw?: string | null
     },
   ): Promise<void> {
     const plate = this.normalizePlate(payload.plate ?? '')
@@ -211,6 +213,8 @@ export class LprReadsService {
       direction: payload.direction ?? null,
       edgeReadId: payload.edgeReadId ?? null,
       hasImage: payload.hasImage ?? false,
+      reason: payload.reason ?? null,
+      ocrRaw: payload.ocrRaw ?? null,
     }).catch((err) =>
       this.logger.warn(`vehicle passage push failed for ${plate}: ${err?.message ?? err}`))
 
@@ -324,8 +328,17 @@ export class LprReadsService {
   private async notifyVehiclePassage(
     buildingId: number,
     plate: string,
-    ctx: { direction?: string | null; edgeReadId?: number | null; hasImage?: boolean },
+    ctx: {
+      direction?: string | null
+      edgeReadId?: number | null
+      hasImage?: boolean
+      /** 2026-09-15 — `probable_match` = odczyt niepewny dopasowany do rejestru na Edge. */
+      reason?: string | null
+      ocrRaw?: string | null
+    },
   ) {
+    // Odczyt niepotwierdzony BEZ dopasowania to surowy OCR — nie ma do kogo pushować.
+    if (ctx.reason === 'unconfirmed') return
     const rows = await this.prisma.$queryRaw<{ id: number; residentId: number | null }[]>`
       SELECT id, "residentId" FROM "vehicles"
        WHERE "buildingId" = ${buildingId}
@@ -345,17 +358,25 @@ export class LprReadsService {
     }
 
     const isExit = String(ctx.direction ?? '').toUpperCase() === 'OUT'
+    const probable = ctx.reason === 'probable_match'
+    const dirWord = isExit ? 'wyjazd' : 'wjazd'
     await this.push.sendToResidentThrottled(
       `vehicle-${isExit ? 'exit' : 'entry'}-${v.id}`,
       3 * 60_000,
       v.residentId,
-      isExit ? '🚗 Twój pojazd wyjechał' : '🚗 Twój pojazd wjechał',
-      `${plate} — ${isExit ? 'wyjazd' : 'wjazd'} przez bramę.`,
+      probable
+        ? (isExit ? '🚗 Prawdopodobnie Twój pojazd wyjechał' : '🚗 Prawdopodobnie Twój pojazd wjechał')
+        : (isExit ? '🚗 Twój pojazd wyjechał' : '🚗 Twój pojazd wjechał'),
+      probable
+        ? `${plate} — ${dirWord} przez bramę. Odczyt niepewny` +
+          (ctx.ocrRaw && ctx.ocrRaw !== plate ? ` (kamera odczytała ${ctx.ocrRaw}).` : '.')
+        : `${plate} — ${dirWord} przez bramę.`,
       {
         kind: isExit ? 'VEHICLE_EXIT' : 'VEHICLE_ENTRY',
         vehicleId: v.id,
         plate,
         ts: Date.now(),
+        ...(probable ? { probable: true, ocrRaw: ctx.ocrRaw ?? undefined } : {}),
         ...(imageUrl ? { imageUrl } : {}),
       },
     )
