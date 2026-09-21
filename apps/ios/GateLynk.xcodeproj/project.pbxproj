@@ -18,6 +18,7 @@
 		3D99EDEF2FE001C9003E6631 /* IntercomCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */; };
 		AA000000000000000000CC25 /* AccessOpenControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB25 /* AccessOpenControl.swift */; };
 		AA000000000000000000FF2C /* AccessOpenControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB25 /* AccessOpenControl.swift */; };
+		AA000000000000000000FF2D /* GlassAccessLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE21 /* GlassAccessLogic.swift */; };
 		3D99EDF22FE03F9D003E6631 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 3D99EDF12FE03F9D003E6631 /* WebRTC */; };
 		3D99EE17302CD0AE003E6631 /* GlassNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA000000000000000000A301 /* GammaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A201 /* GammaApp.swift */; };
@@ -250,6 +251,7 @@
 		AA000000000000000000EE1E /* GlassPushContentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPushContentSheet.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE1F /* GlassAdminHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAdminHomeView.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE20 /* GlassAdminSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAdminSheets.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE21 /* GlassAccessLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlassAccessLogic.swift; path = Logic/GlassAccessLogic.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -507,6 +509,7 @@
 			children = (
 				AA000000000000000000EE15 /* GateLynkGlass.entitlements */,
 				AA000000000000000000EE01 /* GlassApp.swift */,
+				AA000000000000000000EE21 /* GlassAccessLogic.swift */,
 				AA000000000000000000EE1C /* GlassAppIntents.swift */,
 				AA000000000000000000DD09 /* Theme */,
 				AA000000000000000000DD0A /* Views */,
@@ -852,6 +855,7 @@
 				AA000000000000000000FF14 /* CallManager.swift in Sources */,
 				AA000000000000000000FF15 /* IntercomCallView.swift in Sources */,
 				AA000000000000000000FF2C /* AccessOpenControl.swift in Sources */,
+				AA000000000000000000FF2D /* GlassAccessLogic.swift in Sources */,
 				AA000000000000000000FF16 /* GlassComingSoon.swift in Sources */,
 				AA000000000000000000FF17 /* GlassHistorySheet.swift in Sources */,
 				AA000000000000000000FF19 /* GlassAccessDeck.swift in Sources */,

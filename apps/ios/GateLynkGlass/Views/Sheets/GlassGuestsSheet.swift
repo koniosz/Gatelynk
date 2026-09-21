@@ -3,8 +3,17 @@ import UIKit
 
 // MARK: - Sheet Goście
 //
-// Lista zaproszeń (aktywne ● zielone / nadchodzące ○ fiolet / wygasłe
-// przygaszone) + kompaktowy kreator zaproszenia w tym samym sheecie.
+// Audyt UX 2026-09-21: lista odpowiada najpierw na pytanie „kto MA TERAZ
+// dostęp" — zakładki Aktywne (domyślna) / Zaplanowane / Historia wg
+// `GuestPassPhase` (termin + cofnięcie + wyczerpany limit, nie sam status).
+// Wiersz: kto → do kiedy → dokąd → stan; PIN, link, limit i historia są
+// w szczegółach. Akcje są NAZWANE (menu ⋯ i podpisane przyciski swipe):
+// Udostępnij / Przedłuż / Edytuj / Cofnij dostęp / Zaproś ponownie / Usuń
+// wpis. „Cofnij dostęp" (aktywna przepustka) i „Usuń wpis z historii"
+// (zakończona) to RÓŻNE działania tego samego endpointu DELETE — UI je
+// rozdziela i mówi prawdę o propagacji cofnięcia do bram.
+//
+// Kompaktowy kreator zaproszenia w tym samym sheecie.
 // POST /resident/guests zwraca Guest z 6-cyfrowym PIN-em — pokazujemy go
 // od razu w toaście i na liście.
 //
@@ -28,7 +37,6 @@ struct GlassGuestsSheet: View {
     /// nil = kreator nowego zaproszenia; gość = edycja (formularz prefill).
     @State private var formEditing: Guest?
     @State private var guestEvents: [AccessEvent] = []
-    @State private var expandedHistoryGuestId: Int?
 
     // Szczegóły / edycja gościa (2026-07-12) — tap na wiersz otwiera widok
     // z wysyłką zaproszenia (ShareLink), edycją pól, anulowaniem i
@@ -50,6 +58,15 @@ struct GlassGuestsSheet: View {
     // anulowanie, zakończony → twarde usunięcie z historii (ten sam endpoint
     // DELETE, patrz ResidentService.cancelGuest).
     @State private var swipedGuestId: Int?
+
+    /// Zakładka listy — domyślnie „kto ma teraz dostęp".
+    private enum ListTab: String, CaseIterable { case active = "Aktywne", scheduled = "Zaplanowane", history = "Historia" }
+    @State private var listTab: ListTab = .active
+    /// Przepustka, dla której pytamy o przedłużenie (lista i szczegóły).
+    @State private var extendTarget: Guest?
+    @State private var extendBusy = false
+    /// Usunięcie WPISU z historii (osobne od cofnięcia dostępu).
+    @State private var confirmDeleteEntry = false
 
     // Formularz
     @State private var name = ""
@@ -112,42 +129,36 @@ struct GlassGuestsSheet: View {
 
     private var listContent: some View {
         VStack(spacing: 9) {
-            GlassSheetHeader(kicker: "Goście", title: "Zaproszenia", onClose: onClose)
+            GlassSheetHeader(kicker: "Goście", title: "Przepustki gości", onClose: onClose)
+
+            tabPicker
 
             if visibleGuests.isEmpty {
-                GlassSheetEmptyState(
-                    icon: "person.2",
-                    text: "Brak aktywnych zaproszeń.\nZaproś gościa — dostanie PIN do bramy."
-                )
+                GlassSheetEmptyState(icon: "person.2", text: emptyText)
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 9) {
                         ForEach(visibleGuests) { g in
+                            let live = phase(g).isLive
                             GlassSwipeToDelete(
                                 id: g.id,
                                 openId: $swipedGuestId,
-                                secondary: GlassSwipeAction(
-                                    icon: "arrow.clockwise",
-                                    color: GlassColor.success,
-                                    action: { reinvite(g) }
-                                ),
-                                confirmTitle: "Czy na pewno chcesz usunąć zaproszenie dla \(g.name)?",
-                                confirmMessage: g.status == .active
-                                    ? "PIN i link przestaną działać, a tablica zniknie z białej listy przy bramie."
-                                    : "Wpis zniknie z historii zaproszeń.",
-                                onDelete: { await deleteGuest(g) },
+                                secondary: live
+                                    ? GlassSwipeAction(icon: "clock.badge.checkmark", color: GlassColor.accentBlue,
+                                                       label: "Przedłuż", action: { extendTarget = g })
+                                    : GlassSwipeAction(icon: "arrow.clockwise", color: GlassColor.success,
+                                                       label: "Zaproś ponownie", action: { reinvite(g) }),
+                                confirmTitle: live ? revokeTitle(g) : "Usunąć wpis z historii?",
+                                confirmMessage: live ? revokeMessage(g) : deleteEntryMessage(g),
+                                destructiveLabel: live ? "Cofnij dostęp" : "Usuń wpis",
+                                destructiveIcon: live ? "xmark.seal.fill" : "trash.fill",
+                                onDelete: { await revokeOrDelete(g) },
                                 onTap: { openEdit(g) }
                             ) { row(g) }
                         }
                     }
                 }
                 .scrollBounceBehavior(.basedOnSize)
-
-                Text("Dotknij gościa, aby wysłać zaproszenie, edytować lub zaprosić ponownie. Przesuń w lewo, aby usunąć.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .padding(.vertical, 4)
             }
 
             GlassButton(title: "+ Zaproś gościa") {
@@ -156,24 +167,155 @@ struct GlassGuestsSheet: View {
             }
             .padding(.top, 6)
         }
+        .confirmationDialog(
+            extendTarget.map { "Przedłużyć dostęp: \($0.name)?" } ?? "Przedłużyć dostęp?",
+            isPresented: Binding(get: { extendTarget != nil && editingGuest == nil }, set: { if !$0 { extendTarget = nil } }),
+            titleVisibility: .visible
+        ) {
+            extendOptions
+        } message: {
+            if let g = extendTarget { Text("Teraz ważna do \(Self.fullDate.string(from: g.validTo)).") }
+        }
+    }
+
+    /// Zakładki z licznikami liczonymi z TEJ SAMEJ klasyfikacji co lista.
+    private var tabPicker: some View {
+        HStack(spacing: 6) {
+            ForEach(ListTab.allCases, id: \.self) { tab in
+                let count = guests(in: tab).count
+                let selected = tab == listTab
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { listTab = tab; swipedGuestId = nil }
+                } label: {
+                    Text(count > 0 ? "\(tab.rawValue) (\(count))" : tab.rawValue)
+                        .font(.system(size: 13, weight: selected ? .bold : .semibold))
+                        .foregroundStyle(.white.opacity(selected ? 1 : 0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background {
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .fill(Color.white.opacity(selected ? 0.18 : 0.06))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .strokeBorder(Color.white.opacity(selected ? 0.4 : 0.12), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+            }
+        }
+    }
+
+    private var emptyText: String {
+        switch listTab {
+        case .active:    return "Nikt nie ma teraz aktywnej przepustki.\nZaproś gościa — dostanie PIN i link do bramy."
+        case .scheduled: return "Brak zaplanowanych przepustek."
+        case .history:   return "Historia przepustek jest pusta."
+        }
     }
 
     // MARK: Swipe-to-delete (2026-07-13)
 
-    /// DELETE /resident/guests/:id — aktywny → CANCELLED (PIN/link/tablica
-    /// przestają działać), wygasły/anulowany → twarde usunięcie z historii.
+    /// Odpowiedź DELETE: `status` po operacji, `deleted` przy usunięciu wpisu,
+    /// `revocation.edgeOnline` = czy sterownik osiedla był połączony w chwili
+    /// cofnięcia (API 2026-09-21; starszy backend nie zwraca → nil).
+    private struct RevokeResult: Decodable {
+        struct Revocation: Decodable { let edgeOnline: Bool }
+        let status: String?
+        let deleted: Bool?
+        let revocation: Revocation?
+    }
+
+    /// DELETE /resident/guests/:id — dwa RÓŻNE skutki tego samego endpointu:
+    ///   • przepustka żywa → status CANCELLED + usunięcie PIN-u i tablicy
+    ///     z bram przez trwałą kolejkę Edge (egzekwowane przez backend),
+    ///   • przepustka zakończona → usunięcie wpisu z listy (zdarzenia
+    ///     w historii osiedla zostają).
     /// Zwraca sukces — komponent swipe cofa animację przy błędzie.
-    private func deleteGuest(_ g: Guest) async -> Bool {
+    private func revokeOrDelete(_ g: Guest) async -> Bool {
+        let wasLive = phase(g).isLive
         do {
-            let _: Guest = try await APIClient.shared.delete("/resident/guests/\(g.id)")
+            let result: RevokeResult = try await APIClient.shared.delete("/resident/guests/\(g.id)")
             await onReload()
-            toast.show(g.status == .active ? "Zaproszenie anulowane" : "Zaproszenie usunięte")
+            toast.show(Self.resultMessage(wasLive: wasLive, name: g.name, result: result))
             return true
         } catch {
-            toast.show("Nie udało się usunąć zaproszenia", error: true)
+            // Błąd = stan BEZ ZMIAN: przepustka nadal działa / wpis nadal jest.
+            toast.show(wasLive
+                       ? "Nie potwierdzono cofnięcia — \(g.name) nadal ma dostęp. Spróbuj ponownie."
+                       : "Nie udało się usunąć wpisu.", error: true)
             return false
         }
     }
+
+    private static func resultMessage(wasLive: Bool, name: String, result: RevokeResult) -> String {
+        guard wasLive else { return "Wpis usunięty z historii" }
+        switch result.revocation?.edgeOnline {
+        case .some(true):
+            return "Cofnięto dostęp: \(name). Usunięcie PIN-u i tablicy wysłane do bram."
+        case .some(false):
+            return "Cofnięto w systemie. Sterownik osiedla jest offline — PIN na klawiaturze może działać do ponownego połączenia."
+        case .none:
+            return "Cofnięto dostęp: \(name). Bramy otrzymują zmianę po synchronizacji."
+        }
+    }
+
+    private func revokeTitle(_ g: Guest) -> String { "Cofnąć dostęp: \(g.name)?" }
+
+    /// Konkretna przepustka, zakres i skutek — nie ogólne „usunąć?".
+    private func revokeMessage(_ g: Guest) -> String {
+        var parts = ["Przepustka ważna \(GlassFormat.guestWindow(g)) · \(scopeText(g))."]
+        var lose = ["PIN \(g.pin)", "link"]
+        if let p = g.vehiclePlate, !p.isEmpty { lose.append("tablica \(p)") }
+        parts.append("Przestaną działać: \(lose.joined(separator: ", ")). Inne przepustki tej osoby pozostają bez zmian. Wpis zostanie w Historii.")
+        return parts.joined(separator: "\n")
+    }
+
+    private func deleteEntryMessage(_ g: Guest) -> String {
+        "Wpis „\(g.name)\" (\(phase(g).label.lowercased())) zniknie z tej listy. Nie zmienia to niczyjego dostępu; zdarzenia w historii osiedla zostają."
+    }
+
+    // MARK: Przedłużenie (PATCH validTo — obsługiwane dla aktywnych przepustek)
+
+    @ViewBuilder
+    private var extendOptions: some View {
+        if let g = extendTarget {
+            let base = max(g.validTo, Date())
+            Button("+2 godziny") { Task { await extend(g, to: base.addingTimeInterval(2 * 3600)) } }
+            Button("Do końca dnia") {
+                let end = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: base) ?? base
+                Task { await extend(g, to: end) }
+            }
+            Button("+1 dzień") { Task { await extend(g, to: base.addingTimeInterval(24 * 3600)) } }
+            Button("+7 dni") { Task { await extend(g, to: base.addingTimeInterval(7 * 24 * 3600)) } }
+            Button("Anuluj", role: .cancel) { extendTarget = nil }
+        }
+    }
+
+    private func extend(_ g: Guest, to newEnd: Date) async {
+        guard !extendBusy, newEnd > g.validTo else { extendTarget = nil; return }
+        extendBusy = true
+        defer { extendBusy = false; extendTarget = nil }
+        struct Body: Encodable { let validTo: String }
+        do {
+            let updated: Guest = try await APIClient.shared.patch(
+                "/resident/guests/\(g.id)", body: Body(validTo: GlassFormat.iso8601.string(from: newEnd)))
+            await onReload()
+            if editingGuest?.id == g.id { editingGuest = updated; editTo = updated.validTo }
+            toast.show("Przedłużono do \(Self.fullDate.string(from: updated.validTo))")
+        } catch {
+            toast.show("Nie udało się przedłużyć — termin bez zmian.", error: true)
+        }
+    }
+
+    private static let fullDate: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "pl_PL")
+        df.dateFormat = "d MMM yyyy, HH:mm"
+        return df
+    }()
 
     /// Otwiera widok szczegółów/edycji — kopiuje pola gościa do stanu.
     private func openEdit(_ g: Guest) {
@@ -186,83 +328,147 @@ struct GlassGuestsSheet: View {
         editingGuest = g
     }
 
-    /// Aktywne i nadchodzące na górze, ostatnie wygasłe na końcu (max 3).
-    private var visibleGuests: [Guest] {
-        let active = guests.filter { $0.status == .active }
-        let inactive = guests.filter { $0.status != .active }.prefix(3)
-        return active + Array(inactive)
+    // MARK: Klasyfikacja przepustek (GuestPassPhase — testowana w LogicTests)
+
+    private func phase(_ g: Guest, now: Date = Date()) -> GuestPassPhase {
+        let limited = (g.allowedAccessPoints ?? []).filter { $0.maxUses != nil }
+        let hasUnlimited = g.allowedAccessPoints == nil
+            || (g.allowedAccessPoints ?? []).contains { $0.maxUses == nil }
+        return GuestPassPhase.classify(
+            status: g.status.rawValue,
+            validFrom: g.validFrom, validTo: g.validTo,
+            remainingPerLimitedEntrance: limited.map { g.remainingUses(apId: $0.apId) ?? 0 },
+            hasUnlimitedEntrance: hasUnlimited,
+            now: now
+        )
     }
 
+    private func guests(in tab: ListTab) -> [Guest] {
+        switch tab {
+        case .active:    return guests.filter { phase($0) == .active }.sorted { $0.validTo < $1.validTo }
+        case .scheduled: return guests.filter { phase($0) == .scheduled }.sorted { $0.validFrom < $1.validFrom }
+        case .history:   return guests.filter { !phase($0).isLive }.sorted { $0.validTo > $1.validTo }
+        }
+    }
+
+    /// Każda przepustka to osobny wiersz — nie scalamy historycznych wpisów
+    /// tej samej osoby (mają niezależne zakresy i terminy).
+    private var visibleGuests: [Guest] { guests(in: listTab) }
+
+    /// Zakres dostępu słowami: „Wszystkie wejścia" albo nazwy wybranych.
+    /// („Tylko 3 wejścia" czytało się jak limit użyć — to liczba PUNKTÓW.)
+    private func scopeText(_ g: Guest) -> String {
+        guard let allowed = g.allowedAccessPoints, !allowed.isEmpty else { return "Wszystkie wejścia" }
+        let names = allowed.compactMap { entry in accessPoints.first(where: { $0.id == entry.apId })?.label }
+        if names.isEmpty { return "Wybrane wejścia: \(allowed.count)" }
+        let head = names.prefix(3).joined(separator: ", ")
+        return names.count > 3 ? "\(head) +\(names.count - 3)" : head
+    }
+
+    /// „Pozostały 2 z 3 wejść" — tylko gdy dane o limicie istnieją.
+    private func limitText(_ g: Guest) -> String? {
+        let limited = (g.allowedAccessPoints ?? []).filter { $0.maxUses != nil }
+        guard !limited.isEmpty, let left = g.totalRemainingUses else { return nil }
+        let total = limited.reduce(0) { $0 + ($1.maxUses ?? 0) }
+        return "Pozostało \(left) z \(total) otwarć"
+    }
+
+    private func validityText(_ g: Guest, phase p: GuestPassPhase) -> String {
+        switch p {
+        case .active:    return "Ważna do \(Self.fullDate.string(from: g.validTo))"
+        case .scheduled: return "Od \(Self.fullDate.string(from: g.validFrom)) do \(Self.fullDate.string(from: g.validTo))"
+        case .expired:   return "Wygasła \(Self.fullDate.string(from: g.validTo))"
+        case .cancelled: return "Cofnięta · była ważna do \(Self.fullDate.string(from: g.validTo))"
+        case .exhausted: return "Limit wykorzystany · termin do \(Self.fullDate.string(from: g.validTo))"
+        }
+    }
+
+    private func phaseColor(_ p: GuestPassPhase) -> Color {
+        switch p {
+        case .active:    return GlassColor.successLight
+        case .scheduled: return GlassColor.accentLight
+        case .exhausted: return GlassColor.orbAmber1
+        case .expired, .cancelled: return Color.white.opacity(0.6)
+        }
+    }
+
+    /// Wiersz: KTO → DO KIEDY → DOKĄD → STAN. PIN, link, limit i historia
+    /// są w szczegółach (dotknięcie) — nie konkurują z tym, co najważniejsze.
     private func row(_ g: Guest) -> some View {
-        let upcoming = g.status == .active && g.validFrom > Date()
-        let initial = String(g.name.prefix(1)).uppercased()
+        let p = phase(g)
 
         return GlassActionRow(
-            orbGradient: g.status == .active
-                ? (upcoming
+            orbGradient: p == .active
+                ? [GlassColor.success, GlassColor.accentBlue]
+                : (p == .scheduled
                     ? [GlassColor.accentLight, GlassColor.accentBlue]
-                    : [GlassColor.success, GlassColor.accentBlue])
-                : [Color.white.opacity(0.2), Color.white.opacity(0.1)],
+                    : [Color.white.opacity(0.2), Color.white.opacity(0.1)]),
             orbIcon: "person.fill",
             title: g.name,
-            subtitle: subtitle(g),
-            dimmed: g.status != .active,
-            trailing: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.35))
-            },
+            subtitle: validityText(g, phase: p),
+            dimmed: !p.isLive,
+            trailing: { rowMenu(g, phase: p) },
             extra: {
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        if g.status == .active {
-                            Text(upcoming ? "○ Nadchodzące" : "● Aktywne teraz")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(upcoming ? GlassColor.accentLight : GlassColor.successLight)
-                            Text("PIN \(g.pin)")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.75))
-                        } else {
-                            Text(g.status.label)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
+                    HStack(spacing: 5) {
+                        Image(systemName: "door.left.hand.open")
+                            .font(.system(size: 10.5, weight: .semibold))
+                        Text(scopeText(g))
+                            .font(.system(size: 12, weight: .medium))
+                            .lineLimit(1)
                     }
-                    restrictionsLine(for: g)
-                    activitySection(for: g)
+                    .foregroundStyle(.white.opacity(0.78))
+
+                    Text(p.label)
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(phaseColor(p))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background { Capsule().fill(phaseColor(p).opacity(0.14)) }
                 }
                 .padding(.top, 3)
             }
         )
-        // używamy initial w orbie? GlassOrb przyjmuje SF Symbol — initial pomijamy
-        .accessibilityLabel("\(initial) — \(g.name)")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(g.name). \(validityText(g, phase: p)). \(scopeText(g)). \(p.label).")
+        .accessibilityHint("Otwiera szczegóły przepustki")
     }
 
-    private func subtitle(_ g: Guest) -> String {
-        var s = GlassFormat.guestWindow(g)
-        if let p = g.vehiclePlate, !p.isEmpty {
-            s += " · \(p)"
-        }
-        return s
-    }
-
-    /// Krótka linijka ograniczeń w wierszu gościa (2026-07-08) — np.
-    /// „Tylko 2 wejścia · Codziennie 6:00–7:00 · zostały 3". Nie renderuje
-    /// się gdy gość bez ograniczeń (stary backend → nic).
-    @ViewBuilder
-    private func restrictionsLine(for g: Guest) -> some View {
-        if let summary = g.restrictionsSummary {
-            // „zostały X" — suma pozostałych otwarć dla wejść z limitem.
-            let text = g.totalRemainingUses.map { "\(summary) · zostały \($0)" } ?? summary
-            HStack(spacing: 5) {
-                Image(systemName: "lock.shield")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(text)
-                    .font(.system(size: 10.5, weight: .medium))
-                    .lineLimit(2)
+    /// Jawne, NAZWANE akcje zależne od stanu (bez znajomości gestów).
+    private func rowMenu(_ g: Guest, phase p: GuestPassPhase) -> some View {
+        Menu {
+            if p.isLive {
+                if let url = g.portalUrl() {
+                    ShareLink(item: url, message: Text(shareMessage(g))) {
+                        Label("Udostępnij", systemImage: "square.and.arrow.up")
+                    }
+                } else {
+                    ShareLink(item: shareMessage(g)) { Label("Udostępnij", systemImage: "square.and.arrow.up") }
+                }
+                Button { extendTarget = g } label: { Label("Przedłuż", systemImage: "clock.badge.checkmark") }
+                Button { openEdit(g) } label: { Label("Szczegóły i edycja", systemImage: "pencil") }
+                Button(role: .destructive) {
+                    swipedGuestId = nil
+                    openEdit(g)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { confirmCancelInvite = true }
+                } label: { Label("Cofnij dostęp", systemImage: "xmark.seal") }
+            } else {
+                Button { reinvite(g) } label: { Label("Zaproś ponownie", systemImage: "arrow.clockwise") }
+                Button { openEdit(g) } label: { Label("Szczegóły", systemImage: "info.circle") }
             }
-            .foregroundStyle(.white.opacity(0.6))
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel("Akcje: \(g.name)")
+    }
+
+    private func shareMessage(_ g: Guest) -> String {
+        g.portalUrl() != nil
+            ? "Cześć \(g.name)! Zapraszam Cię — otwórz link i naciśnij przycisk przy bramie. PIN do domofonu: \(g.pin)"
+            : "Cześć \(g.name)! Twój PIN do domofonu: \(g.pin) (ważny \(GlassFormat.guestWindow(g)))."
     }
 
     // MARK: Historia aktywności gościa (2026-07-07)
@@ -285,66 +491,6 @@ struct GlassGuestsSheet: View {
         }
     }
 
-    /// „Ostatnia aktywność: X temu" + tap rozwija zdarzenia tego gościa.
-    /// Nie renderuje się gdy brak zdarzeń (świeży gość / stary backend).
-    @ViewBuilder
-    private func activitySection(for g: Guest) -> some View {
-        let evs = events(for: g)
-        if let last = evs.first {
-            let isExpanded = expandedHistoryGuestId == g.id
-            VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                        expandedHistoryGuestId = isExpanded ? nil : g.id
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("Ostatnia aktywność: \(GlassFormat.relative.localizedString(for: last.date, relativeTo: Date()))")
-                            .font(.system(size: 10.5, weight: .medium))
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 9, weight: .semibold))
-                    }
-                    .foregroundStyle(GlassColor.accentLight.opacity(0.85))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                if isExpanded {
-                    ForEach(Array(evs.prefix(8))) { ev in
-                        HStack(spacing: 7) {
-                            Image(systemName: ev.icon)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(ev.gateOpened ? GlassColor.successLight : GlassColor.dangerSoft)
-                                .frame(width: 20, height: 20)
-                                .background {
-                                    Circle().fill(
-                                        (ev.gateOpened ? GlassColor.success : GlassColor.danger).opacity(0.14)
-                                    )
-                                }
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(guestEventTitle(ev))
-                                    .font(.system(size: 11.5, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.9))
-                                HStack(spacing: 4) {
-                                    if let label = ev.accessPointLabel {
-                                        Text(label)
-                                        Text("·")
-                                    }
-                                    Text(GlassFormat.relative.localizedString(for: ev.date, relativeTo: Date()))
-                                }
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white.opacity(0.45))
-                            }
-                            Spacer()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: Szczegóły zaproszenia — PEŁNY EKRAN (redesign v2, 2026-08-14)
     //
     // Read-first jak karta w Apple Wallet: PIN i wysyłka od razu widoczne,
@@ -352,32 +498,40 @@ struct GlassGuestsSheet: View {
     // pełnemu ekranowi kluczowa treść mieści się bez przewijania.
 
     private func detailScreen(_ g: Guest) -> some View {
-        fullScreenScaffold(kicker: "Gość", title: "Szczegóły zaproszenia", onClose: { editingGuest = nil }) {
+        let p = phase(g)
+        return fullScreenScaffold(kicker: "Gość", title: "Szczegóły przepustki", onClose: { editingGuest = nil }) {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 14) {
                     guestHeaderCard(g)
 
-                    if g.status == .active {
+                    if p.isLive {
                         pinHero(g)
                         shareInviteButton(g)
 
-                        sectionLabel("Szczegóły")
-                        readonlyRow("Okres ważności", GlassFormat.guestWindow(g))
-                        if let p = g.vehiclePlate, !p.isEmpty {
-                            readonlyRow("Tablica", p)
+                        sectionLabel("Ważność i zakres")
+                        readonlyRow("Od", Self.fullDate.string(from: g.validFrom))
+                        readonlyRow("Do", Self.fullDate.string(from: g.validTo))
+                        readonlyRow("Zakres dostępu", scopeText(g))
+                        if let sched = g.recurringSchedule {
+                            readonlyRow("Harmonogram", sched.summary)
+                        }
+                        if let limit = limitText(g) {
+                            readonlyRow("Limit", limit)
+                        }
+                        if let plate = g.vehiclePlate, !plate.isEmpty {
+                            readonlyRow("Tablica", plate)
                         }
                         if let phone = g.phone, !phone.isEmpty {
                             readonlyRow("Telefon", phone)
                         }
-                        if let summary = g.restrictionsSummary {
-                            readonlyRow("Ograniczenia", summary)
-                        }
 
                         sectionLabel("Powiadomienia")
                         toggleRow("Powiadamiaj o aktywności gościa", isOn: notifyBinding(g))
-                        sectionCaption("Push przy każdym wjeździe, wyjeździe i użyciu PIN-u.")
+                        sectionCaption("Powiadomienie przy każdym wjeździe, wyjeździe i użyciu PIN-u.")
+
+                        detailHistory(g)
                     } else {
-                        Text("Zaproszenie \(g.status == .expired ? "wygasło" : "zostało anulowane"). Możesz zaprosić tę osobę ponownie — dostanie nowy PIN i nowy link.")
+                        Text(historyExplanation(p))
                             .font(.system(size: 13.5))
                             .foregroundStyle(.white.opacity(0.75))
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -410,8 +564,11 @@ struct GlassGuestsSheet: View {
             .scrollBounceBehavior(.basedOnSize)
 
             VStack(spacing: 10) {
-                if g.status == .active {
-                    GlassButton(title: "Edytuj zaproszenie", style: .ghost) {
+                if p.isLive {
+                    HStack(spacing: 10) {
+                        GlassButton(title: "Przedłuż", style: .ghost) { extendTarget = g }
+                            .disabled(editBusy || extendBusy)
+                        GlassButton(title: "Edytuj", style: .ghost) {
                         name = g.name
                         plate = g.vehiclePlate ?? ""
                         validFrom = g.validFrom
@@ -422,15 +579,20 @@ struct GlassGuestsSheet: View {
                         // listy pod spodem) — prezentacja z zakrytego widoku
                         // po cichu nie działa (pułapka fullScreenCover).
                         formEditing = g
+                        }
+                        .disabled(editBusy)
                     }
-                    .disabled(editBusy)
 
                     Button {
                         confirmCancelInvite = true
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "xmark.seal.fill").font(.system(size: 14, weight: .semibold))
-                            Text("Anuluj zaproszenie")
+                            if editBusy {
+                                ProgressView().tint(GlassColor.dangerSoft).scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "xmark.seal.fill").font(.system(size: 14, weight: .semibold))
+                            }
+                            Text(editBusy ? "Trwa cofanie dostępu…" : "Cofnij dostęp")
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .foregroundStyle(GlassColor.dangerSoft)
@@ -451,14 +613,33 @@ struct GlassGuestsSheet: View {
                     GlassButton(title: "Zaproś ponownie") {
                         reinvite(g)
                     }
+                    GlassButton(title: "Usuń wpis z historii", style: .ghost) {
+                        confirmDeleteEntry = true
+                    }
+                    .disabled(editBusy)
                 }
             }
         }
-        .confirmationDialog("Anulować zaproszenie dla \(g.name)?", isPresented: $confirmCancelInvite, titleVisibility: .visible) {
-            Button("Anuluj zaproszenie", role: .destructive) { Task { await cancelInvite(g) } }
+        .confirmationDialog(revokeTitle(g), isPresented: $confirmCancelInvite, titleVisibility: .visible) {
+            Button("Cofnij dostęp", role: .destructive) { Task { await cancelInvite(g) } }
             Button("Wróć", role: .cancel) {}
         } message: {
-            Text("PIN i link przestaną działać, a tablica zniknie z białej listy przy bramie.")
+            Text(revokeMessage(g))
+        }
+        .confirmationDialog("Usunąć wpis z historii?", isPresented: $confirmDeleteEntry, titleVisibility: .visible) {
+            Button("Usuń wpis", role: .destructive) { Task { await cancelInvite(g) } }
+            Button("Wróć", role: .cancel) {}
+        } message: {
+            Text(deleteEntryMessage(g))
+        }
+        .confirmationDialog(
+            "Przedłużyć dostęp: \(g.name)?",
+            isPresented: Binding(get: { extendTarget?.id == g.id }, set: { if !$0 { extendTarget = nil } }),
+            titleVisibility: .visible
+        ) {
+            extendOptions
+        } message: {
+            Text("Teraz ważna do \(Self.fullDate.string(from: g.validTo)).")
         }
         .fullScreenCover(item: $formEditing) { g in
             // UŻYWAMY parametru closure'a, nie stanu — pierwsza klatka covera
@@ -527,7 +708,7 @@ struct GlassGuestsSheet: View {
     private func guestHeaderCard(_ g: Guest) -> some View {
         HStack(spacing: 14) {
             GlassOrb(
-                gradient: g.status == .active
+                gradient: phase(g).isLive
                     ? [GlassColor.success, GlassColor.accentBlue]
                     : [Color.white.opacity(0.25), Color.white.opacity(0.12)],
                 systemName: "person.fill",
@@ -548,24 +729,58 @@ struct GlassGuestsSheet: View {
 
     /// Kolorowa plakietka statusu (kapsuła z tintowanym tłem).
     private func statusBadge(_ g: Guest) -> some View {
-        let upcoming = g.status == .active && g.validFrom > Date()
-        let (text, color): (String, Color) = {
-            if g.status == .active {
-                return upcoming
-                    ? ("NADCHODZĄCE", GlassColor.accentLight)
-                    : ("AKTYWNE TERAZ", GlassColor.successLight)
-            }
-            if g.status == .cancelled { return ("ANULOWANE", GlassColor.dangerSoft) }
-            return ("WYGASŁE", Color.white.opacity(0.55))
-        }()
-        return Text(text)
-            .font(.system(size: 10.5, weight: .bold))
+        let p = phase(g)
+        let color = phaseColor(p)
+        return Text(p.label.uppercased())
+            .font(.system(size: 11, weight: .bold))
             .tracking(0.6)
             .foregroundStyle(color)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background { Capsule().fill(color.opacity(0.16)) }
             .overlay { Capsule().strokeBorder(color.opacity(0.4), lineWidth: 1) }
+    }
+
+    private func historyExplanation(_ p: GuestPassPhase) -> String {
+        switch p {
+        case .cancelled: return "Dostęp został cofnięty — PIN, link i tablica tej przepustki nie działają. Możesz zaprosić tę osobę ponownie: dostanie nowy PIN i nowy link."
+        case .exhausted: return "Limit otwarć tej przepustki został wykorzystany, więc nie daje już dostępu. Możesz zaprosić tę osobę ponownie."
+        default:         return "Przepustka wygasła. Możesz zaprosić tę osobę ponownie — dostanie nowy PIN i nowy link."
+        }
+    }
+
+    /// Historia użycia TEJ przepustki (przeniesiona z wiersza listy).
+    @ViewBuilder
+    private func detailHistory(_ g: Guest) -> some View {
+        let evs = events(for: g)
+        sectionLabel("Historia użycia")
+        if evs.isEmpty {
+            sectionCaption("Brak zarejestrowanych zdarzeń tej przepustki.")
+        } else {
+            VStack(spacing: 6) {
+                ForEach(Array(evs.prefix(12))) { ev in
+                    HStack(spacing: 9) {
+                        Image(systemName: ev.icon)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(ev.gateOpened ? GlassColor.successLight : GlassColor.dangerSoft)
+                            .frame(width: 26, height: 26)
+                            .background {
+                                Circle().fill((ev.gateOpened ? GlassColor.success : GlassColor.danger).opacity(0.14))
+                            }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(guestEventTitle(ev))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.92))
+                            Text([ev.accessPointLabel, Self.fullDate.string(from: ev.date)].compactMap { $0 }.joined(separator: " · "))
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     /// PIN — duży, monospaced, kopiowalny tapem (toast „PIN skopiowany").
@@ -698,7 +913,7 @@ struct GlassGuestsSheet: View {
     private var shareInviteLabel: some View {
         HStack(spacing: 8) {
             Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .semibold))
-            Text("Wyślij zaproszenie")
+            Text("Udostępnij przepustkę")
                 .font(.system(size: 15, weight: .semibold))
         }
         .foregroundStyle(.white)
@@ -781,16 +996,23 @@ struct GlassGuestsSheet: View {
         submitting = false
     }
 
+    /// Cofnięcie dostępu / usunięcie wpisu ze szczegółów. „Trwa cofanie…"
+    /// widać do odpowiedzi serwera; sukces ogłaszamy dopiero po niej,
+    /// a przy błędzie mówimy wprost, że dostęp NIE został cofnięty.
     private func cancelInvite(_ g: Guest) async {
+        guard !editBusy else { return }
+        let wasLive = phase(g).isLive
         editBusy = true
         editError = nil
         do {
-            let _: Guest = try await APIClient.shared.delete("/resident/guests/\(g.id)")
+            let result: RevokeResult = try await APIClient.shared.delete("/resident/guests/\(g.id)")
             await onReload()
-            toast.show("Zaproszenie anulowane")
+            toast.show(Self.resultMessage(wasLive: wasLive, name: g.name, result: result))
             editingGuest = nil
         } catch {
-            editError = error.localizedDescription
+            editError = wasLive
+                ? "Nie potwierdzono cofnięcia — \(g.name) NADAL ma dostęp. Sprawdź połączenie i spróbuj ponownie. (\(error.localizedDescription))"
+                : "Nie udało się usunąć wpisu. (\(error.localizedDescription))"
         }
         editBusy = false
     }

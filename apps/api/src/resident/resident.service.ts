@@ -1440,7 +1440,16 @@ export class ResidentService {
       this.syncPinToEdge(g.buildingId, 'DELETE', { pin: g.pin, guestId: g.id })
     }
 
-    return { ...g, status: 'CANCELLED' as const }
+    // 2026-09-21 (audyt UX, P0 3.3) — prawda o propagacji cofnięcia.
+    // Cloud odrzuca PIN/link/tablicę OD RAZU (status CANCELLED). Edge waliduje
+    // PIN i tablicę OFFLINE-first z lokalnej kopii — usunięcie jedzie przez
+    // trwały outbox: przy połączonym Edge natychmiast, przy rozłączonym po
+    // reconnect. Klient dostaje `edgeOnline`, żeby NIE ogłaszać pełnego
+    // cofnięcia, gdy sterownik osiedla jest offline (PIN na klawiaturze może
+    // wtedy działać do czasu ponownego połączenia).
+    const edgeOnline = !!this.edgeGateway.getEdgeIpForBuilding(g.buildingId)
+
+    return { ...g, status: 'CANCELLED' as const, revocation: { edgeOnline } }
   }
 
   /**

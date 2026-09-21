@@ -58,7 +58,7 @@ struct GlassVehiclesSheet: View {
                 .scrollBounceBehavior(.basedOnSize)
             }
 
-            Text("Dotknij kafelek, aby zobaczyć szczegóły i pełną historię przejazdów. Przytrzymaj, aby edytować lub usunąć.")
+            Text("Dotknij pojazd, aby zobaczyć status wjazdu i historię przejazdów. Edycja i usuwanie: menu ⋯.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
@@ -79,6 +79,11 @@ struct GlassVehiclesSheet: View {
                     // Zamiana sheetów: zamknij szczegóły, po animacji otwórz edycję.
                     detail = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { editing = v }
+                },
+                onDelete: {
+                    let ok = await deleteVehicle(v)
+                    if ok { detail = nil }
+                    return ok
                 }
             )
             .glassNestedSheet()
@@ -162,16 +167,14 @@ struct GlassVehiclesSheet: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     GlassPlateBadge(plate: v.licensePlate)
-                    if v.effectiveStatus != .approved {
-                        Text(v.effectiveStatus.label)
-                            .font(.system(size: 10, weight: .semibold))
+                    // Status dostępu z danych (V01) — widać go bez otwierania.
+                    HStack(spacing: 4) {
+                        Circle().fill(statusColor(v.effectiveStatus)).frame(width: 6, height: 6)
+                        Text(Self.accessStatusShort(v.effectiveStatus))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(statusColor(v.effectiveStatus))
                             .lineLimit(1)
-                    } else if !subtitle(v).isEmpty {
-                        Text(subtitle(v))
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -187,10 +190,29 @@ struct GlassVehiclesSheet: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.13), lineWidth: 1)
             }
-            .opacity(v.effectiveStatus == .approved ? 1 : 0.75)
+            .opacity(v.effectiveStatus == .approved ? 1 : 0.85)
             .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(v.displayName), tablica \(v.licensePlate). \(Self.accessStatusShort(v.effectiveStatus)).")
+        .accessibilityHint("Otwiera szczegóły pojazdu")
+        .overlay(alignment: .topTrailing) {
+            // Jawne, nazwane akcje — przytrzymanie kafla zostaje skrótem (N01).
+            Menu {
+                Button { detail = v } label: { Label("Szczegóły i historia", systemImage: "list.bullet.rectangle") }
+                Button { editing = v } label: { Label("Edytuj dane", systemImage: "pencil") }
+                Button(role: .destructive) { confirmDelete = v } label: { Label("Usuń pojazd", systemImage: "trash") }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background { Circle().fill(Color.black.opacity(0.45)) }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Akcje: \(v.licensePlate)")
+        }
         .contextMenu {
             Button { editing = v } label: { Label("Edytuj dane", systemImage: "pencil") }
             Button(role: .destructive) { confirmDelete = v } label: {
@@ -212,15 +234,19 @@ struct GlassVehiclesSheet: View {
             }
             Button("Anuluj", role: .cancel) { confirmDelete = nil }
         } message: {
-            Text("Pojazd zniknie z rejestru i z białej listy przy bramie. Tej operacji nie można cofnąć.")
+            Text("Pojazd zniknie z rejestru, a automatyczny wjazd dla tej tablicy zostanie wyłączony. Tej operacji nie można cofnąć.")
         }
     }
 
-    private func subtitle(_ v: Vehicle) -> String {
-        var parts: [String] = []
-        if !v.color.isEmpty { parts.append(v.color) }
-        if let kind = v.kind, kind != .resident { parts.append(kind.label) }
-        return parts.joined(separator: " · ")
+    /// Krótki status DOSTĘPU wynikający ze statusu pojazdu w rejestrze:
+    /// zatwierdzony = tablica na liście uprawnionych kamer LPR.
+    static func accessStatusShort(_ s: VehicleStatus) -> String {
+        switch s {
+        case .approved: return "Automatyczny wjazd włączony"
+        case .pending:  return "Czeka na zatwierdzenie"
+        case .rejected: return "Odrzucony"
+        default:        return "\(s.label) — bez automatycznego wjazdu"
+        }
     }
 
     private func statusColor(_ s: VehicleStatus) -> Color {
@@ -851,17 +877,27 @@ private struct GlassVehiclePhotoField: View {
     }
 }
 
-// MARK: - Szczegóły pojazdu (2026-07-16) — styl apki producenta samochodu
+// MARK: - Szczegóły pojazdu
 //
-// Hero ze zdjęciem pojazdu (gradient dołem), duża nazwa na środku, tablica
-// + status, karta „Rozpoznawanie przy bramie" (ANPR), ostatnia aktywność
-// z access-events (fail-silent) i siatka danych. Edycja — przyciskiem.
+// Audyt UX 2026-09-21 — kolejność: (1) mała miniatura + JEDNA nazwa i tablica,
+// (2) zakres i status automatycznego wjazdu, (3) ostatnie zdarzenie: czas,
+// miejsce, typ, WYNIK i powód (LprEventReading — uprawnienie ≠ wynik
+// zdarzenia, a odczyt kamery nie dowodzi przejazdu ani bieżącej lokalizacji
+// auta), (4) widoczna „Historia przejazdów", (5) dane pojazdu i powiadomienia,
+// (6) jawne „Edytuj" + menu pozostałych działań. Parking: brak przypisań
+// w modelu danych → sekcji nie ma (nie wymyślamy jej).
 
 private struct GlassVehicleDetailSheet: View {
     let vehicle: Vehicle
     let onEdit: () -> Void
+    /// Usunięcie pojazdu (potwierdzane tutaj; realizuje lista).
+    var onDelete: () async -> Bool = { false }
 
     @Environment(\.dismiss) private var dismiss
+    @State private var historyExpanded = false
+    @State private var historyLoaded = false
+    @State private var confirmDelete = false
+    @State private var deleting = false
 
     /// Zdarzenia LPR tego pojazdu (najnowsze pierwsze) — karta „ostatni
     /// przejazd" + sekcja historii na dole.
@@ -873,57 +909,175 @@ private struct GlassVehicleDetailSheet: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            GlassSheetHeader(kicker: "Pojazd", title: vehicle.displayName, onClose: { dismiss() })
+            GlassSheetHeader(kicker: "Pojazd", title: "Szczegóły pojazdu", onClose: { dismiss() })
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
-                    hero
-
-                    // Nazwa + identyfikacja — wycentrowane jak w apkach OEM.
-                    VStack(spacing: 8) {
-                        Text(vehicle.displayName)
-                            .font(.system(size: 25, weight: .bold))
-                            .tracking(-0.5)
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                        HStack(spacing: 10) {
-                            GlassPlateBadge(plate: vehicle.licensePlate)
-                            if !vehicle.color.isEmpty {
-                                Text(vehicle.color.capitalized)
-                                    .font(.system(size: 12.5))
-                                    .foregroundStyle(.white.opacity(0.65))
-                            }
-                        }
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        identityRow
+                        anprStatusCard
+                        lastEventSection
+                        historyEntry(proxy)
+                        if historyExpanded { historySection.id("history") }
+                        sectionTitle("Dane pojazdu")
+                        infoGrid
+                        sectionTitle("Powiadomienia")
+                        notifyCard
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 2)
+                    .padding(.bottom, 8)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
 
-                    anprStatusCard
-
-                    notifyCard
-
-                    if let ev = lastEvent {
-                        lastActivityCard(ev)
+            HStack(spacing: 10) {
+                GlassButton(title: "Edytuj", style: .ghost) { onEdit() }
+                Menu {
+                    Button { onEdit() } label: { Label("Edytuj dane pojazdu", systemImage: "pencil") }
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label("Usuń pojazd", systemImage: "trash")
                     }
-
-                    infoGrid
-
-                    if events.count > 0 {
-                        historySection
+                } label: {
+                    HStack(spacing: 6) {
+                        if deleting { ProgressView().tint(.white).scaleEffect(0.8) }
+                        Text("Więcej").font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "ellipsis").font(.system(size: 13, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.10))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
                     }
                 }
-                .padding(.bottom, 8)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-
-            GlassButton(title: "Edytuj dane pojazdu", style: .ghost) {
-                onEdit()
+                .disabled(deleting)
+                .accessibilityLabel("Więcej działań")
             }
         }
         .task {
             notifyPassage = vehicle.notifyOnUse ?? false
             await loadLastEvent()
+            historyLoaded = true
         }
+        .confirmationDialog("Usunąć pojazd \(vehicle.licensePlate)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Usuń pojazd", role: .destructive) {
+                Task {
+                    deleting = true
+                    _ = await onDelete()
+                    deleting = false
+                }
+            }
+            Button("Anuluj", role: .cancel) {}
+        } message: {
+            Text("Pojazd zniknie z rejestru, a automatyczny wjazd dla tej tablicy zostanie wyłączony. Tej operacji nie można cofnąć.")
+        }
+    }
+
+    // MARK: (1) Identyfikacja — mała miniatura, jedna nazwa, tablica
+
+    private var identityRow: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                if let img = GlassVehiclePhotoField.decode(vehicle.photo) {
+                    Image(uiImage: img).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    RadialGradient(
+                        colors: [GlassColor.accentBlue.opacity(0.35), Color(hex: 0x0B1020)],
+                        center: .center, startRadius: 4, endRadius: 60
+                    )
+                    Image(systemName: "car.side.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+            }
+            .frame(width: 92, height: 68)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+            }
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text(vehicle.displayName)
+                    .font(.system(size: 20, weight: .bold))
+                    .tracking(-0.3)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                GlassPlateBadge(plate: vehicle.licensePlate)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 11.5, weight: .bold))
+            .tracking(0.8)
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    // MARK: (3) Ostatnie zdarzenie — czas, miejsce, typ, wynik i powód
+
+    @ViewBuilder
+    private var lastEventSection: some View {
+        sectionTitle("Ostatnie zdarzenie przy bramie")
+        if let ev = lastEvent {
+            lastActivityCard(ev)
+        } else {
+            Text(historyLoaded ? "Brak zarejestrowanych zdarzeń tego pojazdu." : "Ładowanie zdarzeń…")
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .glassCard()
+        }
+    }
+
+    // MARK: (5) Widoczne wejście do historii (V03)
+
+    private func historyEntry(_ proxy: ScrollViewProxy) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) { historyExpanded.toggle() }
+            if historyExpanded {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation { proxy.scrollTo("history", anchor: .top) }
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(GlassColor.accentLight)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Historia przejazdów")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(historyLoaded
+                         ? (events.isEmpty ? "Brak zarejestrowanych zdarzeń" : "Zdarzenia kamer: \(events.count)\(events.count >= 200 ? "+" : "")")
+                         : "Ładowanie…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                Spacer()
+                Image(systemName: historyExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 56)
+            .glassCard()
+        }
+        .buttonStyle(.plain)
+        .disabled(events.isEmpty)
+        .accessibilityHint(historyExpanded ? "Zwija historię" : "Rozwija historię przejazdów")
     }
 
     // MARK: Powiadomienia o przejazdach (2026-08-21)
@@ -942,7 +1096,7 @@ private struct GlassVehicleDetailSheet: View {
                 Text("Powiadomienia o przejazdach")
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(.white)
-                Text("Push ze zdjęciem z kamery przy każdym wjeździe i wyjeździe.")
+                Text("Powiadomienie ze zdjęciem z kamery przy każdym rozpoznaniu przy wjeździe i wyjeździe.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
@@ -977,49 +1131,6 @@ private struct GlassVehicleDetailSheet: View {
         }
     }
 
-    // MARK: Hero — zdjęcie z gradientem albo elegancki placeholder
-
-    private var hero: some View {
-        ZStack(alignment: .bottom) {
-            if let img = GlassVehiclePhotoField.decode(vehicle.photo) {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 190)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-            } else {
-                // Placeholder — radialny spotlight + duża ikona auta.
-                ZStack {
-                    RadialGradient(
-                        colors: [GlassColor.accentBlue.opacity(0.35), Color(hex: 0x0B1020)],
-                        center: .center, startRadius: 10, endRadius: 220
-                    )
-                    Image(systemName: "car.side.fill")
-                        .font(.system(size: 74))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .shadow(color: .black.opacity(0.6), radius: 14, y: 8)
-                }
-                .frame(height: 190)
-                .frame(maxWidth: .infinity)
-            }
-
-            // Gradient dołem — głębia jak w apkach OEM.
-            LinearGradient(
-                colors: [.clear, Color(hex: 0x0A0E1E).opacity(0.75)],
-                startPoint: .center, endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-        }
-        .frame(height: 190)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.4), radius: 18, y: 10)
-    }
-
     // MARK: Karta statusu ANPR
 
     private var anprStatusCard: some View {
@@ -1027,8 +1138,8 @@ private struct GlassVehicleDetailSheet: View {
             switch vehicle.effectiveStatus {
             case .approved:
                 return ("checkmark.shield.fill", GlassColor.successLight,
-                        "Rozpoznawanie aktywne",
-                        "Tablica na białej liście — szlaban otwiera się automatycznie.")
+                        "Automatyczny wjazd jest włączony",
+                        "Uprawnienia: \(Self.scopeLabel(vehicle)). Kamery rozpoznają tablicę i wysyłają polecenie otwarcia bramy.")
             case .pending:
                 return ("clock.badge.exclamationmark.fill", GlassColor.orbAmber1,
                         "Oczekuje na zatwierdzenie",
@@ -1040,7 +1151,7 @@ private struct GlassVehicleDetailSheet: View {
             default:
                 return ("minus.circle.fill", GlassColor.dangerSoft,
                         vehicle.effectiveStatus.label,
-                        "Tablica nie jest rozpoznawana przy bramie.")
+                        "Automatyczny wjazd jest wyłączony dla tej tablicy.")
             }
         }()
 
@@ -1067,33 +1178,79 @@ private struct GlassVehicleDetailSheet: View {
 
     // MARK: Ostatnia aktywność przy bramie
 
+    private func reading(_ ev: AccessEvent) -> LprEventReading {
+        LprEventReading.read(type: ev.type, gateOpened: ev.gateOpened, reason: ev.reason, direction: ev.direction)
+    }
+
+    private func toneColor(_ tone: AccessEventTone) -> Color {
+        switch tone {
+        case .positive: return GlassColor.successLight
+        case .neutral:  return Color.white.opacity(0.75)
+        case .warning:  return GlassColor.orbAmber1
+        case .negative: return GlassColor.dangerSoft
+        }
+    }
+
+    private func toneIcon(_ tone: AccessEventTone) -> String {
+        switch tone {
+        case .positive: return "checkmark.circle.fill"
+        case .neutral:  return "circle.dashed"
+        case .warning:  return "exclamationmark.triangle.fill"
+        case .negative: return "xmark.octagon.fill"
+        }
+    }
+
+    private static let eventDate: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "pl_PL")
+        df.dateFormat = "d MMM, HH:mm"
+        return df
+    }()
+
+    /// Czas + miejsce + typ + WYNIK (+ powód). Kolor = wynik zdarzenia,
+    /// niezależny od zielonej karty uprawnienia powyżej (V02).
     private func lastActivityCard(_ ev: AccessEvent) -> some View {
-        HStack(spacing: 13) {
-            Image(systemName: ev.gateOpened ? "arrow.up.forward.circle.fill" : "exclamationmark.circle.fill")
-                .font(.system(size: 22))
-                .foregroundStyle(ev.gateOpened ? GlassColor.accentLight : GlassColor.dangerSoft)
+        let r = reading(ev)
+        let color = toneColor(r.tone)
+        return HStack(alignment: .top, spacing: 13) {
+            Image(systemName: toneIcon(r.tone))
+                .font(.system(size: 21))
+                .foregroundStyle(color)
                 .frame(width: 40, height: 40)
-                .background {
-                    Circle().fill((ev.gateOpened ? GlassColor.accentBlue : GlassColor.danger).opacity(0.14))
-                }
+                .background { Circle().fill(color.opacity(0.14)) }
             VStack(alignment: .leading, spacing: 3) {
-                Text(ev.gateOpened ? "Ostatni przejazd" : "Ostatnia próba wjazdu")
-                    .font(.system(size: 14.5, weight: .semibold))
+                Text(r.title)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
-                HStack(spacing: 5) {
-                    Text(GlassFormat.relative.localizedString(for: ev.date, relativeTo: Date()))
-                    if let label = ev.accessPointLabel {
-                        Text("·")
-                        Text(label)
-                    }
-                }
-                .font(.system(size: 11.5))
-                .foregroundStyle(.white.opacity(0.6))
+                Text(r.detail)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(color)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text([
+                    Self.eventDate.string(from: ev.date)
+                        + " (\(GlassFormat.relative.localizedString(for: ev.date, relativeTo: Date())))",
+                    ev.accessPointLabel,
+                ].compactMap { $0 }.joined(separator: " · "))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.7))
+                Text("Odczyt kamery nie potwierdza przejazdu ani tego, gdzie auto jest teraz.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
             }
             Spacer(minLength: 0)
         }
         .padding(14)
         .glassCard()
+        .accessibilityElement(children: .combine)
+    }
+
+    static func scopeLabel(_ v: Vehicle) -> String {
+        switch v.kind ?? .resident {
+        case .resident: return "pojazd mieszkańca"
+        default:        return (v.kind ?? .resident).label.lowercased()
+        }
     }
 
     // MARK: Siatka danych
@@ -1104,7 +1261,7 @@ private struct GlassVehicleDetailSheet: View {
                 ("Marka", vehicle.make),
                 ("Model", vehicle.model?.isEmpty == false ? vehicle.model! : "—"),
                 ("Kolor", vehicle.color.isEmpty ? "—" : vehicle.color.capitalized),
-                ("Typ", (vehicle.kind ?? .resident).label),
+                ("Uprawnienia", Self.scopeLabel(vehicle).capitalized),
             ]
             if let n = vehicle.notes, !n.isEmpty { out.append(("Notatka", n)) }
             return out
@@ -1203,23 +1360,6 @@ private struct GlassVehicleDetailSheet: View {
         }
     }
 
-    /// Tytuł wiersza historii: kierunek z kamery albo typ zdarzenia.
-    /// Dane zawierają OBA formaty kierunku: 'IN'/'OUT' (nowe eventy) i
-    /// surowe 'forward'/'reverse' z Edge (starsze / backfill 2026-05).
-    private func historyTitle(_ ev: AccessEvent) -> String {
-        if ev.type == "LPR_NO_MATCH" { return "Odmowa — tablica nierozpoznana" }
-        switch ev.direction {
-        case "IN", "forward":  return "Wjazd"
-        case "OUT", "reverse": return "Wyjazd"
-        default:    return ev.gateOpened ? "Przejazd" : "Rozpoznanie bez otwarcia"
-        }
-    }
-
-    /// Czy zdarzenie to wyjazd (dla ikony strzałki) — oba formaty kierunku.
-    private func isExit(_ ev: AccessEvent) -> Bool {
-        ev.direction == "OUT" || ev.direction == "reverse"
-    }
-
     private static let historyDate: DateFormatter = {
         let df = DateFormatter()
         df.locale = Locale(identifier: "pl_PL")
@@ -1228,33 +1368,30 @@ private struct GlassVehicleDetailSheet: View {
         return df
     }()
 
+    /// Wiersz historii — ten sam odczyt co karta „ostatnie zdarzenie":
+    /// typ + wynik + powód, kolor = wynik (nieznany ≠ czerwony, ≠ zielony).
     private func historyRow(_ ev: AccessEvent) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: ev.gateOpened
-                  ? (isExit(ev) ? "arrow.up.right" : "arrow.down.left")
-                  : "xmark")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(ev.gateOpened ? GlassColor.successLight : GlassColor.dangerSoft)
+        let r = reading(ev)
+        let color = toneColor(r.tone)
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: toneIcon(r.tone))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(color)
                 .frame(width: 26, height: 26)
-                .background {
-                    Circle().fill(
-                        (ev.gateOpened ? GlassColor.success : GlassColor.danger).opacity(0.14)
-                    )
-                }
+                .background { Circle().fill(color.opacity(0.14)) }
             VStack(alignment: .leading, spacing: 1) {
-                Text(historyTitle(ev))
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                if let label = ev.accessPointLabel {
-                    Text(label)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.white.opacity(0.5))
-                }
+                Text(r.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                Text([r.detail, ev.accessPointLabel].compactMap { $0 }.joined(separator: " · "))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
             Text(Self.historyDate.string(from: ev.date))
-                .font(.system(size: 10.5).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.5))
+                .font(.system(size: 11.5).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.6))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -1262,5 +1399,6 @@ private struct GlassVehicleDetailSheet: View {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .fill(Color.white.opacity(0.055))
         }
+        .accessibilityElement(children: .combine)
     }
 }

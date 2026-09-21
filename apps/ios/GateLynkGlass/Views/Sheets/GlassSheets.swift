@@ -368,6 +368,9 @@ struct GlassSheetLoading: View {
 struct GlassSwipeAction {
     let icon: String
     let color: Color
+    /// Podpis pod ikoną (audyt UX 2026-09-21: strzałka i kosz bez nazw nie
+    /// mówiły, co robią). nil = sama ikona (starsze call-site'y).
+    var label: String? = nil
     let action: () -> Void
 }
 
@@ -379,6 +382,10 @@ struct GlassSwipeToDelete<Content: View>: View {
     /// z destrukcyjnym „Usuń"). nil = usuwanie bez potwierdzenia.
     var confirmTitle: String? = nil
     var confirmMessage: String? = nil
+    /// Nazwa akcji destrukcyjnej — podpis pod koszem i przycisk w dialogu
+    /// („Cofnij dostęp" ≠ „Usuń wpis"). Domyślnie „Usuń".
+    var destructiveLabel: String = "Usuń"
+    var destructiveIcon: String = "trash.fill"
     /// Usuwa rekord (razem z reloadem listy). `false` = błąd → wiersz wraca.
     let onDelete: () async -> Bool
     let onTap: () -> Void
@@ -394,7 +401,7 @@ struct GlassSwipeToDelete<Content: View>: View {
     private static var spring: Animation { .spring(response: 0.32, dampingFraction: 0.85) }
 
     /// Szerokość odsłoniętej strefy: 1 przycisk (46) lub 2 (46+9+46) + marginesy.
-    private var revealWidth: CGFloat { secondary == nil ? 62 : 117 }
+    private var revealWidth: CGFloat { secondary == nil ? 78 : 150 }
     /// Głębokość pełnego swipe'a — puszczenie za nią = natychmiastowe usunięcie.
     private var commitDepth: CGFloat { revealWidth + 110 }
 
@@ -480,7 +487,7 @@ struct GlassSwipeToDelete<Content: View>: View {
             isPresented: $confirming,
             titleVisibility: .visible
         ) {
-            Button("Usuń", role: .destructive) { commitDelete() }
+            Button(destructiveLabel, role: .destructive) { commitDelete() }
             Button("Anuluj", role: .cancel) {}
         } message: {
             if let confirmMessage { Text(confirmMessage) }
@@ -506,35 +513,56 @@ struct GlassSwipeToDelete<Content: View>: View {
                     withAnimation(Self.spring) { openId = nil }
                     secondary.action()
                 } label: {
-                    ZStack {
-                        Circle().fill(secondary.color)
-                        Image(systemName: secondary.icon)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                    swipeButtonLabel(caption: secondary.label) {
+                        ZStack {
+                            Circle().fill(secondary.color)
+                            Image(systemName: secondary.icon)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
                     }
-                    .frame(width: 46, height: 46)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(secondary.label ?? "Akcja")
             }
 
             Button(action: requestDelete) {
-                ZStack {
-                    Circle().fill(GlassColor.danger)
-                    if deleting {
-                        ProgressView().tint(.white).scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                swipeButtonLabel(caption: destructiveLabel) {
+                    ZStack {
+                        Circle().fill(GlassColor.danger)
+                        if deleting {
+                            ProgressView().tint(.white).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: destructiveIcon)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
                     }
                 }
-                .frame(width: 46, height: 46)
             }
             .buttonStyle(.plain)
             .disabled(deleting)
+            .accessibilityLabel(destructiveLabel)
         }
         .padding(.trailing, 7)
         .allowsHitTesting(interactive)
+    }
+
+    /// Okrągła ikona 46 pt + podpis (max 2 wiersze) — nazwana akcja zamiast
+    /// samego symbolu; pole dotyku 64 pt szerokości.
+    private func swipeButtonLabel<Icon: View>(caption: String?, @ViewBuilder icon: () -> Icon) -> some View {
+        VStack(spacing: 3) {
+            icon().frame(width: 46, height: 46)
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .frame(width: 64)
     }
 
     /// Optymistyczne usunięcie: animuj wyjazd + collapse, potem strzał do

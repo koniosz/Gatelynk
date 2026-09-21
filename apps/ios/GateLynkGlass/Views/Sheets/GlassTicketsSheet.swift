@@ -154,6 +154,11 @@ struct GlassTicketsSheet: View {
                             GlassSwipeToDelete(
                                 id: t.id,
                                 openId: $swipedTicketId,
+                                // Audyt UX 2026-09-21: usuwanie bez pytania +
+                                // kosz bez nazwy → nazwana akcja z potwierdzeniem.
+                                confirmTitle: "Usunąć zgłoszenie „\(t.title)\"?",
+                                confirmMessage: "Zgłoszenie i korespondencja znikną z Twojej listy. Tej operacji nie można cofnąć.",
+                                destructiveLabel: "Usuń zgłoszenie",
                                 onDelete: { await deleteTicket(t) },
                                 onTap: { openDetail(t) }
                             ) { row(t) }
