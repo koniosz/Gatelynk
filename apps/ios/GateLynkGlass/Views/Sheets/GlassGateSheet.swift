@@ -1,11 +1,13 @@
 import SwiftUI
 
-// MARK: - Sheet "Co chcesz otworzyć?"
+// MARK: - Sheet „Wszystkie wejścia"
 //
-// Lista realnych access pointów z /resident/access-points. CTA "Otwórz" →
-// spinner "Otwieram" → "Otwarte ✓" (3s) → reset. Brama pożarowa (heurystyka
-// label jak w GateActionSheet starej apki) → ekran potwierdzenia w tym
-// samym sheecie (jak w prototypu HTML).
+// Lista realnych access pointów z /resident/access-points. Audyt UX
+// 2026-09-21: dotknięcie wiersza WYBIERA wejście i rozwija ten sam przycisk
+// co na Domu (`HoldToOpenButton`, 2 s, realny wynik polecenia) — wcześniej
+// „Otwórz" w wierszu otwierało jednym tapem i kończyło „Otwarte ✓" bez
+// telemetrii. Wejścia awaryjne są w OSOBNEJ sekcji na końcu; ich logika
+// (ekran potwierdzenia) jest bez zmian.
 //
 // 2026-07-07 (produkcja):
 //   • „Połącz z domofonem" — outbound call do stacji (CallManager, WebRTC).
@@ -18,7 +20,7 @@ import SwiftUI
 
 struct GlassGateSheet: View {
     let accessPoints: [AccessPoint]
-    let onOpen: (AccessPoint) async -> Bool
+    let onOpen: (AccessPoint) async -> AccessOpenOutcome
     let onComingSoon: (GlassUpcomingFeature) -> Void
     let onClose: () -> Void
 
@@ -31,9 +33,10 @@ struct GlassGateSheet: View {
     }
 
     @State private var mode: Mode = .list
-    @State private var ctaPhases: [Int: GlassCTAPhase] = [:]
+    /// Wejście wybrane na liście — pod nim rozwija się przycisk otwierania.
+    @State private var selectedApId: Int?
     @State private var fireBusy = false
-    @State private var fireDone = false
+    @State private var fireOutcome: AccessOpenOutcome?
     @State private var stations: [IntercomStation] = []
     @State private var loadingStations = false
 
@@ -43,7 +46,7 @@ struct GlassGateSheet: View {
     init(
         accessPoints: [AccessPoint],
         fireConfirmApId: Int? = nil,
-        onOpen: @escaping (AccessPoint) async -> Bool,
+        onOpen: @escaping (AccessPoint) async -> AccessOpenOutcome,
         onComingSoon: @escaping (GlassUpcomingFeature) -> Void,
         onClose: @escaping () -> Void
     ) {
@@ -69,9 +72,12 @@ struct GlassGateSheet: View {
 
     // MARK: Lista przejść
 
+    private var regularPoints: [AccessPoint] { accessPoints.filter { !Self.isFireGate($0) } }
+    private var emergencyPoints: [AccessPoint] { accessPoints.filter { Self.isFireGate($0) } }
+
     private var listContent: some View {
         VStack(spacing: 9) {
-            GlassSheetHeader(kicker: "Dostęp", title: "Co chcesz otworzyć?", onClose: onClose)
+            GlassSheetHeader(kicker: "Dostęp", title: "Wszystkie wejścia", onClose: onClose)
 
             if accessPoints.isEmpty {
                 GlassSheetEmptyState(
@@ -81,15 +87,20 @@ struct GlassGateSheet: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 9) {
-                        ForEach(accessPoints) { ap in
+                        ForEach(regularPoints) { ap in
                             row(ap)
                         }
-                        // 2026-07-08 — zapowiedź Tedee tylko gdy w API nie ma
-                        // REALNEGO zamka drzwi mieszkania (category==UNIT_DOOR);
-                        // realny renderuje się wyżej jako zwykły row (klucz +
-                        // bursztyn, istniejący flow open).
-                        if !accessPoints.contains(where: { $0.isUnitDoor }) {
-                            tedeeRow
+                        if !emergencyPoints.isEmpty {
+                            Text("AWARYJNE")
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(1.2)
+                                .foregroundStyle(GlassColor.dangerSoft.opacity(0.95))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 8)
+                                .accessibilityAddTraits(.isHeader)
+                            ForEach(emergencyPoints) { ap in
+                                row(ap)
+                            }
                         }
                     }
                 }
@@ -177,64 +188,44 @@ struct GlassGateSheet: View {
         }
     }
 
-    // MARK: „Mój dom" (Tedee) — zapowiedź WKRÓTCE
-
-    private var tedeeRow: some View {
-        Button {
-            onComingSoon(.tedeeLock)
-        } label: {
-            GlassActionRow(
-                orbGradient: [GlassColor.accentLight, GlassColor.orbPurple],
-                orbIcon: "lock.open.rotation",
-                title: "Mój dom — drzwi mieszkania",
-                subtitle: "Inteligentny zamek",
-                dimmed: true
-            ) {
-                GlassSoonBadge()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
     @ViewBuilder
     private func row(_ ap: AccessPoint) -> some View {
         let fire = Self.isFireGate(ap)
-        GlassActionRow(
-            orbGradient: fire
-                ? [GlassColor.dangerSoft, GlassColor.dangerDeep]
-                : Self.orbGradient(for: ap),
-            orbIcon: Self.icon(for: ap),
-            title: ap.label,
-            subtitle: fire ? "Wymaga potwierdzenia" : Self.subtitle(for: ap)
-        ) {
-            if fire {
-                GlassOpenCTA(phase: .idle, idleText: "Awaryjnie", danger: true) {
-                    mode = .fireConfirm(ap.id)
+        let selected = selectedApId == ap.id
+        VStack(spacing: 8) {
+            Button {
+                if fire {
+                    mode = .fireConfirm(ap.id)   // logika awaryjna bez zmian
+                } else {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        selectedApId = selected ? nil : ap.id
+                    }
                 }
-            } else {
-                GlassOpenCTA(phase: ctaPhases[ap.id] ?? .idle) {
-                    Task { await runOpen(ap) }
+            } label: {
+                GlassActionRow(
+                    orbGradient: fire
+                        ? [GlassColor.dangerSoft, GlassColor.dangerDeep]
+                        : Self.orbGradient(for: ap),
+                    orbIcon: Self.icon(for: ap),
+                    title: ap.label,
+                    subtitle: fire ? "Awaryjne — wymaga potwierdzenia" : Self.subtitle(for: ap)
+                ) {
+                    Image(systemName: fire ? "chevron.right" : (selected ? "chevron.up" : "chevron.down"))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: 30, height: 30)
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(fire ? "Otwiera ekran potwierdzenia" : "Rozwija przycisk otwierania")
+
+            if selected && !fire {
+                HoldToOpenButton(targetName: ap.label) { await onOpen(ap) }
+                    .id(ap.id)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-    }
-
-    private func runOpen(_ ap: AccessPoint) async {
-        guard (ctaPhases[ap.id] ?? .idle) == .idle else { return }
-        ctaPhases[ap.id] = .busy
-        let ok = await onOpen(ap)
-        if ok {
-            ctaPhases[ap.id] = .ok
-            toast.show("\(ap.label) — otwarto")
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        } else {
-            ctaPhases[ap.id] = .idle
-            toast.show("Nie udało się otworzyć", error: true)
-            return
-        }
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-        ctaPhases[ap.id] = .idle
     }
 
     // MARK: Potwierdzenie bramy pożarowej
@@ -247,7 +238,7 @@ struct GlassGateSheet: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 32))
                     .foregroundStyle(GlassColor.dangerSoft)
-                Text("Otwarcie zostanie zarejestrowane\ni zgłoszone do administracji.")
+                Text("Otwarcie zostanie zapisane w historii\nzdarzeń osiedla, którą widzi administracja.")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -267,8 +258,18 @@ struct GlassGateSheet: View {
             }
             .padding(.bottom, 14)
 
-            if fireDone {
-                GlassButton(title: "Brama pożarowa otwarta ✓", style: .ghost) {}
+            if let fireOutcome, fireOutcome != .accepted {
+                Text(fireOutcome == .unknown
+                     ? "Wynik nieznany — nie wiemy, czy polecenie dotarło. Sprawdź bramę; nie ponawiamy automatycznie."
+                     : "Nie udało się wysłać polecenia. Brama NIE została otwarta z aplikacji.")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(fireOutcome == .unknown ? GlassColor.orbAmber1 : GlassColor.dangerSoft)
+                    .multilineTextAlignment(.center)
+                    .padding(.bottom, 10)
+            }
+
+            if fireOutcome == .accepted {
+                GlassButton(title: "Polecenie otwarcia przyjęte ✓", style: .ghost) {}
                     .disabled(true)
             } else {
                 GlassButton(
@@ -290,22 +291,26 @@ struct GlassGateSheet: View {
     }
 
     private func runFireOpen(_ ap: AccessPoint) async {
+        guard !fireBusy else { return }   // dubel dotknięcia ≠ druga komenda
         fireBusy = true
-        let ok = await onOpen(ap)
+        let outcome = await onOpen(ap)
         fireBusy = false
-        if ok {
-            fireDone = true
-            toast.show("Powiadomiono administrację")
-            try? await Task.sleep(nanoseconds: 1_800_000_000)
+        fireOutcome = outcome
+        if outcome == .accepted {
+            // Backend zapisuje REMOTE_OPEN w audycie; NIE wysyła osobnego
+            // powiadomienia do administracji — nie twierdzimy, że wysłał.
+            toast.show("\(ap.label) — polecenie otwarcia przyjęte")
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
             onClose()
-        } else {
-            toast.show("Nie udało się otworzyć", error: true)
         }
     }
 
     // MARK: Mapowanie (spójne z GateActionSheet głównej apki)
 
     static func isFireGate(_ ap: AccessPoint) -> Bool {
+        // Najpierw dane z API (kategoria nadana przez integratora), heurystyka
+        // po nazwie zostaje dla obiektów bez ustawionej kategorii.
+        if ap.category == "FIRE_ESCAPE" { return true }
         let l = ap.label.lowercased()
         return l.contains("poż") || l.contains("fire") || l.contains("awar")
     }

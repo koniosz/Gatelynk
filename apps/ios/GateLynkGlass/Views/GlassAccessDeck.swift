@@ -28,14 +28,19 @@ import SwiftUI
 //   • kropki paginacji 6pt, aktywna 6→22 w akcencie (transition .3s)
 //   • wypełnienie pierścienia .9s cubic-bezier(.4,0,.2,1)
 //
-// Interakcja tap: pierścień wypełnia się ~0.9 s, RÓWNOLEGLE leci realne
-// API otwarcia (onOpen → openAccessPoint). Sukces → ✓ w kółku + zieleń
-// (#34D399) + toast + auto-reset 3 s. Błąd/timeout → czerwony stan „Nie
-// udało się otworzyć" (bez auto-sukcesu), reset 3 s. Brama pożarowa NIE
-// otwiera z decka — onFireConfirm prowadzi do istniejącego ekranu
-// potwierdzenia (GlassGateSheet.fireConfirm — nie osłabiamy bezpieczeństwa).
-//
-// Swipe vs tap: TabView(.page) rozróżnia natywnie.
+// Interakcja (audyt UX 2026-09-21):
+//   • WYBÓR wejścia jest jawny — rząd chipów z nazwami + „Wszystkie wejścia";
+//     karuzela (swipe) zostaje skrótem, nie jedyną metodą (A02).
+//   • OTWIERANIE to osobny, nazwany przycisk `HoldToOpenButton` pod kadrem
+//     (A01/A05) — postęp 2 s w obrębie przycisku, nie na całej karcie.
+//   • „Podgląd" i „Domofon" to nazwane akcje pomocnicze pod CTA.
+//   • STAN: bramy/szlabany nie raportują stanu fizycznego, więc deck nie
+//     twierdzi „Zamknięta/Otwarte". Pokazuje wynik POLECENIA (przyjęte /
+//     nieznany / błąd); realny stan ma tylko zamek Nuki (telemetria).
+//   • Kolor akcentu identyfikuje wejście; kolor STANU jest semantyczny
+//     (zieleń = ok, bursztyn = niewiadoma, czerwień = problem) — A03.
+//   • Brama pożarowa: logika BEZ ZMIAN (osobny ekran potwierdzenia); w UI
+//     oddzielona — chip „awaryjne" na końcu + przycisk „Otwórz awaryjnie…".
 
 // MARK: - Kategoria punktu dostępu (asset 3D + akcent + statusy) — 5 sekcji v7
 //
@@ -56,7 +61,8 @@ enum GlassAccessCategory {
     /// fallback→brama. Pożarową rozpoznajemy też przez GlassGateSheet.isFireGate.
     static func classify(_ ap: AccessPoint) -> GlassAccessCategory {
         let l = ap.label.lowercased()
-        // 1) Brama pożarowa — najwyższy priorytet (bezpieczeństwo).
+        // 1) Brama pożarowa — najwyższy priorytet (bezpieczeństwo). Najpierw
+        //    DANE (category=FIRE_ESCAPE z API), heurystyka po nazwie to fallback.
         if GlassGateSheet.isFireGate(ap)
             || l.contains("pożar") || l.contains("pozar") || l.contains("ppoż")
             || l.contains("ppoz") {
@@ -102,39 +108,8 @@ enum GlassAccessCategory {
         }
     }
 
-    /// Status w spoczynku (data-idle w HTML).
-    var idleStatus: String {
-        switch self {
-        case .szlaban:  return "Opuszczony"
-        case .pozarowa: return "Gotowa"
-        case .drzwi:    return "Zamknięte"
-        default:        return "Zamknięta"  // szlaban ma własny, tu brama/furtka
-        }
-    }
-
-    /// Status w trakcie akcji: szlaban „Podnoszę…", reszta „Otwieranie…".
-    var openingStatus: String {
-        self == .szlaban ? "Podnoszę…" : "Otwieranie…"
-    }
-
-    /// Status końcowy sukcesu: szlaban „Podniesiony", reszta „Otwarte".
-    var doneStatus: String {
-        self == .szlaban ? "Podniesiony" : "Otwarte"
-    }
-
-    /// Toast po sukcesie (data-toast w HTML).
-    func successToast(label: String) -> String {
-        self == .szlaban ? "\(label) — podniesiony" : "\(label) — otwarto"
-    }
-
-    /// Otwieranie przez press-and-hold 2 s (2026-07-15) — chroni przed
-    /// przypadkowymi dotknięciami. Pożarowa zostaje na tap → ekran
-    /// potwierdzenia (własna warstwa bezpieczeństwa).
-    var hint: String {
-        self == .pozarowa
-            ? "Awaryjne — dotknij, aby otworzyć"
-            : "Przytrzymaj 2 s, aby otworzyć"
-    }
+    /// Wejście awaryjne — własna ścieżka (ekran potwierdzenia), bez hold-a.
+    var isEmergency: Bool { self == .pozarowa }
 }
 
 // MARK: - Deck
@@ -142,8 +117,9 @@ enum GlassAccessCategory {
 struct GlassAccessDeck: View {
     let accessPoints: [AccessPoint]
     let loadFailed: Bool
-    /// Realne otwarcie (istniejący flow openAccessPoint w GlassHomeView).
-    let onOpen: (AccessPoint) async -> Bool
+    /// Realne polecenie otwarcia (GlassHomeView.openAccessPoint) — wynik
+    /// zgodny z kontraktem API: przyjęte / błąd / nieznany.
+    let onOpen: (AccessPoint) async -> AccessOpenOutcome
     /// Brama pożarowa — ekran potwierdzenia (istniejący wzorzec).
     let onFireConfirm: (AccessPoint) -> Void
     /// Kicker „DOSTĘP" → pełne menu (GlassGateSheet).
@@ -162,24 +138,21 @@ struct GlassAccessDeck: View {
     /// realny „Zamknięty/Otwarty" zamiast statycznego „Zamknięte" (2026-07-10).
     /// Puste = brak danych / stary backend → fallback do statycznego statusu.
     var lockStatuses: [Int: NukiLockStatus] = [:]
+    /// Klucz UserDefaults ulubionego wejścia — per użytkownik + nieruchomość
+    /// (nil dopóki Home nie zna obu identyfikatorów → brak ulubionego).
+    var favoriteKey: String? = nil
 
     @Environment(GlassToastCenter.self) private var toast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private enum DialState: Equatable { case idle, opening, success, failure }
-
     @State private var activeIndex = 0
-    @State private var dialStates: [Int: DialState] = [:]
-    @State private var ringProgress: [Int: CGFloat] = [:]
-    /// Diale aktualnie przytrzymywane palcem (press-and-hold 2 s).
-    @State private var pressingIds: Set<Int> = []
-    /// Postęp przytrzymania 0→1 (2 s) — napędza zalew CAŁEGO kafla „Dostęp"
-    /// (pasek postępu na pełnej karcie + obwódka). Kciuk zasłania dial,
-    /// więc feedback musi być widoczny poza nim (2026-07-15).
-    @State private var holdGlow: CGFloat = 0
-    /// Odliczanie „2 → 1" podczas trzymania (nil = brak).
-    @State private var holdCountdown: Int?
-    @State private var holdCountdownTask: Task<Void, Never>?
+    /// Faza polecenia per wejście (z HoldToOpenButton) — steruje linią stanu
+    /// i znacznikiem na kadrze. Klucz = AccessPoint.id, więc spóźniona
+    /// odpowiedź poprzedniego wejścia nie zmienia widoku innego.
+    @State private var phases: [Int: AccessOpenPhase] = [:]
+    /// Ulubione wejście (UserDefaults pod `favoriteKey`).
+    @State private var favoriteApId: Int?
+    @State private var favoriteApplied = false
     /// Wariant 2026-08-17: tarcza kafla pokazuje SNAPSHOT z kamery danego
     /// wejścia zamiast ikony 3D (keyed by apId). Brak obrazu (kamera bez
     /// podglądu, np. RTSP wyłączone) → fallback do ikony — bez zmian UX.
@@ -219,8 +192,14 @@ struct GlassAccessDeck: View {
             if accessPoints.isEmpty {
                 emptyState
             } else {
+                entranceChips
                 deck
-                dots
+                if let ap = activeAP {
+                    primaryAction(ap)
+                        .padding(.top, 10)
+                    secondaryActions(ap)
+                        .padding(.top, 8)
+                }
             }
         }
         .padding(.horizontal, 22)
@@ -239,32 +218,6 @@ struct GlassAccessDeck: View {
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         }
         .overlay {
-            // Press-and-hold (2026-07-15): akcentowa obwódka całej karty
-            // rozjaśnia się z postępem trzymania — czytelny feedback, którego
-            // kciuk nie zasłania. Gruba (2.5pt) i z mocnym glow, żeby efekt
-            // był oczywisty również w pełnym słońcu.
-            RoundedRectangle(cornerRadius: GlassRadius.primary, style: .continuous)
-                .strokeBorder(activeAccent.opacity(min(1, 1.2 * holdGlow)), lineWidth: 3)
-                .shadow(color: activeAccent.opacity(0.9 * holdGlow), radius: 16)
-                .allowsHitTesting(false)
-        }
-        .overlay(alignment: .top) {
-            // Duże odliczanie „2 → 1" u góry karty (poza kciukiem) — razem
-            // z zalewem koloru nie sposób przegapić, że trwa otwieranie.
-            if let n = holdCountdown {
-                Text("\(n)")
-                    .font(.system(size: 46, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                    .shadow(color: activeAccent, radius: 14)
-                    .shadow(color: .black.opacity(0.6), radius: 4, y: 2)
-                    .padding(.top, 8)
-                    .id(n)   // zmiana cyfry = nowy widok → transition
-                    .transition(.scale(scale: 1.6).combined(with: .opacity))
-                    .allowsHitTesting(false)
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: holdCountdown)
-        .overlay {
             RoundedRectangle(cornerRadius: GlassRadius.primary, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
@@ -282,6 +235,12 @@ struct GlassAccessDeck: View {
             // Pull-to-refresh może zmniejszyć listę — nie zostawiaj selekcji
             // poza zakresem (TabView pokazałby pustą stronę).
             if activeIndex >= slideCount { activeIndex = max(0, slideCount - 1) }
+        }
+        .onAppear { applyFavoriteIfNeeded() }
+        .onChange(of: accessPoints.map(\.id)) { _, _ in applyFavoriteIfNeeded() }
+        .onChange(of: favoriteKey) { _, _ in
+            favoriteApplied = false
+            applyFavoriteIfNeeded()
         }
     }
 
@@ -305,116 +264,126 @@ struct GlassAccessDeck: View {
                 // poświata narasta razem z holdGlow (0.16 → ~0.7) — cały kafel
                 // WYRAŹNIE „ładuje się" kolorem sekcji przez 2 s trzymania.
                 RadialGradient(
-                    colors: [activeAccent.opacity(0.16 + 0.55 * holdGlow), .clear],
+                    colors: [activeAccent.opacity(0.16), .clear],
                     center: UnitPoint(x: 0.5, y: 0.12),
                     startRadius: 0, endRadius: 300
                 )
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: activeIndex)
             }
-            .overlay {
-                // CAŁY KAFEL jako pasek postępu (2026-07-15): akcentowy zalew
-                // sunie od lewej do prawej przez pełne 2 s trzymania, ze
-                // świecącą pionową krawędzią-„skanerem" na froncie. Widoczny
-                // na całej wysokości karty — kciuk na dialu go nie zasłania.
-                GeometryReader { geo in
-                    HStack(spacing: 0) {
-                        LinearGradient(
-                            colors: [activeAccent.opacity(0.28), activeAccent.opacity(0.55)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                        .frame(width: geo.size.width * holdGlow)
-
-                        // Świecąca krawędź frontu zalewu.
-                        Rectangle()
-                            .fill(activeAccent)
-                            .frame(width: 3)
-                            .shadow(color: activeAccent, radius: 8)
-                            .opacity(holdGlow > 0.01 && holdGlow < 0.995 ? 1 : 0)
-
-                        Color.clear
-                    }
-                }
-                .allowsHitTesting(false)
-            }
     }
 
-    // MARK: Nagłówek — kicker + 2 okrągłe ikony glass 34pt
+    // MARK: Nagłówek — kicker + jawne „Wszystkie wejścia"
 
     private var header: some View {
         HStack {
-            Button(action: onOpenMenu) {
-                Text("DOSTĘP")
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(1.3)
-                    .foregroundStyle(.white.opacity(0.78))
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            Text("DOSTĘP")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(1.3)
+                .foregroundStyle(.white.opacity(0.82))
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
-            // Zamek Nuki (UNIT_DOOR) nie ma kamery ani domofonu — ikony
-            // znikają, gdy aktywna sekcja to drzwi mieszkania (2026-07-15).
-            if let ap = activeAP, !ap.isUnitDoor {
-                HStack(spacing: 8) {
-                    // Kolory wg konwencji telefonii (zgłoszenie 2026-08-12):
-                    // ZIELONA słuchawka = zadzwoń (czerwona oznacza „rozłącz"
-                    // i myliła); kamera na niebieskim akcencie apki — wideo
-                    // nie ma utrwalonej konwencji koloru, a dwa zielone orby
-                    // obok siebie zlewałyby się w jedno.
-                    headerIcon(
-                        "video.fill",
-                        gradient: [GlassColor.accentLight, GlassColor.accentBlue],
-                        label: "Podgląd z kamery"
-                    ) {
-                        onCamera(ap)
-                    }
-                    headerIcon(
-                        "phone.fill",
-                        gradient: [GlassColor.successLight, GlassColor.success],
-                        label: "Domofon", busy: intercomBusy
-                    ) {
-                        onIntercom(ap)
-                    }
+            Button(action: onOpenMenu) {
+                HStack(spacing: 4) {
+                    Text("Wszystkie wejścia")
+                        .font(.system(size: 12.5, weight: .semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
                 }
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
     }
 
-    private func headerIcon(
-        _ systemName: String, gradient: [Color], label: String, busy: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        // 2026-07-17: pełnokolorowe orby jak przy pojazdach/gościach —
-        // gradientowe kółko (kamera niebieska, telefon zielony) zamiast
-        // szklanego tła; spinner zachowany dla stanu łączenia z domofonem.
-        Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .overlay {
-                        Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.8)
-                            .blendMode(.plusLighter)
+    // MARK: Jawny wybór wejścia — chipy z nazwami (A02)
+
+    /// Zwykłe wejścia w kolejności z API, awaryjne NA KOŃCU (wizualnie
+    /// oddzielone kreską) — funkcja awaryjna nie stoi w ciągu codziennych.
+    private var chipOrder: [(index: Int, ap: AccessPoint)] {
+        let all = accessPoints.enumerated().map { (index: $0.offset, ap: $0.element) }
+        let regular = all.filter { !GlassAccessCategory.classify($0.ap).isEmergency }
+        let emergency = all.filter { GlassAccessCategory.classify($0.ap).isEmergency }
+        return regular + emergency
+    }
+
+    private var entranceChips: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(chipOrder, id: \.ap.id) { item in
+                        let emergency = GlassAccessCategory.classify(item.ap).isEmergency
+                        if emergency, item.index == chipOrder.first(where: { GlassAccessCategory.classify($0.ap).isEmergency })?.index,
+                           chipOrder.contains(where: { !GlassAccessCategory.classify($0.ap).isEmergency }) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.22))
+                                .frame(width: 1, height: 22)
+                                .accessibilityHidden(true)
+                        }
+                        entranceChip(item.ap, index: item.index, emergency: emergency)
+                            .id(item.ap.id)
                     }
-                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
-                    .shadow(color: (gradient.last ?? .clear).opacity(0.5), radius: 8, y: 4)
-                if busy {
-                    ProgressView().tint(.white).scaleEffect(0.7)
-                } else {
-                    Image(systemName: systemName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
+                }
+                .padding(.vertical, 2)
+            }
+            .onChange(of: activeIndex) { _, _ in
+                if let id = activeAP?.id {
+                    withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
                 }
             }
-            .frame(width: 40, height: 40)
+        }
+        .padding(.top, 2)
+    }
+
+    private func entranceChip(_ ap: AccessPoint, index: Int, emergency: Bool) -> some View {
+        let selected = index == activeIndex
+        let accent = GlassAccessCategory.classify(ap).accent
+        return Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { activeIndex = index }
+        } label: {
+            HStack(spacing: 6) {
+                if emergency {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .foregroundStyle(Color(hex: 0xFF8A80))
+                } else {
+                    Circle().fill(accent).frame(width: 7, height: 7)
+                }
+                Text(ap.label)
+                    .font(.system(size: 13, weight: selected ? .bold : .semibold))
+                    .lineLimit(1)
+                if favoriteApId == ap.id {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(GlassColor.orbAmber1)
+                }
+            }
+            .foregroundStyle(.white.opacity(selected ? 1 : 0.85))
+            .padding(.horizontal, 13)
+            .frame(minHeight: 44)
+            .background {
+                Capsule().fill(Color.white.opacity(selected ? 0.22 : 0.08))
+            }
+            .overlay {
+                Capsule().strokeBorder(
+                    emergency ? Color(hex: 0xFF8A80).opacity(selected ? 0.9 : 0.45)
+                              : Color.white.opacity(selected ? 0.55 : 0.16),
+                    lineWidth: 1
+                )
+            }
         }
         .buttonStyle(.plain)
-        .disabled(busy)
-        .accessibilityLabel(label)
+        .accessibilityLabel(
+            "\(ap.label)\(emergency ? ", wejście awaryjne" : "")\(favoriteApId == ap.id ? ", ulubione" : "")"
+        )
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
-    // MARK: Deck — TabView(.page), jeden swipe = jedna sekcja
+    // MARK: Deck — TabView(.page); swipe zostaje SKRÓTEM do chipów
 
     private var deck: some View {
         TabView(selection: $activeIndex) {
@@ -424,80 +393,223 @@ struct GlassAccessDeck: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        // 2026-08-18: foto-kafel (140 pt) + teksty potrzebują więcej miejsca
-        // niż tarcza 98 pt. Wysokość rośnie dopiero gdy JAKIKOLWIEK snapshot
-        // się załadował — bez podglądów deck wygląda jak dotychczas.
-        .frame(height: tileSnapshots.isEmpty ? 186 : 236)
+        // Foto-kafel (140 pt) + nazwa + linia stanu; bez podglądów niższy dial.
+        .frame(height: tileSnapshots.isEmpty ? 172 : 214)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: tileSnapshots.isEmpty)
-        .padding(.top, 6)
+        .padding(.top, 8)
     }
 
     private func slide(_ ap: AccessPoint) -> some View {
         let cat = GlassAccessCategory.classify(ap)
-        let state = dialStates[ap.id, default: .idle]
+        let phase = phases[ap.id, default: .idle]
         // Live stan zamka Nuki dla tego kafla (tylko UNIT_DOOR ma wpis).
         let lock = lockStatuses[ap.id]
 
         return VStack(spacing: 0) {
-            // Wariant 2026-08-18: gdy jest snapshot z kamery wejścia — DUŻY
-            // prostokątny kadr zamiast tarczy z ikoną 3D (w kółku 82 pt obraz
-            // z fisheye był „totalnie niewidoczny" — feedback Konrada).
-            // Brak podglądu (RTSP off itp.) → klasyczna tarcza.
             if let snap = tileSnapshots[ap.id] {
-                photoTile(ap, category: cat, state: state, snapshot: snap)
+                photoTile(ap, category: cat, phase: phase, snapshot: snap)
             } else {
-                dial(ap, category: cat, state: state)
+                dial(ap, category: cat, phase: phase)
             }
 
-            // Nazwa — 23pt / 650 / −.02em, margin-top 10 (data-driven z AP).
-            Text(ap.label)
-                .font(.system(size: 23, weight: .semibold))
-                .tracking(-0.46)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.top, 10)
+            // Nazwa KONKRETNEGO wejścia + gwiazdka ulubionego.
+            HStack(spacing: 6) {
+                Text(ap.label)
+                    .font(.system(size: 22, weight: .semibold))
+                    .tracking(-0.4)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if !cat.isEmergency {
+                    favoriteButton(ap)
+                }
+            }
+            .padding(.top, 6)
 
-            // Status z kropką w akcencie, margin-top 5. Dla zamka Nuki
-            // w spoczynku pokazujemy realny stan („Zamknięty/Otwarty") kolorem.
+            statusLine(phase: phase, lock: lock)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func favoriteButton(_ ap: AccessPoint) -> some View {
+        let isFav = favoriteApId == ap.id
+        return Button {
+            setFavorite(isFav ? nil : ap.id)
+            toast.show(isFav ? "Usunięto ulubione wejście" : "\(ap.label) — ulubione wejście na Domu")
+        } label: {
+            Image(systemName: isFav ? "star.fill" : "star")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isFav ? GlassColor.orbAmber1 : .white.opacity(0.7))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isFav ? "Usuń \(ap.label) z ulubionych" : "Ustaw \(ap.label) jako ulubione wejście")
+    }
+
+    /// Linia stanu. Bez telemetrii NIE twierdzimy nic o bramie — pokazujemy
+    /// wyłącznie wynik polecenia. Zamek Nuki ma realny stan z API.
+    @ViewBuilder
+    private func statusLine(phase: AccessOpenPhase, lock: NukiLockStatus?) -> some View {
+        if let line = statusContent(phase: phase, lock: lock) {
             HStack(spacing: 7) {
                 Circle()
-                    .fill(statusDotColor(state, category: cat, lock: lock))
-                    .frame(width: 6, height: 6)
-                    .shadow(color: statusDotColor(state, category: cat, lock: lock), radius: 4)
-                // Podczas przytrzymania status zmienia się na „Przytrzymaj…" —
-                // razem z domykającym się pierścieniem daje jasny feedback.
-                Text(pressingIds.contains(ap.id) && state == .idle
-                     ? "Przytrzymaj…"
-                     : statusText(state, category: cat, lock: lock))
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .fill(line.color)
+                    .frame(width: 7, height: 7)
+                Text(line.text)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.88))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .padding(.top, 5)
-
-            // Hint — 11.5pt opacity .5, margin-top 6.
-            Text(cat.hint)
-                .font(.system(size: 11.5, weight: .medium))
-                .tracking(0.2)
-                .foregroundStyle(.white.opacity(0.5))
-                .padding(.top, 6)
+            .accessibilityElement(children: .combine)
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    private func statusContent(phase: AccessOpenPhase, lock: NukiLockStatus?) -> (text: String, color: Color)? {
+        switch phase {
+        case .sending:  return ("Wysyłanie polecenia…", Color(hex: 0x6E8BFF))
+        case .accepted: return ("Polecenie otwarcia przyjęte", GlassColor.success)
+        case .unknown:  return ("Wynik nieznany — sprawdź wejście", Color(hex: 0xF0A93E))
+        case .failed:   return ("Nie udało się otworzyć", Color(hex: 0xFF6B6B))
+        case .idle, .holding:
+            guard let lock else { return nil }   // brak telemetrii → brak twierdzeń o stanie
+            guard lock.online, let s = lock.effectiveStateLabel else {
+                return ("Brak aktualnego statusu zamka", Color(hex: 0x8A93A6))
+            }
+            let text = lock.doorState == 3 ? "\(s) · drzwi otwarte" : s
+            let color: Color = switch lock.badge {
+            case .secure:     Color(hex: 0x34D399)
+            case .open:       Color(hex: 0xF0A93E)
+            case .transition: Color(hex: 0x6E8BFF)
+            case .unknown, .offline: Color(hex: 0x8A93A6)
+            }
+            return (text, color)
+        }
+    }
+
+    // MARK: Główne CTA + akcje pomocnicze (A01)
+
+    @ViewBuilder
+    private func primaryAction(_ ap: AccessPoint) -> some View {
+        let cat = GlassAccessCategory.classify(ap)
+        if cat.isEmergency {
+            // Logika awaryjna BEZ ZMIAN: dotknięcie → ekran potwierdzenia.
+            Button { onFireConfirm(ap) } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xFF8A80))
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Otwórz awaryjnie…")
+                            .font(.system(.headline).weight(.bold))
+                            .foregroundStyle(.white)
+                        Text("\(ap.label) — wymaga potwierdzenia")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.78))
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, minHeight: 60)
+                .background {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color(hex: 0xFF5A5F).opacity(0.14))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Color(hex: 0xFF8A80).opacity(0.6), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            HoldToOpenButton(
+                targetName: ap.label,
+                onPhaseChange: { phase in
+                    phases[ap.id] = phase
+                    // Po przyjęciu polecenia gęstsze kadry — mieszkaniec WIDZI,
+                    // co dzieje się przy wejściu (to jedyny realny dowód stanu).
+                    if phase == .sending { startSnapshotBoost(ap) }
+                },
+                onCommit: { await onOpen(ap) }
+            )
+            .id(ap.id)   // zmiana wejścia = nowy przycisk (czyści przytrzymanie)
+        }
+    }
+
+    @ViewBuilder
+    private func secondaryActions(_ ap: AccessPoint) -> some View {
+        // Zamek Nuki (UNIT_DOOR) nie ma kamery ani domofonu.
+        if !ap.isUnitDoor {
+            HStack(spacing: 8) {
+                secondaryButton("Podgląd", icon: "video.fill") { onCamera(ap) }
+                secondaryButton("Domofon", icon: "phone.fill", busy: intercomBusy) { onIntercom(ap) }
+            }
+        }
+    }
+
+    private func secondaryButton(
+        _ title: String, icon: String, busy: Bool = false, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                if busy {
+                    ProgressView().tint(.white).scaleEffect(0.7)
+                } else {
+                    Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+                }
+                Text(title).font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .fill(Color.white.opacity(0.10))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+
+    // MARK: Ulubione wejście (per użytkownik + nieruchomość)
+
+    private func applyFavoriteIfNeeded() {
+        guard let key = favoriteKey, !accessPoints.isEmpty else { return }
+        let stored = UserDefaults.standard.object(forKey: key) as? Int
+        favoriteApId = stored
+        guard !favoriteApplied else { return }
+        favoriteApplied = true
+        if let stored, let idx = accessPoints.firstIndex(where: { $0.id == stored }) {
+            activeIndex = idx
+        }
+    }
+
+    private func setFavorite(_ apId: Int?) {
+        favoriteApId = apId
+        guard let key = favoriteKey else { return }
+        if let apId {
+            UserDefaults.standard.set(apId, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     // MARK: Foto-kafel — duży prostokątny kadr z kamery wejścia (2026-08-18)
 
     private func photoTile(
         _ ap: AccessPoint, category cat: GlassAccessCategory,
-        state: DialState, snapshot: UIImage,
+        phase: AccessOpenPhase, snapshot: UIImage,
     ) -> some View {
-        let accent: Color = switch state {
-        case .success: GlassColor.success
-        case .failure: Color(hex: 0xFF3B30)
-        default: cat.accent
-        }
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
         return Image(uiImage: snapshot)
@@ -515,34 +627,21 @@ struct GlassAccessDeck: View {
                     )
                 )
             }
-            .overlay {
-                // Stany ✓/✗ — kolorowy zalew + duży znak na środku kadru.
-                if state == .success || state == .failure {
-                    shape.fill(accent.opacity(0.45))
-                    Image(systemName: state == .success ? "checkmark" : "xmark")
-                        .font(.system(size: 44, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-                        .transition(.scale.combined(with: .opacity))
-                }
-            }
-            .overlay(alignment: .bottomLeading) {
-                // Pasek postępu otwierania na dolnej krawędzi kadru —
-                // odpowiednik pierścienia z tarczy (ringProgress 0→1 ~0.9 s).
-                GeometryReader { geo in
-                    let progress = state == .success || state == .failure
-                        ? 1 : ringProgress[ap.id, default: 0]
-                    VStack {
-                        Spacer()
-                        Capsule()
-                            .fill(accent)
-                            .frame(width: max(0, (geo.size.width - 20) * progress), height: 4)
-                            .shadow(color: accent.opacity(0.9), radius: 5)
-                            .padding(.horizontal, 10)
-                            .padding(.bottom, 8)
+            .overlay(alignment: .topLeading) {
+                // Znacznik WYNIKU POLECENIA (mały, z tekstem) — nie wielki ✓ na
+                // kadrze, który czytało się jak „brama otwarta". Stan fizyczny
+                // pokazuje sam obraz z kamery.
+                if let badge = resultBadge(phase) {
+                    HStack(spacing: 5) {
+                        Image(systemName: badge.icon).font(.system(size: 10.5, weight: .bold))
+                        Text(badge.text).font(.system(size: 11, weight: .bold))
                     }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9).padding(.vertical, 5)
+                    .background { Capsule().fill(badge.color.opacity(0.92)) }
+                    .padding(9)
+                    .transition(.opacity)
                 }
-                .allowsHitTesting(false)
             }
             .overlay {
                 // Szklana ramka — spójna z inner-highlight reszty decka.
@@ -555,40 +654,35 @@ struct GlassAccessDeck: View {
                 )
             }
             .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
-            .scaleEffect(pressingIds.contains(ap.id) ? 0.97 : 1)
-            .animation(.timingCurve(0.34, 1.56, 0.64, 1, duration: 0.2),
-                       value: pressingIds.contains(ap.id))
             .contentShape(shape)
-            // Te same gesty co tarcza: tap = hint / pożarowa → potwierdzenie,
-            // hold 2 s = otwarcie (zalew karty + odliczanie bez zmian).
-            .onTapGesture {
-                if cat == .pozarowa {
-                    onFireConfirm(ap)
-                } else if dialStates[ap.id, default: .idle] == .idle {
-                    toast.show("Przytrzymaj 2 sekundy, aby otworzyć")
-                }
-            }
-            .onLongPressGesture(minimumDuration: 2.0, maximumDistance: 60) {
-                commitHoldOpen(ap, category: cat)
-            } onPressingChanged: { pressing in
-                handlePressing(pressing, ap: ap, category: cat)
-            }
-            .accessibilityLabel("\(ap.label) — \(cat.hint)")
+            // Dotknięcie kadru = skrót do nazwanej akcji „Podgląd" (nie otwiera).
+            .onTapGesture { if !ap.isUnitDoor { onCamera(ap) } }
+            .accessibilityLabel("Obraz z kamery: \(ap.label)")
+            .accessibilityHint("Otwiera podgląd z kamery")
+    }
+
+    private func resultBadge(_ phase: AccessOpenPhase) -> (icon: String, text: String, color: Color)? {
+        switch phase {
+        case .accepted: return ("checkmark", "Polecenie przyjęte", GlassColor.success)
+        case .unknown:  return ("questionmark", "Wynik nieznany", Color(hex: 0xC78A2B))
+        case .failed:   return ("xmark", "Nie udało się", Color(hex: 0xD9534F))
+        default:        return nil
+        }
     }
 
     // MARK: Dial — pierścień postępu + szklana tarcza z ikoną 3D
 
-    private func dial(_ ap: AccessPoint, category cat: GlassAccessCategory, state: DialState) -> some View {
-        let ringColor: Color = switch state {
-        case .success: GlassColor.success
-        case .failure: Color(hex: 0xFF3B30)
+    private func dial(_ ap: AccessPoint, category cat: GlassAccessCategory, phase: AccessOpenPhase) -> some View {
+        let ringColor: Color = switch phase {
+        case .accepted: GlassColor.success
+        case .unknown:  Color(hex: 0xF0A93E)
+        case .failed:   Color(hex: 0xFF6B6B)
         default: cat.accent
         }
-        // Dolna poświata tarczy (HTML: radial at 50% 120%) — kolor śledzi stan.
-        let coreGlow: Color = switch state {
-        case .success: GlassColor.success
-        case .failure: Color(hex: 0xFF3B30)
-        default: cat.accent
+        let coreGlow = ringColor
+        let ringFull: Bool = switch phase {
+        case .sending, .accepted, .unknown, .failed: true
+        default: false
         }
 
         return ZStack {
@@ -601,8 +695,7 @@ struct GlassAccessDeck: View {
                 // (kciuk i tak zasłania dial podczas trzymania; feedback
                 // przytrzymania robi kafel — holdGlow).
                 Circle()
-                    .trim(from: 0, to: state == .success || state == .failure
-                          ? 1 : ringProgress[ap.id, default: 0])
+                    .trim(from: 0, to: ringFull ? 1 : 0)
                     .stroke(ringColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .padding(5)
@@ -657,80 +750,14 @@ struct GlassAccessDeck: View {
                     }
                     .shadow(color: .black.opacity(0.34), radius: 14, y: 8)
                     .padding(8)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: state)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: phase)
 
                 // Warstwa ikony: idle/opening → render 3D, success → ✓, failure → ✗.
-                dialGlyph(cat: cat, state: state)
+                dialGlyph(cat: cat, phase: phase)
         }
         .frame(width: 98, height: 98)
-        .scaleEffect(pressingIds.contains(ap.id) ? 0.95 : 1)
-        .animation(.timingCurve(0.34, 1.56, 0.64, 1, duration: 0.2), value: pressingIds.contains(ap.id))
-        .contentShape(Circle())
-        // Press-and-hold 2 s (2026-07-15): trzymanie wypełnia pierścień,
-        // puszczenie przed czasem cofa go (anty-przypadkowe otwarcia).
-        // Pożarowa: zwykły tap → ekran potwierdzenia (jak dotąd).
-        .onTapGesture {
-            if cat == .pozarowa {
-                onFireConfirm(ap)
-            } else if dialStates[ap.id, default: .idle] == .idle {
-                // Krótki tap = podpowiedź zamiast otwarcia.
-                toast.show("Przytrzymaj 2 sekundy, aby otworzyć")
-            }
-        }
-        .onLongPressGesture(minimumDuration: 2.0, maximumDistance: 60) {
-            commitHoldOpen(ap, category: cat)
-        } onPressingChanged: { pressing in
-            handlePressing(pressing, ap: ap, category: cat)
-        }
-        .accessibilityLabel("\(ap.label) — \(cat.hint)")
-    }
-
-    /// Palec dotknął / puścił dial przed upływem 2 s. Feedback trzymania:
-    /// dyskretna animacja CAŁEGO kafla (holdGlow → poświata + obwódka karty),
-    /// bo kciuk zasłania dial. Puszczenie przed czasem cofa poświatę.
-    private func handlePressing(_ pressing: Bool, ap: AccessPoint, category cat: GlassAccessCategory) {
-        guard cat != .pozarowa else { return }
-        if pressing {
-            guard dialStates[ap.id, default: .idle] == .idle else { return }
-            pressingIds.insert(ap.id)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            // Zalew karty przez pełne 2 s trzymania.
-            withAnimation(reduceMotion ? nil : .linear(duration: 2.0)) {
-                holdGlow = 1
-            }
-            // Odliczanie 2 → 1 (duża cyfra u góry karty) + haptic na zmianie.
-            holdCountdown = 2
-            holdCountdownTask?.cancel()
-            holdCountdownTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
-                holdCountdown = 1
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            }
-        } else {
-            pressingIds.remove(ap.id)
-            holdCountdownTask?.cancel()
-            holdCountdown = nil
-            // Puszczono przed commitem → zalew gaśnie.
-            if dialStates[ap.id, default: .idle] == .idle {
-                withAnimation(.easeOut(duration: 0.35)) { holdGlow = 0 }
-            }
-        }
-    }
-
-    /// Przytrzymano pełne 2 s — odpalamy realne otwarcie (pierścień wypełnia
-    /// się teraz standardowo w runOpen, poświata kafla gaśnie).
-    private func commitHoldOpen(_ ap: AccessPoint, category cat: GlassAccessCategory) {
-        guard cat != .pozarowa else { return }
-        guard dialStates[ap.id, default: .idle] == .idle else { return }
-        pressingIds.remove(ap.id)
-        holdCountdownTask?.cancel()
-        holdCountdown = nil
-        withAnimation(.easeOut(duration: 0.4)) { holdGlow = 0 }
-        dialStates[ap.id] = .opening
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        startSnapshotBoost(ap)
-        Task { await runOpen(ap, category: cat) }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: ringFull)
+        .accessibilityHidden(true)   // nazwa i stan są w tekście pod spodem
     }
 
     // MARK: Snapshoty w tarczach (wariant 2026-08-17)
@@ -818,83 +845,34 @@ struct GlassAccessDeck: View {
     }
 
     @ViewBuilder
-    private func dialGlyph(cat: GlassAccessCategory, state: DialState) -> some View {
-        switch state {
-        case .idle, .opening:
-            // Realistyczna ikona 3D „unosząca się" w tarczy — 82pt scaledToFit,
-            // drop-shadow 0 5px 9px rgba(10,14,30,.55).
-            Image(cat.assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 76, height: 76)
-                .shadow(color: Color(hex: 0x0A0E1E).opacity(0.55), radius: 9, x: 0, y: 5)
-        case .success:
-            // ✓ w kółku (tarcza jest zielona) — jak checkIco w HTML.
+    private func dialGlyph(cat: GlassAccessCategory, phase: AccessOpenPhase) -> some View {
+        switch phase {
+        case .accepted:
             Image(systemName: "checkmark")
                 .font(.system(size: 34, weight: .bold))
                 .foregroundStyle(Color(hex: 0xEAFBF2))
                 .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
                 .transition(.scale.combined(with: .opacity))
-        case .failure:
+        case .unknown:
+            Image(systemName: "questionmark")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+                .transition(.scale.combined(with: .opacity))
+        case .failed:
             Image(systemName: "xmark")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
                 .transition(.scale.combined(with: .opacity))
-        }
-    }
-
-    private func statusText(
-        _ state: DialState, category cat: GlassAccessCategory, lock: NukiLockStatus? = nil
-    ) -> String {
-        switch state {
-        case .idle:
-            // Zamek Nuki: realny stan zamiast statycznego „Zamknięte".
-            if let lock, lock.online, let s = lock.effectiveStateLabel {
-                // Drzwi otwarte (czujnik) doklejamy — mieszkaniec widzi że lokal
-                // nie jest domknięty mimo zaryglowanego rygla.
-                if lock.doorState == 3 { return "\(s) · drzwi otwarte" }
-                return s
-            }
-            if lock != nil { return "offline" }   // zamek jest, ale brak odczytu
-            return cat.idleStatus
-        case .opening: return cat.openingStatus
-        case .success: return cat.doneStatus
-        case .failure: return "Nie udało się otworzyć"
-        }
-    }
-
-    private func statusDotColor(
-        _ state: DialState, category cat: GlassAccessCategory, lock: NukiLockStatus? = nil
-    ) -> Color {
-        switch state {
-        case .success: return GlassColor.success
-        case .failure: return Color(hex: 0xFF3B30)
         default:
-            if let lock {
-                switch lock.badge {
-                case .secure:     return Color(hex: 0x34D399)   // zielony — zamknięty
-                case .open:       return Color(hex: 0xF0A93E)   // bursztyn — otwarty
-                case .transition: return Color(hex: 0x6E8BFF)   // niebieski — w ruchu
-                case .unknown, .offline: return Color(hex: 0x8A93A6) // szary
-                }
-            }
-            return cat.accent
+            // Realistyczna ikona 3D „unosząca się" w tarczy.
+            Image(cat.assetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 76, height: 76)
+                .shadow(color: Color(hex: 0x0A0E1E).opacity(0.55), radius: 9, x: 0, y: 5)
         }
-    }
-
-    // MARK: Paginacja — kropka 6pt, aktywna wydłuża się do 22 w akcencie
-
-    private var dots: some View {
-        HStack(spacing: 7) {
-            ForEach(0..<slideCount, id: \.self) { i in
-                Capsule()
-                    .fill(i == activeIndex ? activeAccent : Color.white.opacity(0.28))
-                    .frame(width: i == activeIndex ? 22 : 6, height: 6)
-            }
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: activeIndex)
-        .padding(.top, 8)
     }
 
     // MARK: Pusty stan (łączenie / offline)
@@ -920,57 +898,6 @@ struct GlassAccessDeck: View {
         .padding(.top, 6)
     }
 
-    // MARK: Interakcja otwierania
-
-    @MainActor
-    private func runOpen(
-        _ ap: AccessPoint, category cat: GlassAccessCategory, ringPrefilled: Bool = false
-    ) async {
-        // Press-and-hold (2026-07-15): pierścień wypełnił się już podczas
-        // 2 s trzymania — nie animujemy drugi raz. (Stara ścieżka tap
-        // z wypełnianiem 0.9 s zostaje dla ewentualnych przyszłych wywołań.)
-        if !ringPrefilled {
-            ringProgress[ap.id] = 0
-            if reduceMotion {
-                ringProgress[ap.id] = 1
-            } else {
-                withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.9)) {
-                    ringProgress[ap.id] = 1
-                }
-            }
-        }
-
-        let started = Date()
-        let ok = await onOpen(ap)
-        // Nie kończymy wcześniej niż animacja pierścienia (spójny rytm z HTML).
-        let minWait = ringPrefilled ? 0.2 : 0.9
-        let remaining = minWait - Date().timeIntervalSince(started)
-        if remaining > 0 {
-            try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
-        }
-
-        if ok {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
-                dialStates[ap.id] = .success
-            }
-            toast.show(cat.successToast(label: ap.label))
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        } else {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
-                dialStates[ap.id] = .failure
-            }
-            toast.show("Nie udało się otworzyć", error: true)
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
-        }
-
-        // Auto-reset po 3 s (HTML) — dotyczy też stanu błędu (wraca do idle,
-        // nigdy do sukcesu).
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) { ringProgress[ap.id] = 0 }
-        withAnimation(.easeInOut(duration: 0.3)) { dialStates[ap.id] = .idle }
-    }
 }
 
 // (GlassDialPressStyle usunięty 2026-07-15 — dial nie jest już Buttonem;

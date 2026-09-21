@@ -369,8 +369,16 @@ struct GlassHomeView: View {
             onIntercom: { ap in Task { await startIntercomFlow(preferred: ap) } },
             intercomBusy: intercomBusy,
             onComingSoon: { activeSheet = .comingSoon($0) },
-            lockStatuses: nukiLockMap
+            lockStatuses: nukiLockMap,
+            favoriteKey: favoriteEntranceKey
         )
+    }
+
+    /// Ulubione wejście pamiętamy w kontekście użytkownika I nieruchomości —
+    /// po przełączeniu osiedla nie zostaje cel z poprzedniego.
+    private var favoriteEntranceKey: String? {
+        guard let rid = auth.currentResidentId, let bid = building?.id else { return nil }
+        return "glass.favoriteEntrance.r\(rid).b\(bid)"
     }
 
     /// Słuchawka / „Połącz z domofonem": GET /stations → >1 stacja = wybór
@@ -532,7 +540,7 @@ struct GlassHomeView: View {
                 body: GlassEmptyBody()
             )
             if resp.gateOpened {
-                toast.show("\(resp.label) — otwarto dla gościa")
+                toast.show("\(resp.label) — polecenie otwarcia przyjęte")
             } else {
                 toast.show("Zatwierdzono, ale nie udało się otworzyć: \(resp.label)", error: true)
             }
@@ -1033,23 +1041,28 @@ struct GlassHomeView: View {
 
     // MARK: - Otwieranie
 
-    private func openAccessPoint(_ ap: AccessPoint) async -> Bool {
+    /// Jedno żądanie = jedno polecenie; BEZ automatycznych powtórek.
+    /// Wynik zgodny z kontraktem API (audyt UX 2026-09-21, P0 3.1):
+    /// `success` = Edge/urządzenie PRZYJĘŁO polecenie przekaźnika — to nie jest
+    /// potwierdzenie fizycznego otwarcia (bramy nie raportują stanu). Timeout
+    /// lub zerwane połączenie → `.unknown`, nie błąd i nie sukces.
+    private func openAccessPoint(_ ap: AccessPoint) async -> AccessOpenOutcome {
         do {
             let r: OpenAccessPointResponse = try await APIClient.shared.post(
                 "/resident/access-points/\(ap.id)/open",
                 body: GlassEmptyBody()
             )
-            // Po otwarciu zamka Nuki odśwież stan (~2.5 s na raport rygla do
-            // chmury Nuki), żeby kafel pokazał realną zmianę „Zamknięty→Otwarty".
+            // Zamek Nuki MA telemetrię: po ~2.5 s odśwież realny stan rygla,
+            // żeby linia stanu pokazała faktyczną zmianę.
             if r.success, ap.isUnitDoor {
                 Task {
                     try? await Task.sleep(nanoseconds: 2_500_000_000)
                     await loadSmartLocks(fresh: true)
                 }
             }
-            return r.success
+            return r.success ? .accepted : .failed(nil)
         } catch {
-            return false
+            return AccessOpenOutcome.from(error: error)
         }
     }
 }

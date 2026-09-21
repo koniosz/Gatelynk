@@ -11,9 +11,12 @@ import WebRTC
 //   • pełnoekranowy podgląd z kamery (snapshoty Akuvox / WebRTC track) + grade,
 //   • górna nakładka: badge NA ŻYWO, tytuł, licznik czasu, chip rozpoznania,
 //   • narożny przycisk aparatu (zapis klatki do Zdjęć),
-//   • suwak „Przytrzymaj, aby otworzyć" (~1.1 s) → otwiera elektrozaczep,
-//   • 4 szklane kontrolki: Wycisz / Mów / Rozłącz / Głośnik,
-//   • toast + „veil" sukcesu.
+//   • wspólny przycisk „Przytrzymaj, aby otworzyć" (HoldToOpenButton, 2 s,
+//     z NAZWĄ wejścia) — ten sam co na Domu i w podglądzie; pokazuje REALNY
+//     wynik polecenia (przyjęte / nieznany / błąd), nigdy „brama otwarta",
+//   • 3 kontrolki: Mikrofon (jawny stan) / Rozłącz / Głośnik — rozmowa jest
+//     zwykłym full-duplex WebRTC z wyciszeniem, nie push-to-talk,
+//   • toast + „veil" po PRZYJĘCIU polecenia.
 // Ekran jest zawsze ciemny (leży na ciemnym wideo) — `.preferredColorScheme(.dark)`.
 
 struct IntercomCallView: View {
@@ -21,9 +24,6 @@ struct IntercomCallView: View {
 
     // Stan UI
     @State private var elapsed = 0
-    @State private var holdProgress: CGFloat = 0
-    @State private var holdTask: Task<Void, Never>?
-    @State private var opened = false
     @State private var blink = false
     @State private var savedFrame = false
     @State private var toastText: String?
@@ -159,31 +159,40 @@ struct IntercomCallView: View {
     private var liveBadge: some View {
         HStack(spacing: 7) {
             Circle().fill(.white).frame(width: 7, height: 7).opacity(blink ? 0.3 : 1)
-            Text(call.callState == .active ? "NA ŻYWO" : "POŁĄCZENIE")
+            Text(badgeText)
                 .font(.system(size: 11, weight: .bold)).tracking(1.1)
         }
         .foregroundStyle(.white)
         .padding(.leading, 9).padding(.trailing, 11).padding(.vertical, 5)
-        .background(Capsule().fill(cLive.opacity(0.92)))
-        .shadow(color: cLive.opacity(0.4), radius: 9, y: 4)
+        // Czerwień = problem / działanie destrukcyjne (Rozłącz). „Na żywo" to
+        // stan poprawny → zieleń; łączenie → neutralne szkło.
+        .background(Capsule().fill(call.callState == .active ? cGreen.opacity(0.85) : Color.white.opacity(0.18)))
+        .accessibilityLabel(badgeText)
     }
 
-    /// Chip rozpoznania (placeholder — docelowo wynik face-recognition / dopasowania
-    /// gościa). Dziś statycznie „gość", spójnie z handoffem.
+    /// Chip kontekstu rozmowy. Aplikacja NIE rozpoznaje dziś osób — poprzedni
+    /// statyczny tekst „Wykryto: osoba · Brak dopasowania · gość" sugerował
+    /// ustaloną rolę/uprawnienie (audyt A07). Mówimy tylko to, co wiemy:
+    /// ktoś zadzwonił z wejścia (przychodzące) — tożsamość niepotwierdzona.
+    /// Przy rozmowie zainicjowanej przez mieszkańca chip znika.
+    @ViewBuilder
     private var recoChip: some View {
-        HStack(spacing: 9) {
-            ZStack {
-                Circle().fill(LinearGradient(colors: [cPurple, cBlue], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: "person.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+        if !call.isOutboundCall {
+            HStack(spacing: 9) {
+                ZStack {
+                    Circle().fill(LinearGradient(colors: [cPurple, cBlue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: "person.fill.questionmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                }
+                .frame(width: 26, height: 26)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Ktoś dzwoni z wejścia").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.white)
+                    Text("Tożsamość niepotwierdzona").font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.72))
+                }
             }
-            .frame(width: 26, height: 26)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Wykryto: osoba").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.white)
-                Text("Brak dopasowania · gość").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
-            }
+            .padding(.leading, 8).padding(.trailing, 14).padding(.vertical, 7)
+            .background(glassCapsule)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.leading, 8).padding(.trailing, 14).padding(.vertical, 7)
-        .background(glassCapsule)
     }
 
     // MARK: - Narożny aparat
@@ -221,7 +230,7 @@ struct IntercomCallView: View {
             ringingControls
         case .connecting, .active:
             VStack(spacing: 16) {
-                holdSlider
+                openButton
                 orbRow
             }
         case .idle, .ended:
@@ -229,64 +238,43 @@ struct IntercomCallView: View {
         }
     }
 
-    // Suwak „przytrzymaj, aby otworzyć"
-    private var holdSlider: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: opened
-                                ? [cGreen.opacity(0.55), cGreen.opacity(0.35)]
-                                : [cPurple.opacity(0.5), cBlue.opacity(0.4)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
-                    .frame(width: opened ? geo.size.width : (54 + (geo.size.width - 54) * holdProgress))
-
-                HStack(spacing: 9) {
-                    Image(systemName: opened ? "checkmark" : "lock.open.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(opened ? "Brama otwarta" : "Przytrzymaj, aby otworzyć")
-                        .font(.system(size: 15, weight: .semibold))
+    /// Ten sam przycisk co na Domu i w podglądzie (HoldToOpenButton): nazwa
+    /// wejścia, 2 s, postęp w przycisku, realny wynik polecenia.
+    private var openButton: some View {
+        HoldToOpenButton(
+            targetName: targetName,
+            onPhaseChange: { phase in
+                if phase == .accepted {
+                    withAnimation(.easeOut(duration: 0.3)) { showVeil = true }
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 3_600_000_000)
+                        withAnimation(.easeInOut(duration: 0.4)) { showVeil = false }
+                    }
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .frame(height: 66)
-        .background(.ultraThinMaterial)
-        .background(glassBg.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(.white.opacity(opened ? 0.3 : 0.2), lineWidth: 1)
-        )
-        .scaleEffect(holdProgress > 0 && !opened ? 0.992 : 1)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in beginHold() }
-                .onEnded { _ in endHold() }
+            },
+            onCommit: { await call.openDoorAwaiting() }
         )
     }
 
     private var orbRow: some View {
         HStack(alignment: .top, spacing: 0) {
+            // Jedna kontrolka mikrofonu z JAWNYM stanem. Wcześniej „Wycisz"
+            // i „Mów" przełączały to samo — nie było jasne, czy „Mów" trzeba
+            // trzymać (audyt A06). Rozmowa jest full-duplex, nie push-to-talk.
             orb(icon: call.isMuted ? "mic.slash.fill" : "mic.fill",
-                label: "Wycisz", active: call.isMuted, tint: cPurple) {
+                label: call.isMuted ? "Wyciszony" : "Mikrofon wł.",
+                active: !call.isMuted, tint: call.isMuted ? cPurple : cGreen,
+                a11y: call.isMuted ? "Mikrofon wyciszony. Włącz mikrofon" : "Mikrofon włączony. Wycisz mikrofon") {
                 call.toggleMute()
                 showToast(call.isMuted ? "Mikrofon wyciszony" : "Mikrofon włączony")
-            }
-            Spacer(minLength: 0)
-            orb(icon: "waveform", label: "Mów", active: !call.isMuted, tint: cGreen) {
-                call.toggleMute()
-                showToast(call.isMuted ? "Mikrofon zwolniony" : "Mówisz")
             }
             Spacer(minLength: 0)
             endOrb
             Spacer(minLength: 0)
             orb(icon: call.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
-                label: "Głośnik", active: call.isSpeaker, tint: cPurple) {
+                label: call.isSpeaker ? "Głośnik wł." : "Głośnik",
+                active: call.isSpeaker, tint: cPurple,
+                a11y: call.isSpeaker ? "Głośnik włączony. Przełącz na słuchawkę" : "Włącz głośnik") {
                 call.toggleSpeaker()
                 showToast(call.isSpeaker ? "Głośnik włączony" : "Głośnik wyłączony")
             }
@@ -294,7 +282,7 @@ struct IntercomCallView: View {
         .padding(.horizontal, 6)
     }
 
-    private func orb(icon: String, label: String, active: Bool, tint: Color, action: @escaping () -> Void) -> some View {
+    private func orb(icon: String, label: String, active: Bool, tint: Color, a11y: String, action: @escaping () -> Void) -> some View {
         VStack(spacing: 8) {
             Button(action: action) {
                 Image(systemName: icon)
@@ -311,11 +299,15 @@ struct IntercomCallView: View {
                     .shadow(color: active ? tint.opacity(0.35) : .clear, radius: 12)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(a11y)
             Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(active ? tint : .white.opacity(0.8))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(active ? tint : .white.opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .accessibilityHidden(true)
         }
-        .frame(width: 62)
+        .frame(width: 84)
     }
 
     private var endOrb: some View {
@@ -387,9 +379,24 @@ struct IntercomCallView: View {
 
     // MARK: - Helpers
 
+    /// Jedna nazwa celu dla tytułu, przycisku otwierania i polecenia (A06:
+    /// „Wyjazd" w tytule + stałe „Brama główna" w podtytule przeczyły sobie).
+    private var targetName: String {
+        call.activeSession?.intercomName ?? "Domofon"
+    }
+
+    private var badgeText: String {
+        call.callState == .active ? "NA ŻYWO" : "ŁĄCZENIE"
+    }
+
+    /// Lewa część linii stanu: lokal (gdy znany) albo jawny stan połączenia.
     private var subtitleLeft: String {
         if let unit = call.activeSession?.unitLabel, !unit.isEmpty { return unit }
-        return "Brama główna"
+        switch call.callState {
+        case .active:  return call.isMuted ? "Połączono · mikrofon wyciszony" : "Połączono · mikrofon włączony"
+        case .ringing: return "Połączenie przychodzące"
+        default:       return "Łączenie — dźwięk jeszcze nieaktywny"
+        }
     }
 
     private var timerString: String {
@@ -405,46 +412,6 @@ struct IntercomCallView: View {
             .fill(.ultraThinMaterial)
             .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 1))
             .shadow(color: .black.opacity(0.3), radius: 11, y: 4)
-    }
-
-    // MARK: - Hold-to-open logika
-
-    private func beginHold() {
-        guard holdTask == nil, !opened else { return }
-        holdTask = Task { @MainActor in
-            let steps = 60                       // ~1.1 s przy 18 ms kroku
-            for i in 1...steps {
-                try? await Task.sleep(nanoseconds: 18_000_000)
-                if Task.isCancelled { return }
-                holdProgress = CGFloat(i) / CGFloat(steps)
-            }
-            completeOpen()
-        }
-    }
-
-    private func endHold() {
-        holdTask?.cancel()
-        holdTask = nil
-        if !opened {
-            withAnimation(.easeOut(duration: 0.25)) { holdProgress = 0 }
-        }
-    }
-
-    private func completeOpen() {
-        holdTask = nil
-        opened = true
-        holdProgress = 1
-        call.openDoor()
-        withAnimation(.easeOut(duration: 0.3)) { showVeil = true }
-        showToast("Brama otwarta")
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_600_000_000)
-            withAnimation(.easeInOut(duration: 0.4)) {
-                showVeil = false
-                opened = false
-                holdProgress = 0
-            }
-        }
     }
 
     private func showToast(_ text: String, danger: Bool = false) {

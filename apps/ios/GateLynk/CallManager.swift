@@ -281,6 +281,39 @@ final class CallManager: NSObject {
     /// „Otwórz" — otwiera elektrozaczep domofonu z którego dzwoni gość.
     /// POST /resident/intercom/calls/:id/open (Cloud → Edge relay). Działa też
     /// w trakcie dzwonienia (można wpuścić bez odbierania).
+    /// „Otwórz" z WYNIKIEM (audyt UX 2026-09-21, P0): ekran rozmowy ogłaszał
+    /// „Brama otwarta" natychmiast po geście — zanim serwer w ogóle
+    /// odpowiedział, także przy błędzie. Ta wersja zwraca realny wynik
+    /// polecenia (przyjęte / błąd / nieznany), a UI pokazuje go wprost.
+    /// Jedno wywołanie = jedno żądanie; równoległy dubel dostaje `.failed`.
+    @MainActor
+    func openDoorAwaiting() async -> AccessOpenOutcome {
+        guard let sid = currentSessionId else { return .failed("Połączenie już się zakończyło.") }
+        guard !isOpening else { return .failed("Polecenie jest już wysyłane.") }
+        isOpening = true
+        defer { isOpening = false }
+        do {
+            struct OpenResp: Decodable { let success: Bool; let label: String? }
+            let resp: OpenResp = try await APIClient.shared.post(
+                "/resident/intercom/calls/\(sid)/open", body: [String: String]())
+            guard resp.success else { return .failed(nil) }
+            doorOpened = true
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await MainActor.run { self?.doorOpened = false }
+            }
+            return .accepted
+        } catch {
+            print("[Call] open błąd: \(error.localizedDescription)")
+            return AccessOpenOutcome.from(error: error)
+        }
+    }
+
+    /// true = rozmowa zainicjowana przez mieszkańca (nikt nie dzwonił z wejścia).
+    var isOutboundCall: Bool { isOutbound }
+
+    /// Wersja fire-and-forget (bez wyniku dla UI) — zostaje dla wywołań spoza
+    /// ekranu rozmowy. Ekran rozmowy używa `openDoorAwaiting()`.
     func openDoor() {
         guard let sid = currentSessionId, !isOpening else { return }
         isOpening = true

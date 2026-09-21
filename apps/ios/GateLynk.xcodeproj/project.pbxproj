@@ -16,6 +16,8 @@
 		3D99EDEC2FE001B8003E6631 /* VoIPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEB2FE001B8003E6631 /* VoIPManager.swift */; };
 		3D99EDED2FE001B8003E6631 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEA2FE001B8003E6631 /* CallManager.swift */; };
 		3D99EDEF2FE001C9003E6631 /* IntercomCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */; };
+		AA000000000000000000CC25 /* AccessOpenControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB25 /* AccessOpenControl.swift */; };
+		AA000000000000000000FF2C /* AccessOpenControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB25 /* AccessOpenControl.swift */; };
 		3D99EDF22FE03F9D003E6631 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 3D99EDF12FE03F9D003E6631 /* WebRTC */; };
 		3D99EE17302CD0AE003E6631 /* GlassNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA000000000000000000A301 /* GammaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000A201 /* GammaApp.swift */; };
@@ -154,6 +156,7 @@
 		3D99EDEA2FE001B8003E6631 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
 		3D99EDEB2FE001B8003E6631 /* VoIPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPManager.swift; sourceTree = "<group>"; };
 		3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntercomCallView.swift; sourceTree = "<group>"; };
+		AA000000000000000000BB25 /* AccessOpenControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessOpenControl.swift; sourceTree = "<group>"; };
 		3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GlassNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DA904F32F7AE47300B44274 /* GateLynk.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GateLynk.entitlements; sourceTree = "<group>"; };
 		AA000000000000000000A201 /* GammaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaApp.swift; sourceTree = "<group>"; };
@@ -373,6 +376,7 @@
 			isa = PBXGroup;
 			children = (
 				3D99EDEE2FE001C9003E6631 /* IntercomCallView.swift */,
+				AA000000000000000000BB25 /* AccessOpenControl.swift */,
 				3D99EDEA2FE001B8003E6631 /* CallManager.swift */,
 				3D99EDEB2FE001B8003E6631 /* VoIPManager.swift */,
 				3D6FD4B12FC330850023CA34 /* AnomalyDetailView.swift */,
@@ -764,6 +768,7 @@
 			files = (
 				AA000000000000000000CC01 /* GateLynkApp.swift in Sources */,
 				3D99EDEF2FE001C9003E6631 /* IntercomCallView.swift in Sources */,
+				AA000000000000000000CC25 /* AccessOpenControl.swift in Sources */,
 				AA000000000000000000CC02 /* APIClient.swift in Sources */,
 				AA000000000000000000CC03 /* KeychainHelper.swift in Sources */,
 				AA000000000000000000CC04 /* Models.swift in Sources */,
@@ -846,6 +851,7 @@
 				AA000000000000000000FF13 /* VoIPManager.swift in Sources */,
 				AA000000000000000000FF14 /* CallManager.swift in Sources */,
 				AA000000000000000000FF15 /* IntercomCallView.swift in Sources */,
+				AA000000000000000000FF2C /* AccessOpenControl.swift in Sources */,
 				AA000000000000000000FF16 /* GlassComingSoon.swift in Sources */,
 				AA000000000000000000FF17 /* GlassHistorySheet.swift in Sources */,
 				AA000000000000000000FF19 /* GlassAccessDeck.swift in Sources */,

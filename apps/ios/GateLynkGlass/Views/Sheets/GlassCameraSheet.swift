@@ -23,9 +23,9 @@ struct GlassCameraSheet: View {
     /// Punkt dostępu aktywnej sekcji decka (jego domofon = źródło kadru).
     let accessPoint: AccessPoint
     let onConnectIntercom: () -> Void
-    /// Otwarcie wejścia wprost z podglądu (2026-08-12) — hold 2 s jak na
-    /// kaflach decka (mocne sygnały > subtelne animacje, anty-przypadkowe).
-    let onOpen: (AccessPoint) async -> Bool
+    /// Otwarcie wejścia wprost z podglądu — TEN SAM przycisk co na Domu
+    /// (`HoldToOpenButton`: nazwa celu, 2 s, realny wynik polecenia).
+    let onOpen: (AccessPoint) async -> AccessOpenOutcome
     let onClose: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,6 +35,10 @@ struct GlassCameraSheet: View {
     @State private var failed = false
     @State private var blink = false
     @State private var now = Date()
+    /// Czas OSTATNIEJ odebranej klatki. Audyt UX 2026-09-21: plakietka
+    /// „NA ŻYWO" świeciła zawsze, a znacznik czasu pokazywał zegar telefonu —
+    /// stary obraz po zerwaniu łącza wyglądał jak transmisja.
+    @State private var lastFrameAt: Date?
     @State private var pollTask: Task<Void, Never>?
 
     // Live MJPEG (2026-08-12): strumień z Cloud proxy; polling snapshotów
@@ -42,11 +46,6 @@ struct GlassCameraSheet: View {
     // strumień padnie — stary Edge / kaseta bez video.cgi i bez RTSP).
     @State private var streamLoader: MJPEGStreamLoader?
     @State private var streamAlive = false
-
-    // Hold-to-open — stan przycisku „Otwórz".
-    private enum OpenState: Equatable { case idle, busy, success, failure }
-    @State private var openState: OpenState = .idle
-    @State private var openPressing = false
 
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -67,10 +66,10 @@ struct GlassCameraSheet: View {
                 // żadnych elementów interaktywnych → wyłączamy mu hit-test.
                 .allowsHitTesting(false)
 
-            holdOpenButton
+            HoldToOpenButton(targetName: accessPoint.label) { await onOpen(accessPoint) }
                 .padding(.bottom, 8)
 
-            GlassButton(title: "Połącz z domofonem", style: .ghost) {
+            GlassButton(title: "Domofon — połącz z: \(accessPoint.label)", style: .ghost) {
                 onConnectIntercom()
             }
         }
@@ -104,13 +103,18 @@ struct GlassCameraSheet: View {
                 VStack(spacing: 6) {
                     Image(systemName: "video.slash")
                         .font(.system(size: 26))
-                        .foregroundStyle(.white.opacity(0.4))
-                    Text("Brak podglądu")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("Brak połączenia z kamerą")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
                 }
             } else {
-                ProgressView().tint(.white.opacity(0.7))
+                VStack(spacing: 8) {
+                    ProgressView().tint(.white.opacity(0.7))
+                    Text("Ładowanie obrazu…")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
             }
 
             // Nakładka gradientowa góra/dół (HTML .cam-view::after)
@@ -128,15 +132,19 @@ struct GlassCameraSheet: View {
             // Badge NA ŻYWO + timestamp
             VStack {
                 HStack {
-                    liveBadge
+                    feedBadge
                     Spacer()
                 }
                 Spacer()
                 HStack {
                     Spacer()
-                    Text(Self.timestamp.string(from: now))
-                        .font(.system(size: 11).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.85))
+                    // Czas KLATKI, nie zegar telefonu.
+                    if let lastFrameAt {
+                        Text(Self.timestamp.string(from: lastFrameAt))
+                            .font(.system(size: 11.5).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.9))
+                            .accessibilityLabel("Obraz z godziny \(Self.timestamp.string(from: lastFrameAt))")
+                    }
                 }
             }
             .padding(12)
@@ -150,27 +158,48 @@ struct GlassCameraSheet: View {
         }
     }
 
-    /// „● NA ŻYWO" — czerwone tło rgba(255,59,48,.92), kropka miga 1.2 s
-    /// (HTML @keyframes blink; reduceMotion → kropka stała).
-    private var liveBadge: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(.white)
-                .frame(width: 6, height: 6)
-                .opacity(reduceMotion ? 1 : (blink ? 0.3 : 1))
-                .animation(
-                    reduceMotion ? nil : .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
-                    value: blink
-                )
-            Text("NA ŻYWO")
-                .font(.system(size: 10.5, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(.white)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background {
-            Capsule().fill(Color(hex: 0xFF3B30).opacity(0.92))
+    /// Klatka jest „na żywo", gdy przyszła w ostatnich 5 s (strumień MJPEG
+    /// albo polling co 1,5 s). Starsza = „Ostatni obraz" z godziną klatki.
+    private var isLive: Bool {
+        guard let lastFrameAt else { return false }
+        return now.timeIntervalSince(lastFrameAt) < 5
+    }
+
+    @ViewBuilder
+    private var feedBadge: some View {
+        if image == nil {
+            EmptyView()
+        } else if isLive {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 6, height: 6)
+                    .opacity(reduceMotion ? 1 : (blink ? 0.3 : 1))
+                    .animation(
+                        reduceMotion ? nil : .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
+                        value: blink
+                    )
+                Text("NA ŻYWO")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            // Zieleń = stan poprawny; czerwień rezerwujemy dla problemów.
+            .background { Capsule().fill(GlassColor.success.opacity(0.9)) }
+        } else {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 10, weight: .bold))
+                Text("OSTATNI OBRAZ — BRAK TRANSMISJI")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.5)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background { Capsule().fill(Color(hex: 0xC78A2B).opacity(0.95)) }
         }
     }
 
@@ -196,6 +225,7 @@ struct GlassCameraSheet: View {
                 await MainActor.run {
                     image = img
                     failed = false
+                    lastFrameAt = Date()
                 }
             } else if image == nil {
                 await MainActor.run { failed = true }
@@ -205,87 +235,6 @@ struct GlassCameraSheet: View {
             if image == nil {
                 await MainActor.run { failed = true }
             }
-        }
-    }
-
-    // MARK: Przycisk „Otwórz" — hold 2 s (wzorzec z decka)
-
-    private var holdOpenButton: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-            // Zalew postępu przez pełne 2 s trzymania (mocny sygnał).
-            GeometryReader { geo in
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(GlassColor.accentGradient)
-                    .frame(width: openPressing ? geo.size.width : 0)
-                    .animation(
-                        openPressing ? .linear(duration: 2.0) : .easeOut(duration: 0.3),
-                        value: openPressing
-                    )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-            HStack(spacing: 8) {
-                switch openState {
-                case .idle:
-                    Image(systemName: "lock.open.fill").font(.system(size: 14, weight: .semibold))
-                    Text(openPressing ? "Trzymaj…" : "Przytrzymaj, aby otworzyć")
-                        .font(.system(size: 15, weight: .bold))
-                case .busy:
-                    ProgressView().tint(.white)
-                    Text("Otwieram…").font(.system(size: 15, weight: .bold))
-                case .success:
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 15, weight: .bold))
-                    Text("Otwarto").font(.system(size: 15, weight: .bold))
-                case .failure:
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 15, weight: .bold))
-                    Text("Nie udało się — spróbuj ponownie").font(.system(size: 14, weight: .bold))
-                }
-            }
-            .foregroundStyle(.white)
-        }
-        .frame(height: 52)
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(
-                    openState == .success
-                        ? Color(hex: 0x34D399).opacity(0.7)
-                        : openState == .failure
-                            ? Color(hex: 0xFF6B6B).opacity(0.7)
-                            : Color.white.opacity(0.18),
-                    lineWidth: 1
-                )
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .onTapGesture {
-            // Krótki tap = podpowiedź (spójnie z kaflami decka).
-            if openState == .idle { toast.show("Przytrzymaj 2 sekundy, aby otworzyć") }
-        }
-        .onLongPressGesture(minimumDuration: 2.0, maximumDistance: 60) {
-            commitOpen()
-        } onPressingChanged: { pressing in
-            guard openState == .idle else { return }
-            openPressing = pressing
-            if pressing { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-        }
-        .accessibilityLabel("Otwórz \(accessPoint.label) — przytrzymaj 2 sekundy")
-    }
-
-    private func commitOpen() {
-        guard openState == .idle else { return }
-        openPressing = false
-        openState = .busy
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        Task {
-            let ok = await onOpen(accessPoint)
-            await MainActor.run {
-                openState = ok ? .success : .failure
-                UINotificationFeedbackGenerator().notificationOccurred(ok ? .success : .error)
-            }
-            // Po chwili wracamy do stanu wyjściowego (można otworzyć ponownie).
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            await MainActor.run { openState = .idle }
         }
     }
 
@@ -299,6 +248,7 @@ struct GlassCameraSheet: View {
             Task { @MainActor in
                 image = img
                 failed = false
+                lastFrameAt = Date()
                 // Pierwsza klatka strumienia → polling przestaje być potrzebny.
                 if !streamAlive {
                     streamAlive = true
