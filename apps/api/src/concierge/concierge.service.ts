@@ -960,7 +960,9 @@ export class ConciergeService {
              r."firstName" AS "residentFirstName",
              r."lastName"  AS "residentLastName",
              r.email       AS "residentEmail",
-             r.avatar      AS "residentAvatar"
+             -- kolumna to "avatarBase64" (r.avatar nie istnieje → 500 na liście
+             -- zgłoszeń konsjerża; wykryte testem multi-tenant-isolation 2026-09-21)
+             r."avatarBase64" AS "residentAvatar"
         FROM "tickets" t
         JOIN "residents" r ON r.id = t."residentId"
        WHERE t."buildingId" = ${buildingId}
