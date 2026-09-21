@@ -88,6 +88,7 @@ struct GlassTicketsSheet: View {
                 detailTicket = t
                 fullDetail = t
                 replyText = ""
+                GlassTicketSeenStore.markSeen(t)
             }
         }
         // Załączniki zdjęciowe (2026-08-13): aparat (fullScreenCover) +
@@ -404,6 +405,9 @@ struct GlassTicketsSheet: View {
     // MARK: Szczegóły zgłoszenia + korespondencja (2026-07-15)
 
     private func openDetail(_ t: Ticket) {
+        // Otwarcie wątku = odpowiedź obsługi przeczytana → znika z „Wymaga
+        // uwagi" na Domu (dopóki nie przyjdzie kolejna).
+        GlassTicketSeenStore.markSeen(t)
         detailTicket = t
         fullDetail = nil
         replyText = ""
@@ -415,6 +419,7 @@ struct GlassTicketsSheet: View {
     private func loadDetail(_ id: Int) async {
         if let full: Ticket = try? await APIClient.shared.get("/resident/tickets/\(id)") {
             fullDetail = full
+            GlassTicketSeenStore.markSeen(full)
         }
     }
 

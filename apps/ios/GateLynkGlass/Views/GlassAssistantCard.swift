@@ -11,10 +11,23 @@ import SwiftUI
 // 30 min server-side; ?refresh=1 wymusza regenerację). Bielik zwraca dwa
 // akapity — tniemy je na max 4 linie po zdaniach/nowych liniach.
 
+//
+// Audyt UX 2026-09-21 (§8): karta jest OSTATNIĄ sekcją Domu („najnowsze
+// informacje"), a zbiorczy ruch wszystkich pojazdów osiedla nie jest treścią
+// dashboardu mieszkańca — linia „Ruch przy bramie" z day-summary jest tu
+// odfiltrowana (generator w ai-prototype zasila też inne widoki, więc filtr
+// jest po stronie tej karty). Brief trzymamy w pamięci per mieszkaniec, żeby
+// powrót na zakładkę Dom nie odpalał ponownie pobierania i animacji.
+
 struct GlassAssistantCard: View {
+    /// Klucz pamięci podręcznej (mieszkaniec + nieruchomość). nil = bez cache.
+    var cacheKey: String? = nil
     let onTap: () -> Void
 
-    private enum Phase: Equatable { case typing, lines, error }
+    private static var cache: (key: String, lines: [String], at: Date)?
+    private static let cacheTTL: TimeInterval = 15 * 60
+
+    private enum Phase: Equatable { case typing, lines, empty, error }
 
     private struct BriefLine: Identifiable {
         let id: Int
@@ -38,15 +51,22 @@ struct GlassAssistantCard: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             briefBody
+            footer
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
-        .glassCard(radius: 22)
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .onTapGesture { onTap() }
+        .padding(.top, 4)
+        .padding(.bottom, 2)
+        .hubPanel(radius: 22)
         .onAppear {
-            if lines.isEmpty { reload(refresh: false) }
+            guard lines.isEmpty else { return }
+            if let key = cacheKey, let c = Self.cache, c.key == key,
+               Date().timeIntervalSince(c.at) < Self.cacheTTL, !c.lines.isEmpty {
+                lines = Self.briefLines(c.lines)
+                visibleCount = lines.count
+                phase = .lines
+            } else {
+                reload(refresh: false)
+            }
         }
         .onDisappear { loadTask?.cancel() }
     }
@@ -59,11 +79,12 @@ struct GlassAssistantCard: View {
                 Image(systemName: "sparkle")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(GlassColor.accentLight)
-                Text("ASYSTENT OSIEDLA")
-                    .font(.system(size: 11, weight: .semibold))
+                Text("NAJNOWSZE NA OSIEDLU")
+                    .font(.caption2.weight(.semibold))
                     .tracking(1.4)
             }
-            .foregroundStyle(.white.opacity(0.7))
+            .foregroundStyle(.white.opacity(0.75))
+            .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -72,18 +93,35 @@ struct GlassAssistantCard: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                     Text("Odśwież")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.caption.weight(.medium))
                 }
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.horizontal, 8)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Odśwież podsumowanie")
         }
-        .padding(.bottom, 8)
+    }
+
+    // MARK: Stopka — nazwane przejście (zamiast „tap w całą kartę")
+
+    private var footer: some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                Text("Ogłoszenia osiedla")
+                    .font(.footnote.weight(.semibold))
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(GlassColor.accentLight)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Body
@@ -95,9 +133,14 @@ struct GlassAssistantCard: View {
             GlassTypingDots()
                 .padding(.vertical, 8)
         case .error:
-            Text("Asystent chwilowo niedostępny — spróbuj odświeżyć.")
-                .font(.system(size: 12.5))
-                .foregroundStyle(.white.opacity(0.6))
+            Text("Nie udało się pobrać podsumowania — spróbuj odświeżyć.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.vertical, 6)
+        case .empty:
+            Text("Brak nowych informacji z osiedla.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.75))
                 .padding(.vertical, 6)
         case .lines:
             VStack(alignment: .leading, spacing: 9) {
@@ -108,8 +151,9 @@ struct GlassAssistantCard: View {
                             .fill(line.color)
                             .frame(width: 6, height: 6)
                         Text(Self.attributed(line.text))
-                            .font(.system(size: 12.5))
+                            .font(.footnote)
                             .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(.white.opacity(0.94))
                     }
                     .opacity(visible ? 1 : 0)
@@ -145,8 +189,9 @@ struct GlassAssistantCard: View {
                 predictions: resp.predictions.text,
                 recap: resp.recap.text
             )
-            newLines = raw.enumerated().map { idx, text in
-                BriefLine(id: idx, text: text, color: Self.dotPalette[idx % Self.dotPalette.count])
+            newLines = Self.briefLines(raw)
+            if let key = cacheKey, !raw.isEmpty {
+                Self.cache = (key, raw, Date())
             }
         } catch {
             if Task.isCancelled { return }
@@ -162,7 +207,9 @@ struct GlassAssistantCard: View {
         guard !Task.isCancelled else { return }
 
         lines = newLines
-        phase = newLines.isEmpty ? .error : .lines
+        // Pusta odpowiedź ≠ awaria — nie mówimy „niedostępny", gdy asystent
+        // po prostu nie ma nic do przekazania.
+        phase = newLines.isEmpty ? .empty : .lines
 
         // stagger 260ms per linia
         for i in newLines.indices {
@@ -170,6 +217,18 @@ struct GlassAssistantCard: View {
             guard !Task.isCancelled else { return }
             visibleCount = i + 1
         }
+    }
+
+    private static func briefLines(_ raw: [String]) -> [BriefLine] {
+        raw.enumerated().map { idx, text in
+            BriefLine(id: idx, text: text, color: dotPalette[idx % dotPalette.count])
+        }
+    }
+
+    /// Zbiorczy ruch WSZYSTKICH pojazdów osiedla — nie dla dashboardu
+    /// mieszkańca (audyt §8). Własne przejazdy są w Pojazdy › historia.
+    static func isEstateTrafficLine(_ text: String) -> Bool {
+        text.localizedCaseInsensitiveContains("Ruch przy bramie")
     }
 
     private static func padTyping(since started: Date) async {
@@ -195,7 +254,7 @@ struct GlassAssistantCard: View {
                     }
                 }
                 .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "-•– ")) }
-                .filter { $0.count > 3 }
+                .filter { $0.count > 3 && !isEstateTrafficLine($0) }
         }
         let pred = sentences(predictions)
         let rec = sentences(recap)

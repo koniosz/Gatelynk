@@ -112,8 +112,9 @@ struct GlassPaymentsSheet: View {
                     }
                 }
 
-                blikButton
-                    .padding(.top, 8)
+                // „Zapłać BLIK · WKRÓTCE" zdjęte z widoku operacyjnego (audyt UX
+                // 2026-09-21, E01): przycisk-atrapa obok realnych należności
+                // sugerował działającą płatność. Zapowiedź → Konto › „W przygotowaniu".
             }
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -403,35 +404,6 @@ struct GlassPaymentsSheet: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.white.opacity(0.06))
         }
-    }
-
-    // MARK: BLIK — zapowiedź (decyzja właściciela: widoczna atrapa WKRÓTCE)
-
-    private var blikButton: some View {
-        Button {
-            onComingSoon(.blik)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "wave.3.right.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                Text("Zapłać BLIK")
-                    .font(.system(size: 15, weight: .bold))
-                GlassSoonBadge()
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(GlassColor.accentGradient)
-                    .opacity(0.55)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: Stan błędu

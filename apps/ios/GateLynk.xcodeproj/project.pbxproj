@@ -107,6 +107,7 @@
 		AA000000000000000000FF17 /* GlassHistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE17 /* GlassHistorySheet.swift */; };
 		AA000000000000000000FF18 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000DD10 /* WebRTC */; };
 		AA000000000000000000FF19 /* GlassAccessDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE18 /* GlassAccessDeck.swift */; };
+		AA000000000000000000FF2E /* GlassHubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE22 /* GlassHubViews.swift */; };
 		AA000000000000000000FF1A /* GlassCameraSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE19 /* GlassCameraSheet.swift */; };
 		AA000000000000000000FF1B /* GlassShimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1A /* GlassShimmer.swift */; };
 		AA000000000000000000FF20 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000BB18 /* AppDelegate.swift */; };
@@ -243,6 +244,7 @@
 		AA000000000000000000EE16 /* GlassComingSoon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassComingSoon.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE17 /* GlassHistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassHistorySheet.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE18 /* GlassAccessDeck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAccessDeck.swift; sourceTree = "<group>"; };
+		AA000000000000000000EE22 /* GlassHubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassHubViews.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE19 /* GlassCameraSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCameraSheet.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE1A /* GlassShimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassShimmer.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE1B /* GlassNukiOnboardingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassNukiOnboardingSheet.swift; sourceTree = "<group>"; };
@@ -537,6 +539,7 @@
 				AA000000000000000000EE06 /* SlideToOpen.swift */,
 				AA000000000000000000EE07 /* GlassAssistantCard.swift */,
 				AA000000000000000000EE18 /* GlassAccessDeck.swift */,
+				AA000000000000000000EE22 /* GlassHubViews.swift */,
 				AA000000000000000000EE1F /* GlassAdminHomeView.swift */,
 				AA000000000000000000DD0B /* Sheets */,
 			);
@@ -859,6 +862,7 @@
 				AA000000000000000000FF16 /* GlassComingSoon.swift in Sources */,
 				AA000000000000000000FF17 /* GlassHistorySheet.swift in Sources */,
 				AA000000000000000000FF19 /* GlassAccessDeck.swift in Sources */,
+				AA000000000000000000FF2E /* GlassHubViews.swift in Sources */,
 				AA000000000000000000FF1A /* GlassCameraSheet.swift in Sources */,
 				AA000000000000000000FF1B /* GlassShimmer.swift in Sources */,
 			);

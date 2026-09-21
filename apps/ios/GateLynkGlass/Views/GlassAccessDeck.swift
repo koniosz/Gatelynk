@@ -31,7 +31,7 @@ import SwiftUI
 // Interakcja (audyt UX 2026-09-21):
 //   • WYBÓR wejścia jest jawny — rząd chipów z nazwami + „Wszystkie wejścia";
 //     karuzela (swipe) zostaje skrótem, nie jedyną metodą (A02).
-//   • OTWIERANIE to osobny, nazwany przycisk `HoldToOpenButton` pod kadrem
+//   • OTWIERANIE to osobny, nazwany przycisk `AccessHoldButton` pod kadrem
 //     (A01/A05) — postęp 2 s w obrębie przycisku, nie na całej karcie.
 //   • „Podgląd" i „Domofon" to nazwane akcje pomocnicze pod CTA.
 //   • STAN: bramy/szlabany nie raportują stanu fizycznego, więc deck nie
@@ -146,7 +146,7 @@ struct GlassAccessDeck: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var activeIndex = 0
-    /// Faza polecenia per wejście (z HoldToOpenButton) — steruje linią stanu
+    /// Faza polecenia per wejście (z AccessHoldButton) — steruje linią stanu
     /// i znacznikiem na kadrze. Klucz = AccessPoint.id, więc spóźniona
     /// odpowiedź poprzedniego wejścia nie zmienia widoku innego.
     @State private var phases: [Int: AccessOpenPhase] = [:]
@@ -529,7 +529,7 @@ struct GlassAccessDeck: View {
             }
             .buttonStyle(.plain)
         } else {
-            HoldToOpenButton(
+            AccessHoldButton(
                 targetName: ap.label,
                 onPhaseChange: { phase in
                     phases[ap.id] = phase

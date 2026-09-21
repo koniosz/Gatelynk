@@ -112,7 +112,7 @@ struct GlassAnnouncementsSheet: View {
                     withAnimation(.easeInOut(duration: 0.2)) { showHistory = false }
                 }
             } else if !history.isEmpty {
-                GlassButton(title: "Historia (\(history.count))", style: .ghost) {
+                GlassButton(title: "Archiwum ogłoszeń (\(history.count))", style: .ghost) {
                     withAnimation(.easeInOut(duration: 0.2)) { showHistory = true }
                 }
             }

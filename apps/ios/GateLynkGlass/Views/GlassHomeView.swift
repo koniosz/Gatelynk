@@ -2,10 +2,13 @@ import SwiftUI
 
 // MARK: - Ekran główny Glass Depth Premium
 //
-// Struktura (README): powitanie → karta "Otwórz" ze sliderem → 2 rzędy
-// kafelków → karta "Asystent osiedla" → floating tab bar (Dom / ✦ Zapytaj AI /
-// Więcej). Tło adaptacyjne wg pory dnia, badge w prawym górnym rogu
-// przełącza porę ręcznie (demo, jak w prototypie).
+// Struktura po audycie UX 2026-09-21 (§7–8):
+//   górny pasek (safe area): nieruchomość/lokal · asystent AI · konto (avatar)
+//   zakładki: Dom / Dostęp / Sprawy / Osiedle (stały dolny pasek w safe area)
+//   Dom: powitanie → pilne prośby gości → ulubione wejście + CTA →
+//        „Wymaga uwagi" (realne dane) → skróty z podsumowaniami → najnowsze.
+// Wszystkie huby i skróty otwierają TE SAME sheety co linki z powiadomień
+// (`activeSheet`) — jedno źródło danych i szczegółów obiektu.
 //
 // Dynamic Island ("Zbliżasz się · Wjazd 12 m") wymaga Live Activities +
 // geofencing — poza zakresem MVP, do osobnej iteracji.
@@ -28,13 +31,25 @@ struct GlassHomeView: View {
     /// true gdy WSZYSTKIE kluczowe fetch-e zawiodły (brak sieci / 500) —
     /// pokazujemy banner offline z retry zamiast wiecznego „Łączenie…".
     @State private var loadFailed = false
+    /// Stan pobrania każdego źródła „Wymaga uwagi" i podsumowań (audyt §8):
+    /// pusta tablica po błędzie ≠ „brak spraw". `unavailable` = moduł
+    /// wyłączony dla osiedla (403 FEATURE_DISABLED) — wtedy go nie pokazujemy.
+    @State private var srcProfile: DashboardSourceState = .loading
+    @State private var srcParcels: DashboardSourceState = .loading
+    @State private var srcPayments: DashboardSourceState = .loading
+    @State private var srcGuests: DashboardSourceState = .loading
+    @State private var srcTickets: DashboardSourceState = .loading
 
     // Domofon — obserwacja błędów wychodzącego połączenia (STATION_BUSY itp.)
     // musi żyć na poziomie Home (sheet bramy zamyka się przy inicjacji rozmowy).
     @State private var call = CallManager.shared
 
     // UI
+    @State private var tab: GlassHomeTab = .home
     @State private var activeSheet: GlassSheetKind?
+    /// Wejście z „Wymaga uwagi" wprost w szczegóły przepustki (czyszczone,
+    /// gdy sheet gości znika — jak `pushTicketId`).
+    @State private var focusGuestId: Int?
     /// Deep-link z pusha `ticket_reply` (2026-08-13) — sheet zgłoszeń otwiera
     /// się od razu na wątku tego ticketa. Czyszczone gdy sheet zgłoszeń znika
     /// (dowolną drogą: ✕, scrim, drag) — ręczne wejście z kafla startuje
@@ -52,9 +67,6 @@ struct GlassHomeView: View {
     @State private var cameraAP: AccessPoint?
     @State private var weather: GlassWeatherNow?
     @State private var tod: GlassTimeOfDay = .fromClock()
-    @State private var todOverride = false
-    @State private var tabBarShown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
     // 2026-07-08 — prośby gości o otwarcie drzwi mieszkania (UNIT_DOOR z
@@ -72,14 +84,10 @@ struct GlassHomeView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                GlassBackground(tod: tod)
+                GlassBackground(tod: tod, calm: isResident ? (tab == .home ? 0.16 : 0.42) : 0)
 
                 if isResident {
-                    mainContent
-                    todBadge
-                    propertyBadge
-                    if loadFailed { offlineBanner }
-                    tabBar
+                    residentRoot
                     sheetHost(maxHeight: geo.size.height * 0.8)
                 } else if case .buildingAdmin(let admin) = auth.role {
                     // 2026-09-06: administrator osiedla dostaje własny zestaw
@@ -160,6 +168,7 @@ struct GlassHomeView: View {
         // przestaje obowiązywać.
         .onChange(of: activeSheet) { _, newSheet in
             if newSheet != .tickets { pushTicketId = nil }
+            if newSheet != .guests { focusGuestId = nil }
             if newSheet != .announcements {
                 pushAnnouncementId = nil
                 pushAnnouncementNewest = false
@@ -168,7 +177,6 @@ struct GlassHomeView: View {
         .onReceive(
             Timer.publish(every: 60, on: .main, in: .common).autoconnect()
         ) { _ in
-            guard !todOverride else { return }
             let clock = GlassTimeOfDay.fromClock()
             if clock != tod { tod = clock }
         }
@@ -210,7 +218,6 @@ struct GlassHomeView: View {
     // MARK: Banner offline (brak danych po starcie)
 
     private var offlineBanner: some View {
-        VStack {
             HStack(spacing: 10) {
                 Image(systemName: "wifi.exclamationmark")
                     .font(.system(size: 14, weight: .semibold))
@@ -250,12 +257,7 @@ struct GlassHomeView: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(GlassColor.dangerSoft.opacity(0.4), lineWidth: 1)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 52)
-            Spacer()
-        }
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .zIndex(50)
+        .transition(.opacity)
     }
 
     private var isResident: Bool {
@@ -268,83 +270,113 @@ struct GlassHomeView: View {
         return ""
     }
 
-    // MARK: - Treść główna
+    // MARK: - Korzeń widoku mieszkańca: pasek górny + zakładka + pasek dolny
 
-    private var mainContent: some View {
+    /// Paski siedzą w `safeAreaInset` — treść nigdy nie wchodzi pod zegar /
+    /// Dynamic Island ani pod dolną nawigację (audyt H04/H06), a ScrollView
+    /// sam rezerwuje na nie miejsce (także przy większym tekście).
+    private var residentRoot: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 10) {
-                greeting
-                    .glassRiseIn(delay: 0.15)
-
-                // 2026-07-08 — prośby gości o otwarcie drzwi mieszkania,
-                // na górze i tylko gdy są oczekujące.
-                if !pendingApprovals.isEmpty {
-                    guestApprovalsSection
+            VStack(spacing: 14) {
+                if loadFailed { offlineBanner }
+                switch tab {
+                case .home:    homeTab
+                case .access:  accessTab
+                case .matters: mattersTab
+                case .estate:  estateTab
                 }
-
-                accessDeckCard
-                    .glassShimmer(delay: 0, radius: GlassRadius.primary)
-                    .glassRiseIn(delay: 0.3)
-
-                tilesRow1
-                    .glassRiseIn(delay: 0.45)
-
-                tilesRow2
-                    .glassRiseIn(delay: 0.6)
-
-                GlassAssistantCard {
-                    activeSheet = .announcements
-                }
-                .glassShimmer(delay: 0, radius: 22)
-                .glassRiseIn(delay: 0.75)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 64)
-            .padding(.bottom, 110)
+            .padding(.top, 4)
+            .padding(.bottom, 18)
         }
+        // Każda zakładka zaczyna od góry — pozycja przewinięcia nie
+        // „przecieka" między zakładkami.
+        .id(tab)
         .refreshable { await loadAll() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            GlassTopBar(
+                propertyName: building?.name ?? "Twoje osiedle",
+                unitLabel: unitLabel,
+                initials: initials,
+                onProperty: { activeSheet = .properties },
+                onAssistant: { activeSheet = .chat },
+                onAccount: { activeSheet = .more }
+            )
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            GlassTabBar(selection: $tab, flagged: flaggedTabs)
+        }
     }
 
-    // MARK: Powitanie
+    private var initials: String {
+        let first = firstName.first.map(String.init) ?? ""
+        let last = residentFull?.lastName.first.map(String.init) ?? ""
+        return (first + last).uppercased()
+    }
+
+    /// Lokal z aktywnego przypisania mieszkańca (`unitResidents` bez daty końca).
+    private var unitLabel: String? {
+        let active = residentFull?.unitResidents?.first { $0.untilDate == nil && $0.unit != nil }
+            ?? residentFull?.unitResidents?.first { $0.unit != nil }
+        guard let unit = active?.unit else { return nil }
+        if let stairwell = unit.stairwell?.name, !stairwell.isEmpty {
+            return "Lokal \(unit.number) · \(stairwell)"
+        }
+        return "Lokal \(unit.number)"
+    }
+
+    // MARK: - Zakładka Dom
+
+    @ViewBuilder
+    private var homeTab: some View {
+        greeting
+
+        // Pilne: gość czeka pod drzwiami — nad wszystkim innym.
+        if !pendingApprovals.isEmpty {
+            guestApprovalsSection
+        }
+
+        accessDeckCard
+            .glassShimmer(delay: 0, radius: GlassRadius.primary)
+
+        GlassAttentionSection(
+            verdict: attentionVerdict,
+            items: attentionItems,
+            onRetry: { Task { await loadAll() } }
+        )
+
+        shortcutsGrid
+
+        GlassAssistantCard(cacheKey: favoriteEntranceKey) {
+            tab = .estate
+            activeSheet = .announcements
+        }
+    }
+
+    // MARK: Powitanie (zwarte — nazwa osiedla jest już w górnym pasku)
 
     private var greeting: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text((building?.name ?? "Twoje osiedle").uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(2.0)
-                .foregroundStyle(.white.opacity(0.78))
-                .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
-
-            (Text("Cześć, ").fontWeight(.medium) + Text(firstName).fontWeight(.bold))
-                .font(.system(size: 34))
-                .tracking(-1)
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Cześć, \(firstName)")
+                .font(.title2.weight(.bold))
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.5), radius: 15, y: 2)
-
             Text(greetingMeta)
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.62))
-                .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.8))
         }
+        .shadow(color: .black.opacity(0.55), radius: 8, y: 1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8)
-        .padding(.top, 14)
-        .padding(.bottom, 26)
+        .padding(.horizontal, 6)
+        .padding(.top, 2)
+        .accessibilityElement(children: .combine)
     }
 
-    /// Prototyp: "21°C · jasno · wracasz do domu". Pogoda realna (Open-Meteo
-    /// po adresie budynku); zanim się załaduje — data jak dotychczas.
+    /// Data + realna pogoda (Open-Meteo po adresie budynku). Bez zgadywania
+    /// co robi użytkownik („wracasz do domu") — tylko fakty.
     private var greetingMeta: String {
         guard let w = weather else { return GlassFormat.dayLabel() }
-        return "\(w.temp)°C · \(w.desc) · \(todPhrase)"
-    }
-
-    private var todPhrase: String {
-        switch tod {
-        case .day:     return "miłego dnia"
-        case .evening: return "wracasz do domu"
-        case .night:   return "dobranoc"
-        }
+        return "\(GlassFormat.dayLabel()) · \(w.temp)°C, \(w.desc)"
     }
 
     // MARK: Karta „Dostęp" — paged deck (PROMPT 1)
@@ -562,219 +594,420 @@ struct GlassHomeView: View {
         await loadPendingApprovals()
     }
 
-    // MARK: Kafelki
+    // MARK: - Funkcje nieruchomości i roli
 
-    // Ikony 1:1 z prototypu: Pojazdy wypełnione auto, reszta konturowa
-    // (stroke 1.9 → SF outline + .medium), Zgłoszenia = klucz+śrubokręt
-    // (serwis; klucz pod kątem mylił się z dostępem — feedback 2026-08-19),
-    // Przesyłki = sześcian 3D, Ogłoszenia = głośnik z falą.
+    /// Moduł widoczny, gdy uprawnienia mieszkańca go nie wyłączają ORAZ API
+    /// nie odpowiedziało 403 FEATURE_DISABLED. Brak pustych modułów (§7).
+    private func isAvailable(_ feature: String, _ state: DashboardSourceState? = nil) -> Bool {
+        if state == .unavailable { return false }
+        return residentFull?.hasFeature(feature) ?? true
+    }
 
-    // Shimmer: delaye 5/10 s per kafelek jak klasy sh2/sh3 w HTML
-    // (row1: sh2 sh2 sh3, row2: sh3 sh2 sh2) — refleks „wędruje" po siatce.
+    // MARK: - Podsumowania z realnych danych (te same tablice co listy)
 
-    private var tilesRow1: some View {
-        HStack(spacing: 9) {
-            GlassTile(
+    /// Tekst stanu źródła, gdy nie ma danych do policzenia. nil = policz.
+    private func sourceNote(_ state: DashboardSourceState) -> String? {
+        switch state {
+        case .loading:     return "Ładowanie…"
+        case .failed:      return "Nie udało się pobrać"
+        case .unavailable: return nil
+        case .loaded:      return nil
+        }
+    }
+
+    private var guestsSummary: String? {
+        if let note = sourceNote(srcGuests) { return note }
+        let active = guests.filter { $0.passPhase() == .active }.count
+        let scheduled = guests.filter { $0.passPhase() == .scheduled }.count
+        if active == 0 && scheduled == 0 { return "Brak aktywnych przepustek" }
+        var parts: [String] = []
+        if active > 0 { parts.append(GlassPlural.pl(active, "aktywna", "aktywne", "aktywnych")) }
+        if scheduled > 0 { parts.append(GlassPlural.pl(scheduled, "zaplanowana", "zaplanowane", "zaplanowanych")) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var myVehicles: [Vehicle] { residentFull?.vehicles ?? [] }
+
+    private var vehiclesSummary: (text: String?, tint: Color?) {
+        if let note = sourceNote(srcProfile) { return (note, nil) }
+        if myVehicles.isEmpty { return ("Brak pojazdów", nil) }
+        let pending = myVehicles.filter { $0.effectiveStatus == .pending }.count
+        let rejected = myVehicles.filter { $0.effectiveStatus == .rejected }.count
+        var parts = [GlassPlural.pl(myVehicles.count, "pojazd", "pojazdy", "pojazdów")]
+        if pending > 0 { parts.append("\(pending) czeka na akceptację") }
+        if rejected > 0 { parts.append("\(rejected) odrzucony") }
+        return (parts.joined(separator: " · "), pending + rejected > 0 ? GlassColor.orbAmber1 : nil)
+    }
+
+    private var paymentAttention: AttentionRules.PaymentAttention {
+        guard srcPayments == .loaded, let charge = payments?.currentCharge else { return .none }
+        return AttentionRules.payment(
+            chargeStatus: charge.status,
+            dueDate: GlassFormat.iso8601.date(from: charge.dueDate)
+                ?? ISO8601DateFormatter().date(from: charge.dueDate),
+            now: Date()
+        )
+    }
+
+    private var paymentsSummary: (text: String?, tint: Color?) {
+        if let note = sourceNote(srcPayments) { return (note, nil) }
+        guard let p = payments else { return (nil, nil) }
+        if let charge = p.currentCharge {
+            let left = max(0, charge.totalAmount - charge.paidAmount)
+            switch charge.status {
+            case "OVERDUE":
+                return ("Po terminie · \(Self.money(left))", GlassColor.dangerSoft)
+            case "UNPAID", "PARTIAL":
+                return ("\(charge.statusLabel) · \(Self.money(left))", nil)
+            default:
+                return (charge.statusLabel, nil)
+            }
+        }
+        // Brak naliczenia w odpowiedzi → tylko saldo z API (ujemne = do zapłaty).
+        if p.balance < 0 { return ("Do zapłaty: \(Self.money(-p.balance))", GlassColor.dangerSoft) }
+        return ("Brak zaległości", nil)
+    }
+
+    private static func money(_ v: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = 2
+        f.maximumFractionDigits = 2
+        f.locale = Locale(identifier: "pl_PL")
+        return (f.string(from: NSNumber(value: v)) ?? String(format: "%.2f", v)) + " zł"
+    }
+
+    private var waitingParcels: [Parcel] {
+        parcels.filter { $0.status == "RECEIVED" }
+    }
+
+    private var parcelsSummary: String? {
+        if let note = sourceNote(srcParcels) { return note }
+        let n = waitingParcels.count
+        return n == 0 ? "Brak paczek do odbioru" : "\(n) do odbioru"
+    }
+
+    private var openTickets: [Ticket] { tickets.filter { $0.status != "DONE" } }
+
+    /// Otwarte zgłoszenia, w których ostatnia odpowiedź jest od obsługi
+    /// i mieszkaniec jeszcze jej nie otworzył (GlassTicketSeenStore).
+    private var ticketsAwaitingMe: [Ticket] {
+        openTickets.filter { t in
+            guard let last = t.replies?.last,
+                  AttentionRules.ticketAwaitsResident(status: t.status, lastReplyAuthorType: last.authorType)
+            else { return false }
+            return (GlassTicketSeenStore.seenReplyId(ticketId: t.id) ?? 0) < last.id
+        }
+    }
+
+    private var ticketsSummary: String? {
+        if let note = sourceNote(srcTickets) { return note }
+        if openTickets.isEmpty { return "Brak otwartych zgłoszeń" }
+        var text = GlassPlural.pl(openTickets.count, "otwarte", "otwarte", "otwartych")
+        let replies = ticketsAwaitingMe.count
+        if replies > 0 { text += " · " + GlassPlural.pl(replies, "nowa odpowiedź", "nowe odpowiedzi", "nowych odpowiedzi") }
+        return text
+    }
+
+    // MARK: - „Wymaga uwagi"
+
+    private var expiringGuests: [Guest] {
+        let now = Date()
+        return guests
+            .filter { AttentionRules.guestPassExpiresSoon(phase: $0.passPhase(now: now), validTo: $0.validTo, now: now) }
+            .sorted { $0.validTo < $1.validTo }
+    }
+
+    /// Pozycje wyłącznie z pobranych danych; każda prowadzi do właściwego
+    /// obiektu. Jedno zdarzenie = jedna pozycja (płatność: po terminie ALBO
+    /// zbliżający się termin, nigdy obie).
+    private var attentionItems: [GlassAttentionItem] {
+        var items: [GlassAttentionItem] = []
+
+        if isAvailable("payments", srcPayments), let charge = payments?.currentCharge {
+            switch paymentAttention {
+            case .overdue:
+                let days = charge.daysOverdue.map { $0 > 0 ? " · \(GlassPlural.pl($0, "dzień", "dni", "dni")) po terminie" : "" } ?? ""
+                items.append(GlassAttentionItem(
+                    id: "payment-overdue", icon: "creditcard.trianglebadge.exclamationmark",
+                    tint: GlassColor.dangerSoft,
+                    title: "Płatność po terminie",
+                    detail: "Naliczenie \(charge.period): \(Self.money(max(0, charge.totalAmount - charge.paidAmount)))\(days)",
+                    action: { activeSheet = .payments }
+                ))
+            case .dueSoon(let days):
+                let when = days == 0 ? "dziś" : (days == 1 ? "jutro" : "za \(days) dni")
+                items.append(GlassAttentionItem(
+                    id: "payment-due", icon: "creditcard",
+                    tint: GlassColor.orbAmber1,
+                    title: "Termin płatności \(when)",
+                    detail: "Naliczenie \(charge.period): \(Self.money(max(0, charge.totalAmount - charge.paidAmount)))",
+                    action: { activeSheet = .payments }
+                ))
+            case .none:
+                break
+            }
+        }
+
+        if isAvailable("tickets", srcTickets) {
+            for t in ticketsAwaitingMe.prefix(3) {
+                let who = t.replies?.last?.authorName ?? "Administracja"
+                items.append(GlassAttentionItem(
+                    id: "ticket-\(t.id)", icon: "bubble.left.and.text.bubble.right",
+                    tint: GlassColor.accentLight,
+                    title: "Nowa odpowiedź w zgłoszeniu",
+                    detail: "\(t.title) · \(who)",
+                    action: {
+                        pushTicketId = t.id
+                        activeSheet = .tickets
+                    }
+                ))
+            }
+        }
+
+        if isAvailable("parcels", srcParcels), !waitingParcels.isEmpty {
+            let n = waitingParcels.count
+            let couriers = Array(Set(waitingParcels.map(\.courier))).sorted().prefix(3).joined(separator: ", ")
+            items.append(GlassAttentionItem(
+                id: "parcels", icon: "shippingbox",
+                tint: GlassColor.orbBlue1,
+                title: n == 1 ? "Paczka do odebrania" : "\(GlassPlural.pl(n, "paczka", "paczki", "paczek")) do odebrania",
+                detail: couriers.isEmpty ? "Czeka w punkcie odbioru" : couriers,
+                action: { activeSheet = .parcels }
+            ))
+        }
+
+        if isAvailable("guests", srcGuests) {
+            for g in expiringGuests.prefix(3) {
+                items.append(GlassAttentionItem(
+                    id: "guest-\(g.id)", icon: "person.badge.clock",
+                    tint: GlassColor.success,
+                    title: "Przepustka wygasa: \(g.name)",
+                    detail: "Ważna do \(GlassFormat.shortDateTime.string(from: g.validTo)) · możesz przedłużyć",
+                    action: {
+                        focusGuestId = g.id
+                        activeSheet = .guests
+                    }
+                ))
+            }
+        }
+        return items
+    }
+
+    private var attentionVerdict: AttentionVerdict {
+        AttentionVerdict.resolve(
+            sources: [srcParcels, srcPayments, srcGuests, srcTickets],
+            itemCount: attentionItems.count
+        )
+    }
+
+    /// Kropka na zakładce = są tam pozycje „Wymaga uwagi" (te same dane).
+    private var flaggedTabs: Set<GlassHomeTab> {
+        var out: Set<GlassHomeTab> = []
+        let ids = attentionItems.map(\.id)
+        if ids.contains(where: { $0.hasPrefix("payment") || $0.hasPrefix("ticket") || $0 == "parcels" }) {
+            out.insert(.matters)
+        }
+        if ids.contains(where: { $0.hasPrefix("guest-") }) || !pendingApprovals.isEmpty {
+            out.insert(.access)
+        }
+        return out
+    }
+
+    // MARK: - Skróty na Domu (2×2, tylko dostępne moduły)
+
+    private var shortcutsGrid: some View {
+        let columns = [GridItem(.flexible(), spacing: 9), GridItem(.flexible(), spacing: 9)]
+        return VStack(alignment: .leading, spacing: 7) {
+            Text("SKRÓTY")
+                .font(.caption2.weight(.semibold))
+                .tracking(1.4)
+                .foregroundStyle(.white.opacity(0.7))
+                .padding(.horizontal, 8)
+                .accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: columns, spacing: 9) {
+                if isAvailable("guests", srcGuests) {
+                    GlassShortcutTile(
+                        gradient: [GlassColor.success, GlassColor.accentBlue],
+                        icon: "person.2", title: "Goście", summary: guestsSummary
+                    ) { activeSheet = .guests }
+                }
+                if isAvailable("vehicles") {
+                    GlassShortcutTile(
+                        gradient: [GlassColor.accentBlue, GlassColor.orbViolet],
+                        icon: "car.fill", title: "Pojazdy",
+                        summary: vehiclesSummary.text, summaryTint: vehiclesSummary.tint
+                    ) { activeSheet = .vehicles }
+                }
+                if isAvailable("payments", srcPayments) {
+                    GlassShortcutTile(
+                        gradient: [GlassColor.dangerSoft, GlassColor.dangerDeep],
+                        icon: "creditcard", title: "Płatności",
+                        summary: paymentsSummary.text, summaryTint: paymentsSummary.tint
+                    ) { activeSheet = .payments }
+                }
+                if isAvailable("parcels", srcParcels) {
+                    GlassShortcutTile(
+                        gradient: [GlassColor.orbBlue1, GlassColor.orbBlue2],
+                        icon: "cube", title: "Przesyłki", summary: parcelsSummary
+                    ) { activeSheet = .parcels }
+                }
+            }
+        }
+    }
+
+    // MARK: - Zakładka Dostęp
+
+    @ViewBuilder
+    private var accessTab: some View {
+        GlassHubHeader(title: "Dostęp", subtitle: "Wejścia, goście, pojazdy, domownicy i zamki")
+
+        if !pendingApprovals.isEmpty {
+            guestApprovalsSection
+        }
+
+        GlassHubSection(title: "Wejścia") {
+            GlassHubRow(
                 gradient: [GlassColor.accentBlue, GlassColor.orbViolet],
-                icon: "car.fill", label: "Pojazdy",
-                shimmerDelay: 5
-            ) { activeSheet = .vehicles }
-
-            GlassTile(
+                icon: "door.left.hand.open", title: "Wszystkie wejścia",
+                summary: entrancesSummary
+            ) { activeSheet = .gate }
+            GlassHubRow(
                 gradient: [GlassColor.success, GlassColor.accentBlue],
-                icon: "person.2", label: "Goście",
-                iconWeight: .medium,
-                shimmerDelay: 5
-            ) { activeSheet = .guests }
-
-            GlassTile(
-                gradient: [GlassColor.dangerSoft, GlassColor.dangerDeep],
-                icon: "creditcard", label: "Płatność",
-                iconWeight: .medium,
-                showAlertDot: hasOverduePayment,
-                shimmerDelay: 10
-            ) { activeSheet = .payments }
-        }
-    }
-
-    private var tilesRow2: some View {
-        HStack(spacing: 9) {
-            GlassTile(
-                // 2026-08-19 (feedback Konrada): klucz z prototypu sugerował
-                // DOSTĘP, nie zgłoszenie usterki. Klucz+śrubokręt = naprawa /
-                // serwis — czytelne dla „zgłoś problem administracji".
-                gradient: [GlassColor.orbAmber1, GlassColor.orbAmber2],
-                icon: "wrench.and.screwdriver", label: "Zgłoszenia",
-                iconWeight: .medium,
-                shimmerDelay: 10
-            ) { activeSheet = .tickets }
-
-            GlassTile(
-                gradient: [GlassColor.orbBlue1, GlassColor.orbBlue2],
-                icon: "cube", label: "Przesyłki",
-                iconWeight: .medium,
-                badgeCount: waitingParcelsCount,
-                shimmerDelay: 5
-            ) { activeSheet = .parcels }
-
-            GlassTile(
+                icon: "phone.fill", title: "Domofon",
+                summary: "Połącz ze stacją przy wejściu",
+                busy: intercomBusy
+            ) { Task { await startIntercomFlow() } }
+            GlassHubRow(
                 gradient: [GlassColor.accentLight, GlassColor.orbPurple],
-                icon: "speaker.wave.1", label: "Ogłoszenia",
-                iconWeight: .medium,
-                shimmerDelay: 5
-            ) { activeSheet = .announcements }
+                icon: "clock.arrow.circlepath", title: "Historia zdarzeń",
+                summary: "Wjazdy, wejścia gości, otwarcia zdalne, domofon",
+                showDivider: false
+            ) { activeSheet = .history }
+        }
+
+        GlassHubSection(title: "Osoby i pojazdy") {
+            if isAvailable("guests", srcGuests) {
+                GlassHubRow(
+                    gradient: [GlassColor.success, GlassColor.accentBlue],
+                    icon: "person.2", title: "Goście",
+                    summary: guestsSummary
+                ) { activeSheet = .guests }
+            }
+            if isAvailable("vehicles") {
+                GlassHubRow(
+                    gradient: [GlassColor.accentBlue, GlassColor.orbViolet],
+                    icon: "car.fill", title: "Pojazdy",
+                    summary: vehiclesSummary.text, summaryTint: vehiclesSummary.tint
+                ) { activeSheet = .vehicles }
+            }
+            GlassHubRow(
+                gradient: [GlassColor.orbAmber1, GlassColor.orbAmber2],
+                icon: "person.3", title: "Domownicy",
+                summary: "Osoby z dostępem do Twojego lokalu",
+                showDivider: false
+            ) { activeSheet = .household }
+        }
+
+        GlassHubSection(title: "Zamki") {
+            ForEach(nukiLocks) { lock in
+                GlassNukiLockHubRow(lock: lock) { activeSheet = .nukiOnboarding }
+            }
+            GlassHubRow(
+                gradient: [GlassColor.orbAmber1, GlassColor.orbAmber2],
+                icon: "lock.badge.plus",
+                title: nukiLocks.isEmpty ? "Dodaj zamek Nuki" : "Zarządzaj zamkami Nuki",
+                summary: nukiLocks.isEmpty ? "Połącz zamek drzwi swojego lokalu" : nil,
+                showDivider: false
+            ) { activeSheet = .nukiOnboarding }
         }
     }
 
-    private var hasOverduePayment: Bool {
-        (payments?.balance ?? 0) < 0
+    private var entrancesSummary: String {
+        if accessPoints.isEmpty {
+            return loadFailed ? "Nie udało się pobrać" : "Brak przypisanych wejść"
+        }
+        return GlassPlural.pl(accessPoints.count, "wejście", "wejścia", "wejść")
     }
 
-    private var waitingParcelsCount: Int {
-        parcels.filter { $0.status == "RECEIVED" }.count
-    }
+    // MARK: - Zakładka Sprawy
 
-    // MARK: Ikonka domku (lewy górny róg) — menu nieruchomości
+    @ViewBuilder
+    private var mattersTab: some View {
+        GlassHubHeader(title: "Sprawy", subtitle: "Zgłoszenia, płatności i przesyłki")
 
-    // Decyzja właściciela 2026-08-11: zmiana nieruchomości ma być NA WIERZCHU,
-    // nie schowana w „Więcej". Domek otwiera GlassPropertiesSheet (zmień /
-    // dodaj nieruchomość); wiersz „Osiedle" w „Więcej" prowadzi w to samo
-    // miejsce. Styl = lustrzane odbicie badge'a pory dnia po prawej.
-    private var propertyBadge: some View {
-        VStack {
-            HStack {
-                Button {
-                    activeSheet = .properties
-                } label: {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 30, height: 26)
-                        .background {
-                            Capsule().fill(.ultraThinMaterial)
-                                .overlay { Capsule().fill(Color.white.opacity(0.08)) }
-                        }
-                        .overlay { Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 1) }
-                        .contentShape(Capsule())
+        let showTickets = isAvailable("tickets", srcTickets)
+        let showPayments = isAvailable("payments", srcPayments)
+        let showParcels = isAvailable("parcels", srcParcels)
+
+        if showTickets || showPayments || showParcels {
+            GlassHubSection(title: "Twoje sprawy") {
+                if showTickets {
+                    GlassHubRow(
+                        gradient: [GlassColor.orbAmber1, GlassColor.orbAmber2],
+                        icon: "wrench.and.screwdriver", title: "Zgłoszenia",
+                        summary: ticketsSummary,
+                        badge: ticketsAwaitingMe.count,
+                        showDivider: showPayments || showParcels
+                    ) { activeSheet = .tickets }
                 }
-                .buttonStyle(.plain)
-                Spacer()
+                if showPayments {
+                    GlassHubRow(
+                        gradient: [GlassColor.dangerSoft, GlassColor.dangerDeep],
+                        icon: "creditcard", title: "Płatności",
+                        summary: paymentsSummary.text, summaryTint: paymentsSummary.tint,
+                        showDivider: showParcels
+                    ) { activeSheet = .payments }
+                }
+                if showParcels {
+                    GlassHubRow(
+                        gradient: [GlassColor.orbBlue1, GlassColor.orbBlue2],
+                        icon: "cube", title: "Przesyłki",
+                        summary: parcelsSummary,
+                        badge: waitingParcels.count,
+                        showDivider: false
+                    ) { activeSheet = .parcels }
+                }
             }
-            .padding(.leading, 24)
-            .padding(.top, 8)
-            Spacer()
+        } else {
+            Text("Ta nieruchomość nie ma włączonych zgłoszeń, płatności ani przesyłek.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .hubPanel()
         }
     }
 
-    // MARK: Badge pory dnia
+    // MARK: - Zakładka Osiedle
 
-    private var todBadge: some View {
-        VStack {
-            HStack {
-                Spacer()
-                Button {
-                    todOverride = true
-                    withAnimation(.easeInOut(duration: 1.2)) { tod = tod.next }
-                } label: {
-                    Text(tod.badgeLabel)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 5)
-                        .background {
-                            Capsule().fill(.ultraThinMaterial)
-                                .overlay { Capsule().fill(Color.white.opacity(0.08)) }
-                        }
-                        .overlay { Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 1) }
-                }
-                .buttonStyle(.plain)
+    @ViewBuilder
+    private var estateTab: some View {
+        GlassHubHeader(title: "Osiedle", subtitle: building?.name ?? "Informacje i wydarzenia")
+
+        GlassHubSection(title: "Informacje") {
+            if isAvailable("notifications") {
+                GlassHubRow(
+                    gradient: [GlassColor.accentLight, GlassColor.orbPurple],
+                    icon: "speaker.wave.1", title: "Ogłoszenia",
+                    summary: "Komunikaty administracji i archiwum"
+                ) { activeSheet = .announcements }
             }
-            .padding(.trailing, 24)
-            .padding(.top, 8)
-            Spacer()
+            GlassHubRow(
+                gradient: [GlassColor.orbBlue1, GlassColor.orbBlue2],
+                icon: "calendar", title: "Kalendarz",
+                summary: "Wydarzenia i terminy osiedla",
+                showDivider: false
+            ) { activeSheet = .calendar }
         }
-    }
 
-    // MARK: Tab bar (floating pill — 3 elementy)
-
-    private var tabBar: some View {
-        VStack {
-            Spacer()
-            HStack(spacing: 4) {
-                // Dom — aktywny
-                HStack(spacing: 5) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Dom")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 9)
-                .background {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [GlassColor.accentLight.opacity(0.4), GlassColor.accentBlue.opacity(0.4)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                }
-
-                // Zapytaj AI — wyróżniony
-                Button {
-                    activeSheet = .chat
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("Zapytaj AI")
-                            .font(.system(size: 12, weight: .bold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 9)
-                    .background {
-                        Capsule()
-                            .fill(GlassColor.accentGradient)
-                            .shadow(color: GlassColor.accentBlue.opacity(0.5), radius: 9, y: 4)
-                    }
-                }
-                .buttonStyle(.plain)
-
-                // Więcej
-                Button {
-                    activeSheet = .more
-                } label: {
-                    Text("Więcej")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 9)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 8)
-            .background {
-                Capsule().fill(.ultraThinMaterial)
-                    .overlay { Capsule().fill(Color(red: 18/255, green: 18/255, blue: 28/255).opacity(0.45)) }
-            }
-            .overlay { Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 1) }
-            .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
-            .opacity(tabBarShown ? 1 : 0)
-            .offset(y: tabBarShown ? 0 : 26)
-            .onAppear {
-                if reduceMotion {
-                    tabBarShown = true
-                } else {
-                    withAnimation(.timingCurve(0.22, 0.9, 0.3, 1, duration: 0.8).delay(0.9)) {
-                        tabBarShown = true
-                    }
-                }
-            }
-            .padding(.bottom, 6)
+        GlassHubSection(title: "Pomoc") {
+            GlassHubRow(
+                gradient: [GlassColor.accentBlue, GlassColor.orbViolet],
+                icon: "sparkles", title: "Asystent AI",
+                summary: "Zapytaj o sprawy osiedla",
+                showDivider: false
+            ) { activeSheet = .chat }
         }
     }
 
@@ -844,6 +1077,7 @@ struct GlassHomeView: View {
         case .guests:
             GlassGuestsSheet(
                 guests: guests,
+                initialGuestId: focusGuestId,
                 onReload: { await reloadGuests() },
                 onClose: { activeSheet = nil }
             )
@@ -877,13 +1111,19 @@ struct GlassHomeView: View {
         case .more:
             GlassMoreSheet(
                 building: building,
-                nukiLocks: nukiLocks,
-                onOpenHistory: { activeSheet = .history },
-                onOpenCalendar: { activeSheet = .calendar },
-                onOpenNukiLock: { activeSheet = .nukiOnboarding },
                 onOpenProperties: { activeSheet = .properties },
                 onComingSoon: { activeSheet = .comingSoon($0) },
                 onClose: { activeSheet = nil }
+            )
+        case .household:
+            // Ten sam widok domowników co dawniej w „Więcej" — teraz z zakładki
+            // Dostęp, otwarty od razu na liście.
+            GlassMoreSheet(
+                building: building,
+                onOpenProperties: { activeSheet = .properties },
+                onComingSoon: { activeSheet = .comingSoon($0) },
+                onClose: { activeSheet = nil },
+                startInHousehold: true
             )
         case .history:
             GlassHistorySheet(onClose: { activeSheet = nil })
@@ -980,29 +1220,54 @@ struct GlassHomeView: View {
 
     // MARK: - Dane
 
+    /// Jedno źródło → (dane, stan). 403 = moduł wyłączony dla osiedla/roli
+    /// (FEATURE_DISABLED) — to nie awaria. Poprzednie dane zostają przy
+    /// błędzie sieci (nie zerujemy list na chwilowym timeoucie).
+    private func fetchSource<T: Decodable>(_ path: String) async -> (T?, DashboardSourceState) {
+        do {
+            let value: T = try await APIClient.shared.get(path)
+            return (value, .loaded)
+        } catch APIError.httpError(let code, _) where code == 403 {
+            return (nil, .unavailable)
+        } catch {
+            return (nil, .failed)
+        }
+    }
+
     private func loadAll() async {
         async let bld: Building? = try? APIClient.shared.get("/resident/building")
-        async let res: Resident? = try? APIClient.shared.get("/resident/me")
+        async let res: (Resident?, DashboardSourceState) = fetchSource("/resident/me")
         async let aps: [AccessPoint] = (try? APIClient.shared.get("/resident/access-points")) ?? []
-        async let parc: [Parcel] = (try? APIClient.shared.get("/resident/parcels")) ?? []
-        async let pay: PaymentSummary? = try? APIClient.shared.get("/resident/payments")
-        async let gst: [Guest] = (try? APIClient.shared.get("/resident/guests")) ?? []
-        async let tck: [Ticket] = (try? APIClient.shared.get("/resident/tickets")) ?? []
+        async let parc: ([Parcel]?, DashboardSourceState) = fetchSource("/resident/parcels")
+        async let pay: (PaymentSummary?, DashboardSourceState) = fetchSource("/resident/payments")
+        async let gst: ([Guest]?, DashboardSourceState) = fetchSource("/resident/guests")
+        async let tck: ([Ticket]?, DashboardSourceState) = fetchSource("/resident/tickets")
 
         building = await bld
-        residentFull = await res
+        let (me, meState) = await res
+        if let me { residentFull = me }
+        srcProfile = meState
         accessPoints = (await aps).sorted { $0.sortOrder < $1.sortOrder }
         // Sync cache Siri/App Intents (2026-07-16) — frazy typu „Otwórz wjazd w GateLynk".
         GlassEntranceStore.save(accessPoints)
-        parcels = await parc
-        payments = await pay
-        guests = await gst
-        tickets = await tck
+
+        let (p, pState) = await parc
+        if let p { parcels = p } else if pState == .unavailable { parcels = [] }
+        srcParcels = pState
+        let (pm, pmState) = await pay
+        if let pm { payments = pm } else if pmState == .unavailable { payments = nil }
+        srcPayments = pmState
+        let (g, gState) = await gst
+        if let g { guests = g } else if gState == .unavailable { guests = [] }
+        srcGuests = gState
+        let (t, tState) = await tck
+        if let t { tickets = t } else if tState == .unavailable { tickets = [] }
+        srcTickets = tState
 
         // Offline detection: wszystkie kluczowe fetch-e puste → pokaż banner
         // z retry (zamiast wiecznego „Łączenie z osiedlem…").
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            loadFailed = building == nil && residentFull == nil && accessPoints.isEmpty
+            loadFailed = building == nil && me == nil && accessPoints.isEmpty
         }
 
         // Pogoda w tle — nie blokuje pull-to-refresh, brak sieci = zostaje data
@@ -1030,12 +1295,14 @@ struct GlassHomeView: View {
     private func reloadGuests() async {
         if let g: [Guest] = try? await APIClient.shared.get("/resident/guests") {
             guests = g
+            srcGuests = .loaded
         }
     }
 
     private func reloadTickets() async {
         if let t: [Ticket] = try? await APIClient.shared.get("/resident/tickets") {
             tickets = t
+            srcTickets = .loaded
         }
     }
 

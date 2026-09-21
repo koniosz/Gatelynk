@@ -14,6 +14,10 @@ import SwiftUI
 
 struct GlassBackground: View {
     let tod: GlassTimeOfDay
+    /// Dodatkowe, równomierne przyciemnienie pod treść (audyt UX 2026-09-21,
+    /// §8 „uspokój tło pod tekstem"): Dom lekko, zakładki-listy mocniej.
+    /// Czytelność tekstu nie może zależeć od jasności zdjęcia.
+    var calm: Double = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var kenBurns = false
@@ -47,13 +51,19 @@ struct GlassBackground: View {
             // Światła okien (noc)
             nightLights
 
-            // 2+3. Aurora + cząsteczki
-            if !reduceMotion {
+            // 2+3. Aurora + cząsteczki — tylko gdy tło nie jest „uspokojone"
+            // pod listę (ruch za tekstem pogarsza czytelność).
+            if !reduceMotion && calm < 0.3 {
                 GlassAuroraCanvas()
+            }
+
+            if calm > 0 {
+                dimColor.opacity(calm)
             }
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 1.2), value: tod)
+        .animation(.easeInOut(duration: 0.35), value: calm)
     }
 
     private var dimColor: Color { Color(red: 8/255, green: 10/255, blue: 20/255) }

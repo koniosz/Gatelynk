@@ -24,6 +24,9 @@ import UIKit
 
 struct GlassGuestsSheet: View {
     let guests: [Guest]
+    /// Wejście wprost w szczegóły przepustki (pozycja „Wymaga uwagi" na Domu:
+    /// „przepustka wygasa wkrótce" → od razu właściwy obiekt i „Przedłuż").
+    var initialGuestId: Int? = nil
     let onReload: () async -> Void
     let onClose: () -> Void
 
@@ -99,6 +102,11 @@ struct GlassGuestsSheet: View {
             .task {
                 await loadGuestEvents()
                 await loadAccessPoints()
+            }
+            .task(id: initialGuestId) {
+                guard let id = initialGuestId, editingGuest?.id != id,
+                      let g = guests.first(where: { $0.id == id }) else { return }
+                openEdit(g)
             }
             .fullScreenCover(item: $editingGuest) { g in
                 detailScreen(g)
@@ -330,17 +338,9 @@ struct GlassGuestsSheet: View {
 
     // MARK: Klasyfikacja przepustek (GuestPassPhase — testowana w LogicTests)
 
+    /// Jedna definicja z licznikami na Domu — `Guest.passPhase` (GlassHubViews).
     private func phase(_ g: Guest, now: Date = Date()) -> GuestPassPhase {
-        let limited = (g.allowedAccessPoints ?? []).filter { $0.maxUses != nil }
-        let hasUnlimited = g.allowedAccessPoints == nil
-            || (g.allowedAccessPoints ?? []).contains { $0.maxUses == nil }
-        return GuestPassPhase.classify(
-            status: g.status.rawValue,
-            validFrom: g.validFrom, validTo: g.validTo,
-            remainingPerLimitedEntrance: limited.map { g.remainingUses(apId: $0.apId) ?? 0 },
-            hasUnlimitedEntrance: hasUnlimited,
-            now: now
-        )
+        g.passPhase(now: now)
     }
 
     private func guests(in tab: ListTab) -> [Guest] {

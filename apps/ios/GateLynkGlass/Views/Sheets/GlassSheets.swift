@@ -25,7 +25,11 @@ enum GlassSheetKind: Identifiable, Equatable {
     case parcels
     case announcements
     case chat
+    /// Konto (avatar w górnym pasku) — profil i ustawienia.
     case more
+    /// Domownicy z zakładki Dostęp (audyt UX 2026-09-21) — ten sam widok co
+    /// dawniej w „Więcej", otwarty od razu na liście domowników.
+    case household
     /// Historia zdarzeń osiedla (parity z HistoryView głównej apki).
     case history
     /// Kalendarz wydarzeń osiedla (2026-07-16 — parity ze starą apką).
@@ -68,6 +72,7 @@ enum GlassSheetKind: Identifiable, Equatable {
         case .announcements: return "announcements"
         case .chat: return "chat"
         case .more: return "more"
+        case .household: return "household"
         case .history: return "history"
         case .calendar: return "calendar"
         case .nukiOnboarding: return "nukiOnboarding"
@@ -191,10 +196,14 @@ struct GlassSheetHeader: View {
                     .overlay {
                         Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
                     }
+                    // Kółko 32 pt, pole dotyku 44 × 44 pt (audyt UX §11).
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Zamknij")
         }
-        .padding(.bottom, 14)
+        .padding(.bottom, 8)
     }
 }
 

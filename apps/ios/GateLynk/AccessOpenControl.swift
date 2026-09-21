@@ -83,7 +83,7 @@ enum AccessOpenPhase: Equatable {
     var isBusy: Bool { self == .holding || self == .sending }
 }
 
-struct HoldToOpenButton: View {
+struct AccessHoldButton: View {
     /// Nazwa KONKRETNEGO wejścia — zawsze widoczna na przycisku.
     let targetName: String
     /// Istniejący czas przytrzymania (2 s) — wspólny dla wszystkich ekranów.

@@ -11,7 +11,7 @@ import WebRTC
 //   • pełnoekranowy podgląd z kamery (snapshoty Akuvox / WebRTC track) + grade,
 //   • górna nakładka: badge NA ŻYWO, tytuł, licznik czasu, chip rozpoznania,
 //   • narożny przycisk aparatu (zapis klatki do Zdjęć),
-//   • wspólny przycisk „Przytrzymaj, aby otworzyć" (HoldToOpenButton, 2 s,
+//   • wspólny przycisk „Przytrzymaj, aby otworzyć" (AccessHoldButton, 2 s,
 //     z NAZWĄ wejścia) — ten sam co na Domu i w podglądzie; pokazuje REALNY
 //     wynik polecenia (przyjęte / nieznany / błąd), nigdy „brama otwarta",
 //   • 3 kontrolki: Mikrofon (jawny stan) / Rozłącz / Głośnik — rozmowa jest
@@ -238,10 +238,10 @@ struct IntercomCallView: View {
         }
     }
 
-    /// Ten sam przycisk co na Domu i w podglądzie (HoldToOpenButton): nazwa
+    /// Ten sam przycisk co na Domu i w podglądzie (AccessHoldButton): nazwa
     /// wejścia, 2 s, postęp w przycisku, realny wynik polecenia.
     private var openButton: some View {
-        HoldToOpenButton(
+        AccessHoldButton(
             targetName: targetName,
             onPhaseChange: { phase in
                 if phase == .accepted {

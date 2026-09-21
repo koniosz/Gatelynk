@@ -4,7 +4,7 @@ import SwiftUI
 //
 // Lista realnych access pointów z /resident/access-points. Audyt UX
 // 2026-09-21: dotknięcie wiersza WYBIERA wejście i rozwija ten sam przycisk
-// co na Domu (`HoldToOpenButton`, 2 s, realny wynik polecenia) — wcześniej
+// co na Domu (`AccessHoldButton`, 2 s, realny wynik polecenia) — wcześniej
 // „Otwórz" w wierszu otwierało jednym tapem i kończyło „Otwarte ✓" bez
 // telemetrii. Wejścia awaryjne są w OSOBNEJ sekcji na końcu; ich logika
 // (ekran potwierdzenia) jest bez zmian.
@@ -221,7 +221,7 @@ struct GlassGateSheet: View {
             .accessibilityHint(fire ? "Otwiera ekran potwierdzenia" : "Rozwija przycisk otwierania")
 
             if selected && !fire {
-                HoldToOpenButton(targetName: ap.label) { await onOpen(ap) }
+                AccessHoldButton(targetName: ap.label) { await onOpen(ap) }
                     .id(ap.id)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }

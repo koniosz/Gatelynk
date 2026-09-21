@@ -25,7 +25,6 @@ struct GlassParcelsSheet: View {
                     icon: "shippingbox",
                     text: "Brak przesyłek. Gdy paczka dotrze\ndo recepcji, zobaczysz ją tutaj."
                 )
-                lockerPreviewRow
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 9) {
@@ -35,7 +34,6 @@ struct GlassParcelsSheet: View {
                         ForEach(issued.prefix(5)) { p in
                             issuedRow(p)
                         }
-                        lockerPreviewRow
                     }
                 }
                 .scrollBounceBehavior(.basedOnSize)
@@ -43,32 +41,16 @@ struct GlassParcelsSheet: View {
         }
     }
 
-    // MARK: Kod skrytki paczkomatu — zapowiedź WKRÓTCE
-
-    private var lockerPreviewRow: some View {
-        Button {
-            onComingSoon(.lockerCode)
-        } label: {
-            GlassActionRow(
-                orbGradient: [GlassColor.orbBlue1, GlassColor.orbBlue2],
-                orbIcon: "lock.rectangle.on.rectangle",
-                title: "Kod skrytki paczkomatu",
-                subtitle: "Odbiór paczek ze skrytki na osiedlu",
-                dimmed: true
-            ) {
-                GlassSoonBadge()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
+    // Zapowiedź „Kod skrytki paczkomatu · WKRÓTCE" przeniesiona poza listę
+    // operacyjną (audyt UX 2026-09-21, E01) → Konto › „W przygotowaniu".
 
     private var waiting: [Parcel] { parcels.filter { $0.status == "RECEIVED" } }
     private var issued: [Parcel] { parcels.filter { $0.status != "RECEIVED" } }
 
     private var waitingTitle: String {
         switch waiting.count {
-        case 0:  return "Wszystko odebrane"
+        // Pusta lista czekających = wiemy tylko, że nic nie czeka (E02).
+        case 0:  return "Brak paczek do odbioru"
         case 1:  return "1 czeka na odbiór"
         default: return "\(waiting.count) czekają na odbiór"
         }

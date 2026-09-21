@@ -24,7 +24,7 @@ struct GlassCameraSheet: View {
     let accessPoint: AccessPoint
     let onConnectIntercom: () -> Void
     /// Otwarcie wejścia wprost z podglądu — TEN SAM przycisk co na Domu
-    /// (`HoldToOpenButton`: nazwa celu, 2 s, realny wynik polecenia).
+    /// (`AccessHoldButton`: nazwa celu, 2 s, realny wynik polecenia).
     let onOpen: (AccessPoint) async -> AccessOpenOutcome
     let onClose: () -> Void
 
@@ -66,7 +66,7 @@ struct GlassCameraSheet: View {
                 // żadnych elementów interaktywnych → wyłączamy mu hit-test.
                 .allowsHitTesting(false)
 
-            HoldToOpenButton(targetName: accessPoint.label) { await onOpen(accessPoint) }
+            AccessHoldButton(targetName: accessPoint.label) { await onOpen(accessPoint) }
                 .padding(.bottom, 8)
 
             GlassButton(title: "Domofon — połącz z: \(accessPoint.label)", style: .ghost) {

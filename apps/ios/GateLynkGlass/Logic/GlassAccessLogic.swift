@@ -120,3 +120,67 @@ struct LprEventReading: Equatable {
         }
     }
 }
+
+// MARK: - Dashboard „Wymaga uwagi" (audyt UX 2026-09-21, §8)
+
+/// Stan pobrania JEDNEGO źródła danych dashboardu. `unavailable` = moduł
+/// wyłączony dla osiedla/roli (403 FEATURE_DISABLED) — to nie jest błąd
+/// i nie blokuje werdyktu „brak spraw".
+enum DashboardSourceState: Equatable {
+    case loading, loaded, failed, unavailable
+}
+
+/// Co wolno powiedzieć w sekcji „Wymaga uwagi". „Brak spraw" pokazujemy
+/// WYŁĄCZNIE, gdy każde źródło odpowiedziało (albo jest wyłączone) — nigdy
+/// na podstawie pustych tablic po nieudanym pobraniu.
+enum AttentionVerdict: Equatable {
+    /// Są pozycje; `incomplete` = część źródeł nie odpowiedziała.
+    case items(incomplete: Bool)
+    case loading
+    /// Brak pozycji, ale nie wszystkie źródła odpowiedziały — nie wiemy.
+    case unknown
+    /// Wszystkie źródła odpowiedziały i nie ma nic do zrobienia.
+    case confirmedEmpty
+
+    static func resolve(sources: [DashboardSourceState], itemCount: Int) -> AttentionVerdict {
+        let anyFailed = sources.contains(.failed)
+        let anyLoading = sources.contains(.loading)
+        if itemCount > 0 { return .items(incomplete: anyFailed) }
+        if anyLoading { return .loading }
+        if anyFailed { return .unknown }
+        return .confirmedEmpty
+    }
+}
+
+enum AttentionRules {
+    /// Zgłoszenie czeka na mieszkańca, gdy jest otwarte, a OSTATNIA odpowiedź
+    /// w wątku pochodzi od obsługi (administracja / konsjerż).
+    static func ticketAwaitsResident(status: String, lastReplyAuthorType: String?) -> Bool {
+        guard status != "DONE", let author = lastReplyAuthorType else { return false }
+        return author != "RESIDENT"
+    }
+
+    /// Przepustka „wygasa wkrótce": działa TERAZ i kończy się w ciągu `window`.
+    static func guestPassExpiresSoon(
+        phase: GuestPassPhase, validTo: Date, now: Date, window: TimeInterval = 24 * 3600
+    ) -> Bool {
+        guard phase == .active else { return false }
+        let left = validTo.timeIntervalSince(now)
+        return left > 0 && left <= window
+    }
+
+    enum PaymentAttention: Equatable { case none, overdue, dueSoon(days: Int) }
+
+    /// Należność wymagalna: po terminie (status API) albo nieopłacona z terminem
+    /// w ciągu `soonDays`. Status liczy backend — klient go nie zgaduje.
+    static func payment(
+        chargeStatus: String?, dueDate: Date?, now: Date, soonDays: Int = 5
+    ) -> PaymentAttention {
+        guard let status = chargeStatus else { return .none }
+        if status == "OVERDUE" { return .overdue }
+        guard status == "UNPAID" || status == "PARTIAL", let due = dueDate else { return .none }
+        let days = Int((due.timeIntervalSince(now) / 86_400).rounded(.down))
+        if days < 0 { return .overdue }
+        return days <= soonDays ? .dueSoon(days: days) : .none
+    }
+}

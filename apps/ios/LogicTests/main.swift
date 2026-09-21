@@ -44,5 +44,52 @@ expect(ge.tone == .negative, "błąd bramy → problem")
 let odd = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "guest_limit_reached", direction: "IN")
 expect(odd.detail.contains("guest_limit_reached"), "nieznany kod powodu pokazany wprost, bez zgadywania")
 
+// MARK: Dashboard „Wymaga uwagi"
+
+print("\nDashboard — werdykt sekcji „Wymaga uwagi\"")
+expect(AttentionVerdict.resolve(sources: [.loaded, .loaded, .unavailable], itemCount: 0) == .confirmedEmpty,
+       "wszystko pobrane (moduł wyłączony nie blokuje) → potwierdzony brak spraw")
+expect(AttentionVerdict.resolve(sources: [.loaded, .failed], itemCount: 0) == .unknown,
+       "jedno źródło nie odpowiedziało → NIE mówimy „brak spraw\"")
+expect(AttentionVerdict.resolve(sources: [.loading, .loaded], itemCount: 0) == .loading,
+       "trwa pobieranie → stan ładowania, nie „brak spraw\"")
+expect(AttentionVerdict.resolve(sources: [.loaded, .failed], itemCount: 2) == .items(incomplete: true),
+       "są pozycje + błąd źródła → lista z adnotacją o niepełnych danych")
+expect(AttentionVerdict.resolve(sources: [.loaded, .loaded], itemCount: 1) == .items(incomplete: false),
+       "są pozycje, komplet danych")
+
+print("\nDashboard — reguły pozycji")
+expect(AttentionRules.ticketAwaitsResident(status: "IN_PROGRESS", lastReplyAuthorType: "ADMIN"),
+       "ostatnia odpowiedź od administracji → czeka na mieszkańca")
+expect(AttentionRules.ticketAwaitsResident(status: "OPEN", lastReplyAuthorType: "CONCIERGE"),
+       "odpowiedź konsjerża też się liczy")
+expect(!AttentionRules.ticketAwaitsResident(status: "OPEN", lastReplyAuthorType: "RESIDENT"),
+       "ostatni pisał mieszkaniec → nie wymaga uwagi")
+expect(!AttentionRules.ticketAwaitsResident(status: "OPEN", lastReplyAuthorType: nil),
+       "brak odpowiedzi → nie wymaga uwagi")
+expect(!AttentionRules.ticketAwaitsResident(status: "DONE", lastReplyAuthorType: "ADMIN"),
+       "zamknięte zgłoszenie nie wraca na dashboard")
+
+let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+expect(AttentionRules.guestPassExpiresSoon(phase: .active, validTo: t0.addingTimeInterval(3 * 3600), now: t0),
+       "aktywna przepustka kończy się za 3 h → wygasa wkrótce")
+expect(!AttentionRules.guestPassExpiresSoon(phase: .active, validTo: t0.addingTimeInterval(3 * 86_400), now: t0),
+       "koniec za 3 dni → nie alarmujemy")
+expect(!AttentionRules.guestPassExpiresSoon(phase: .scheduled, validTo: t0.addingTimeInterval(3600), now: t0),
+       "zaplanowana (jeszcze nie działa) → nie „wygasa\"")
+expect(!AttentionRules.guestPassExpiresSoon(phase: .expired, validTo: t0.addingTimeInterval(-60), now: t0),
+       "już wygasła → nie dublujemy alarmu")
+
+expect(AttentionRules.payment(chargeStatus: "OVERDUE", dueDate: nil, now: t0) == .overdue,
+       "status OVERDUE z API → po terminie")
+expect(AttentionRules.payment(chargeStatus: "UNPAID", dueDate: t0.addingTimeInterval(2 * 86_400 + 60), now: t0) == .dueSoon(days: 2),
+       "nieopłacone, termin za 2 dni → wkrótce")
+expect(AttentionRules.payment(chargeStatus: "UNPAID", dueDate: t0.addingTimeInterval(20 * 86_400), now: t0) == .none,
+       "termin odległy → brak pozycji")
+expect(AttentionRules.payment(chargeStatus: "PAID", dueDate: t0.addingTimeInterval(86_400), now: t0) == .none,
+       "opłacone → brak pozycji")
+expect(AttentionRules.payment(chargeStatus: nil, dueDate: nil, now: t0) == .none,
+       "brak naliczenia w odpowiedzi → niczego nie zgadujemy")
+
 print(failures == 0 ? "\nALL PASSED" : "\nFAILED: \(failures)")
 exit(failures == 0 ? 0 : 1)

@@ -1,6 +1,15 @@
 import SwiftUI
 
-// MARK: - Sheet "Więcej"
+// MARK: - Sheet „Konto" (dawniej „Więcej")
+//
+// Audyt UX 2026-09-21 (N03): „Twoje konto" zawierało historię osiedla,
+// kalendarz, zamki i domowników. Teraz zostaje tu TYLKO konto: profil,
+// nieruchomość, wersja, prywatność, wylogowanie, usunięcie konta.
+// Kalendarz → zakładka Osiedle; historia zdarzeń (wjazdy/wejścia), zamki
+// i domownicy → zakładka Dostęp (domownicy otwierają ten sam widok przez
+// `startInHousehold`).
+// Zapowiedzi „WKRÓTCE" zdjęte z list operacyjnych lądują w sekcji
+// „W przygotowaniu" na dole.
 //
 // 2026-07-07 (produkcja): profil + wejścia wymagane przez App Store:
 //   • Historia zdarzeń osiedla (parity z główną apką),
@@ -11,18 +20,14 @@ import SwiftUI
 
 struct GlassMoreSheet: View {
     let building: Building?
-    /// Live stan zamków Nuki lokalu (2026-07-10) — lista ze statusem nad
-    /// przyciskiem „Dodaj zamek Nuki". Pusta = brak zamka / stary backend.
-    var nukiLocks: [NukiLockStatus] = []
-    let onOpenHistory: () -> Void
-    /// Kalendarz wydarzeń osiedla (2026-07-16).
-    let onOpenCalendar: () -> Void
-    let onOpenNukiLock: () -> Void
     /// Nieruchomości (2026-08-11) — otwiera GlassPropertiesSheet (ta sama
     /// destynacja co ikonka domku w lewym górnym rogu ekranu głównego).
     let onOpenProperties: () -> Void
     let onComingSoon: (GlassUpcomingFeature) -> Void
     let onClose: () -> Void
+    /// true = sheet otwarty z zakładki Dostęp wprost na „Domowników"
+    /// („Wróć" zamyka sheet zamiast wracać do konta).
+    var startInHousehold = false
 
     @Environment(AuthManager.self) private var auth
     @Environment(GlassToastCenter.self) private var toast
@@ -51,8 +56,16 @@ struct GlassMoreSheet: View {
     @State private var createdInvite: HouseholdInviteCreated? = nil
 
     var body: some View {
+        content
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch mode {
-        case .main: mainContent
+        // Wejście z zakładki Dostęp › Domownicy: tryb główny nie istnieje
+        // („Zamknij" zamyka sheet), więc od pierwszej klatki widać domowników.
+        case .main:
+            if startInHousehold { householdContent } else { mainContent }
         case .deleteConfirm: deleteConfirmContent
         case .household: householdContent
         case .householdInvite: householdInviteContent
@@ -63,76 +76,13 @@ struct GlassMoreSheet: View {
 
     private var mainContent: some View {
         VStack(spacing: 10) {
-            GlassSheetHeader(kicker: "Więcej", title: "Twoje konto", onClose: onClose)
+            GlassSheetHeader(kicker: "Konto", title: "Profil i ustawienia", onClose: onClose)
 
             if case .resident(let user) = auth.role {
                 profileCard(user)
             }
 
-            // Historia zdarzeń
-            actionRow(icon: "clock.arrow.circlepath", label: "Historia zdarzeń osiedla") {
-                onOpenHistory()
-            }
-
-            // Kalendarz wydarzeń (odbiory śmieci itd.) — parity ze starą apką.
-            actionRow(icon: "calendar", label: "Kalendarz osiedla") {
-                onOpenCalendar()
-            }
-
-            // Zamek inteligentny (2026-07-16, wariant 1): wiersz statusu zamka
-            // jest KLIKALNY i sam prowadzi do zarządzania (chevron po prawej) —
-            // bez osobnej pozycji „Zarządzaj". Gdy zamka nie ma — uniwersalny
-            // „Dodaj zamek (Nuki / Tedee)".
-            ForEach(nukiLocks) { lock in
-                Button {
-                    onOpenNukiLock()
-                } label: {
-                    nukiLockRow(lock)
-                }
-                .buttonStyle(.plain)
-            }
-            if nukiLocks.isEmpty {
-                actionRow(icon: "lock.badge.plus", label: "Dodaj zamek (Nuki / Tedee)") {
-                    onOpenNukiLock()
-                }
-            }
-
-            // Dynamic Island geofencing — zapowiedź WKRÓTCE
-            Button {
-                onComingSoon(.geofencing)
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "location.viewfinder")
-                        .font(.system(size: 14))
-                        .foregroundStyle(GlassColor.accentLight)
-                        .frame(width: 24)
-                    Text("Otwieranie przy zbliżaniu")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                    GlassSoonBadge()
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.35))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            // Domownicy — zaproś żonę/dziecko do swojego lokalu (pełne konto
-            // mieszkańca przez link ShareLink).
-            actionRow(icon: "person.2.fill", label: "Domownicy") {
-                mode = .household
-            }
-
-            // Osiedle — klikalne: prowadzi do przełącznika nieruchomości
-            // (zmiana obiektu bez wylogowania + jak dodać kolejny).
+            // Nieruchomość — przełącznik obiektu / jak dodać kolejny.
             Button {
                 onOpenProperties()
             } label: {
@@ -141,19 +91,19 @@ struct GlassMoreSheet: View {
                         .font(.system(size: 14))
                         .foregroundStyle(GlassColor.accentLight)
                         .frame(width: 24)
-                    Text("Osiedle")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
+                    Text("Nieruchomość")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
                     Spacer()
                     Text(building?.name ?? "—")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .frame(minHeight: 48)
                 .background {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color.white.opacity(0.06))
@@ -169,6 +119,18 @@ struct GlassMoreSheet: View {
                 openURL(Self.privacyURL)
             }
 
+            // Zapowiedzi zdjęte z widoków operacyjnych (E01) — informacja
+            // o rozwoju produktu, nie pozycje „do kliknięcia" w codziennych listach.
+            Text("W PRZYGOTOWANIU")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.0)
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+            upcomingRow(icon: "location.viewfinder", label: "Otwieranie przy zbliżaniu", feature: .geofencing)
+            upcomingRow(icon: "lock.rectangle.on.rectangle", label: "Kod skrytki paczkomatu", feature: .lockerCode)
+            upcomingRow(icon: "wave.3.right.circle", label: "Płatność BLIK", feature: .blik)
+
             GlassButton(title: "Wyloguj się", style: .ghost) {
                 auth.logout()
             }
@@ -180,12 +142,36 @@ struct GlassMoreSheet: View {
                 mode = .deleteConfirm
             } label: {
                 Text("Usuń konto")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(GlassColor.dangerSoft.opacity(0.9))
-                    .padding(.vertical, 6)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(GlassColor.dangerSoft.opacity(0.95))
+                    .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func upcomingRow(icon: String, label: String, feature: GlassUpcomingFeature) -> some View {
+        Button { onComingSoon(feature) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 24)
+                Text(label)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                GlassSoonBadge()
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var appVersion: String {
@@ -268,7 +254,7 @@ struct GlassMoreSheet: View {
 
     private var householdContent: some View {
         VStack(spacing: 10) {
-            GlassSheetHeader(kicker: "Konto", title: "Domownicy", onClose: onClose)
+            GlassSheetHeader(kicker: startInHousehold ? "Dostęp" : "Konto", title: "Domownicy", onClose: onClose)
 
             if householdData == nil && householdError == nil {
                 ProgressView()
@@ -320,8 +306,8 @@ struct GlassMoreSheet: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            GlassButton(title: "Wróć", style: .ghost) {
-                mode = .main
+            GlassButton(title: startInHousehold ? "Zamknij" : "Wróć", style: .ghost) {
+                if startInHousehold { onClose() } else { mode = .main }
             }
         }
         .task { await loadHousehold() }
@@ -681,61 +667,6 @@ struct GlassMoreSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: Wiersz zamka Nuki ze stanem (2026-07-10)
-
-    @ViewBuilder
-    private func nukiLockRow(_ lock: NukiLockStatus) -> some View {
-        let (text, color): (String, Color) = {
-            switch lock.badge {
-            case .secure:     return (lock.effectiveStateLabel ?? "Zamknięty", Color(hex: 0x34D399))
-            case .open:       return (lock.effectiveStateLabel ?? "Otwarty", Color(hex: 0xF0A93E))
-            case .transition: return (lock.effectiveStateLabel ?? "W ruchu", Color(hex: 0x6E8BFF))
-            case .unknown:    return (lock.effectiveStateLabel ?? "Nieznany", Color(hex: 0x8A93A6))
-            case .offline:    return ("offline", Color(hex: 0x8A93A6))
-            }
-        }()
-        HStack(spacing: 12) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(GlassColor.accentLight)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(lock.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                if let door = lock.doorLabel, lock.online {
-                    Text(door)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-            }
-            Spacer()
-            if lock.batteryCritical == true {
-                Text("🔋")
-                    .font(.system(size: 11))
-            }
-            HStack(spacing: 5) {
-                Circle().fill(color).frame(width: 7, height: 7)
-                Text(text)
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(color)
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(color.opacity(0.16)))
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.35))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        }
     }
 }
 
