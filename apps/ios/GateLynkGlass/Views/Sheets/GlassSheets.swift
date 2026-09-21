@@ -622,3 +622,24 @@ struct GlassNestedSheetChrome: ViewModifier {
 extension View {
     func glassNestedSheet() -> some View { modifier(GlassNestedSheetChrome()) }
 }
+
+// MARK: - Czytelny komunikat błędu zapisu formularza (audyt UX 2026-09-21, §9)
+//
+// APIClient opakowuje błędy w APIError — `error as? URLError` nigdy nie
+// trafiało, a `String(describing:)` pokazywało surowy zrzut enuma. Dane
+// formularza zostają na ekranie; komunikat mówi wprost, że nic nie zapisano.
+
+enum GlassErrorText {
+    static func save(_ error: Error, fallback: String = "Nie udało się zapisać. Spróbuj ponownie.") -> String {
+        switch error {
+        case APIError.networkError:
+            return "Brak połączenia — nic nie zapisano. Dane zostały w formularzu, spróbuj ponownie."
+        case APIError.httpError(_, let msg) where !msg.isEmpty:
+            return msg
+        case APIError.unauthorized:
+            return "Sesja wygasła — zaloguj się ponownie."
+        default:
+            return fallback
+        }
+    }
+}

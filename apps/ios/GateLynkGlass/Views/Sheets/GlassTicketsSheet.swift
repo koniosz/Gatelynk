@@ -733,6 +733,8 @@ struct GlassTicketsSheet: View {
             formError = "Uzupełnij tytuł i opis."
             return
         }
+        // Jedno dotknięcie = jedno zgłoszenie (brak duplikatów).
+        guard !submitting else { return }
         submitting = true
         formError = nil
         let photoBase64 = photoData.map { "data:image/jpeg;base64," + $0.base64EncodedString() }
@@ -747,7 +749,7 @@ struct GlassTicketsSheet: View {
             photoItem = nil; photoData = nil; photoPreview = nil
             mode = .list
         } catch {
-            formError = error.localizedDescription
+            formError = GlassErrorText.save(error, fallback: "Nie udało się wysłać zgłoszenia. Spróbuj ponownie.")
         }
         submitting = false
     }

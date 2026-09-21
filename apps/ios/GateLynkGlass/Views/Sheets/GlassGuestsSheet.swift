@@ -80,7 +80,13 @@ struct GlassGuestsSheet: View {
     /// wysyłane jako `notifyOnUse` w POST.
     @State private var notifyOnUse = true
     @State private var submitting = false
+    /// Błąd zapisu (sieć/serwer) — pokazywany nad przyciskiem, zawsze widoczny.
     @State private var formError: String?
+    // Błędy walidacji PRZY POLACH (audyt UX 2026-09-21, §9).
+    @State private var nameError: String?
+    @State private var dateError: String?
+    @State private var entrancesError: String?
+    @State private var confirmDiscardForm = false
 
     // Ograniczenia dostępu (2026-07-08) — parity z NewGuestView głównej apki.
     @State private var accessPoints: [AccessPoint] = []
@@ -963,15 +969,9 @@ struct GlassGuestsSheet: View {
     /// Zapis EDYCJI z formularza (redesign v2): wspólne pola z kreatorem.
     /// Po sukcesie zamykamy formularz i szczegóły — lista pokaże świeży stan.
     private func saveEditFromForm(_ g: Guest) async {
+        guard !submitting else { return }
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else {
-            formError = "Podaj imię gościa."
-            return
-        }
-        guard validTo > validFrom else {
-            formError = "Koniec okna czasowego musi być po początku."
-            return
-        }
+        guard validateForm(creating: false) else { return }
         submitting = true
         formError = nil
         let trimmedPlate = plate.trimmingCharacters(in: .whitespaces).uppercased()
@@ -991,7 +991,7 @@ struct GlassGuestsSheet: View {
             formEditing = nil
             editingGuest = nil
         } catch {
-            formError = error.localizedDescription
+            formError = Self.saveErrorText(error)
         }
         submitting = false
     }
@@ -1048,7 +1048,54 @@ struct GlassGuestsSheet: View {
         apApprovals = [:]
         recurring = false
         formError = nil
+        clearFieldErrors()
         formEditing = nil
+    }
+
+    private func clearFieldErrors() {
+        nameError = nil
+        dateError = nil
+        entrancesError = nil
+    }
+
+    /// Kreator ma wpisane dane, które zamknięcie by skasowało.
+    private var createFormIsDirty: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty
+            || !plate.trimmingCharacters(in: .whitespaces).isEmpty
+            || !allEntrances || recurring
+    }
+
+    private func closeForm(editing: Guest?) {
+        if editing != nil {
+            formEditing = nil
+        } else if createFormIsDirty && !submitting {
+            confirmDiscardForm = true
+        } else {
+            showForm = false
+        }
+    }
+
+    /// Wspólna walidacja kreatora i edycji; komunikat trafia pod właściwe pole.
+    private func validateForm(creating: Bool) -> Bool {
+        clearFieldErrors()
+        if name.trimmingCharacters(in: .whitespaces).isEmpty {
+            nameError = "Podaj imię gościa lub opis wizyty."
+        }
+        if validTo <= validFrom {
+            dateError = "Koniec musi być później niż początek."
+        } else if creating && validTo <= Date() {
+            dateError = "Ten termin już minął — przepustka nie zadziała."
+        }
+        // Wyłączone „Wszystkie wejścia" bez wyboru NIE może po cichu oznaczać
+        // dostępu wszędzie (draftAllowedAccessPoints zwróciłby wtedy nil).
+        if creating && !allEntrances && selectedApIds.isEmpty {
+            entrancesError = "Wybierz co najmniej jedno wejście albo włącz „Wszystkie wejścia”."
+        }
+        return nameError == nil && dateError == nil && entrancesError == nil
+    }
+
+    private static func saveErrorText(_ error: Error) -> String {
+        GlassErrorText.save(error)
     }
 
     // MARK: Formularz — PEŁNY EKRAN (redesign v2, 2026-08-14)
@@ -1057,7 +1104,7 @@ struct GlassGuestsSheet: View {
         fullScreenScaffold(
             kicker: editing == nil ? "Goście" : "Gość",
             title: editing == nil ? "Zaproś gościa" : "Edytuj zaproszenie",
-            onClose: { if editing != nil { formEditing = nil } else { showForm = false } }
+            onClose: { closeForm(editing: editing) }
         ) {
             // ScrollView — po dodaniu sekcji ograniczeń (2026-07-08) formularz
             // bywa wyższy niż sheet; przyciski akcji zostają przypięte na dole.
@@ -1067,6 +1114,8 @@ struct GlassGuestsSheet: View {
                 VStack(spacing: 11) {
                     sectionLabel("Gość")
                     formField("Imię i nazwisko gościa", text: $name)
+                        .onChange(of: name) { _, _ in nameError = nil }
+                    fieldError(nameError)
 
                     sectionLabel("Pojazd")
                     formField("Tablica rejestracyjna (opcjonalnie)", text: $plate, autocapitalize: true)
@@ -1074,29 +1123,50 @@ struct GlassGuestsSheet: View {
                     sectionLabel("Okres ważności")
                     datePickerRow("Od", selection: $validFrom)
                     datePickerRow("Do", selection: $validTo)
+                    fieldError(dateError)
 
                     // Powiadomienia o aktywności gościa (2026-08-14).
                     sectionLabel("Powiadomienia")
                     toggleRow("Powiadamiaj o aktywności gościa", isOn: $notifyOnUse)
-                    sectionCaption("Push przy każdym wjeździe, wyjeździe i użyciu PIN-u.")
+                    sectionCaption("Powiadomienie przy każdym wjeździe, wyjeździe i użyciu PIN-u.")
 
                     // Ograniczenia tylko przy TWORZENIU (edycja nie wysyła ich
                     // w PATCH — jak dotąd; bez sekcji nie sugerujemy inaczej).
                     if editing == nil {
                         sectionLabel("Ograniczenia dostępu")
                         entrancesSection
+                        fieldError(entrancesError)
                         scheduleSection
-                    }
 
-                    if let formError {
-                        Text(formError)
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(GlassColor.dangerSoft)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        sectionLabel("Podsumowanie")
+                        createSummary
                     }
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
+            .onChange(of: validFrom) { _, _ in dateError = nil }
+            .onChange(of: validTo) { _, _ in dateError = nil }
+            .onChange(of: allEntrances) { _, _ in entrancesError = nil }
+            .onChange(of: selectedApIds) { _, _ in entrancesError = nil }
+            .confirmationDialog(
+                "Porzucić to zaproszenie?",
+                isPresented: $confirmDiscardForm,
+                titleVisibility: .visible
+            ) {
+                Button("Porzuć wpisane dane", role: .destructive) { showForm = false }
+                Button("Wróć do formularza", role: .cancel) {}
+            } message: {
+                Text("Przepustka nie została utworzona. Wpisane dane zostaną usunięte.")
+            }
+
+            // Błąd zapisu nad przyciskiem — widoczny niezależnie od przewinięcia.
+            if let formError {
+                Label(formError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(GlassColor.dangerSoft)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             GlassButton(
                 title: editing == nil ? "Utwórz zaproszenie" : "Zapisz zmiany",
@@ -1111,9 +1181,66 @@ struct GlassGuestsSheet: View {
             }
 
             GlassButton(title: "Wróć", style: .ghost) {
-                if editing != nil { formEditing = nil } else { showForm = false }
+                closeForm(editing: editing)
             }
         }
+    }
+
+    @ViewBuilder
+    private func fieldError(_ text: String?) -> some View {
+        if let text {
+            Label(text, systemImage: "exclamationmark.circle.fill")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(GlassColor.dangerSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 6)
+        }
+    }
+
+    /// Podsumowanie PRZED utworzeniem — dokładnie to, co pójdzie w żądaniu.
+    private var createSummary: some View {
+        let who = name.trimmingCharacters(in: .whitespaces)
+        let plateText = plate.trimmingCharacters(in: .whitespaces).uppercased()
+        let entrances: String = {
+            guard !allEntrances else { return "wszystkie wejścia" }
+            let chosen = accessPoints.filter { selectedApIds.contains($0.id) }
+            if chosen.isEmpty { return "nie wybrano wejść" }
+            return chosen.map { ap in
+                apLimits[ap.id].map { "\(ap.label) (limit: \($0))" } ?? ap.label
+            }.joined(separator: ", ")
+        }()
+        let lines: [(String, String)] = [
+            ("Kto", who.isEmpty ? "—" : who),
+            ("Jak", plateText.isEmpty ? "pieszo · PIN do domofonu" : "autem \(plateText) · tablica + PIN"),
+            ("Kiedy", "\(GlassFormat.shortDateTime.string(from: validFrom)) – \(GlassFormat.shortDateTime.string(from: validTo))"),
+            ("Gdzie", entrances),
+        ] + (recurring ? [("Harmonogram", draftSchedule.summary)] : [])
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(lines, id: \.0) { line in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(line.0)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .frame(width: 92, alignment: .leading)
+                    Text(line.1)
+                        .font(.footnote)
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: 0x151C33).opacity(0.92))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: Ograniczenia dostępu — sekcje formularza (2026-07-08)
@@ -1392,15 +1519,10 @@ struct GlassGuestsSheet: View {
     }
 
     private func submit() async {
+        // Jedno dotknięcie = jedno żądanie (brak duplikatów przepustek).
+        guard !submitting else { return }
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else {
-            formError = "Podaj imię gościa."
-            return
-        }
-        guard validTo > validFrom else {
-            formError = "Koniec okna czasowego musi być po początku."
-            return
-        }
+        guard validateForm(creating: true) else { return }
         submitting = true
         formError = nil
 
@@ -1432,8 +1554,16 @@ struct GlassGuestsSheet: View {
             selectedDays = []
             notifyOnUse = true
             showForm = false
+            // Po utworzeniu od razu szczegóły nowej przepustki z działającym
+            // „Udostępnij przepustkę" (link + PIN). Opóźnienie: równoczesny
+            // dismiss + present gubi prezentację (ta sama pułapka co „Edytuj").
+            let fresh = guests.first(where: { $0.id == created.id }) ?? created
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                openEdit(fresh)
+            }
         } catch {
-            formError = error.localizedDescription
+            // Dane zostają w formularzu; ponowienie to świadome drugie żądanie.
+            formError = Self.saveErrorText(error)
         }
         submitting = false
     }

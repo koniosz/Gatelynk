@@ -465,6 +465,7 @@ private struct GlassVehicleEditSheet: View {
     }
 
     private func save() async {
+        guard !saving else { return }
         saving = true; error = nil
         do {
             let _: Vehicle = try await APIClient.shared.patch(
@@ -481,12 +482,13 @@ private struct GlassVehicleEditSheet: View {
             dismiss()
             Task { await onChange() }
         } catch {
-            self.error = (error as? URLError)?.localizedDescription ?? "Nie udało się zapisać. Spróbuj ponownie."
+            self.error = GlassErrorText.save(error)
         }
         saving = false
     }
 
     private func remove() async {
+        guard !deleting else { return }
         deleting = true; error = nil
         do {
             let _: EmptyResponse = try await APIClient.shared.delete("/resident/vehicles/\(vehicle.id)")
@@ -494,7 +496,7 @@ private struct GlassVehicleEditSheet: View {
             toast.show("Pojazd usunięty")
             dismiss()
         } catch {
-            self.error = (error as? URLError)?.localizedDescription ?? "Nie udało się usunąć. Spróbuj ponownie."
+            self.error = GlassErrorText.save(error, fallback: "Nie udało się usunąć. Spróbuj ponownie.")
         }
         deleting = false
     }
@@ -649,6 +651,8 @@ private struct GlassVehicleAddSheet: View {
             error = "Uzupełnij markę, kolor i tablicę."
             return
         }
+        // Jedno dotknięcie = jedno zgłoszenie (duplikat tablicy i tak odrzuca API).
+        guard !saving else { return }
         saving = true
         error = nil
         do {
@@ -669,7 +673,7 @@ private struct GlassVehicleAddSheet: View {
             Task { await onChange() }
         } catch {
             // Backend zwraca 400 m.in. przy duplikacie tablicy w budynku.
-            self.error = (error as? URLError)?.localizedDescription ?? String(describing: error)
+            self.error = GlassErrorText.save(error, fallback: "Nie udało się zgłosić pojazdu. Spróbuj ponownie.")
         }
         saving = false
     }
