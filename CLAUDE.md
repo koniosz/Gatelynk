@@ -2134,3 +2134,26 @@ pusha; w panelu przejazd nie istniał.
   otwiera ją wyłącznie odczyt ścisły lub ścisły OCR-fuzzy.
 - Payload `LPR_READ` ma nowe pole `ocrRaw` (surowy odczyt); starszy Cloud je
   ignoruje. Wdrożone na oba Edge (VN + Villa Natura) 2026-09-15.
+
+## Pojazdy: przełącznik „otwieraj bramę po rozpoznaniu" (autoOpen, 2026-09-25)
+
+- `vehicles.autoOpen` (default `true`) — mieszkaniec przełącza w karcie pojazdu
+  (Glass: karta statusu ANPR; GateLynk: sekcja „Automatyczny wjazd" w formularzu).
+  `PATCH /resident/vehicles/:id { autoOpen }`. Dostępne tylko dla pojazdu
+  APPROVED (PENDING zapisuje wartość, ale nie synchronizuje do Edge — nie był
+  w allowliście).
+- Egzekwowane OFFLINE na Edge: `lpr_plates.auto_open` (NULL/1 = otwieraj,
+  0 = nie). `handleAnprEvent`: po cooldownie, przed regułami gościa —
+  `match.autoOpen === false` → `finalizeRead(matched:1, opened:0,
+  reason:'auto_open_disabled')`, bez wyzwalania AP i bez cooldownu. Tablica
+  jest nadal ZNANA (historia, push „rozpoznano… brama nie została otwarta").
+- Pole leci w każdym `PLATE_UPSERT` (BA `buildPlateSyncPayload`, wspólny
+  `common/plate-sync.ts` dla mieszkańca i konsjerża) i w `PLATE_SYNC_ALL`
+  (`collectPlateSyncItems`). Stary Edge ignoruje pole (= otwiera).
+- **PUŁAPKA: `PLATE_UPSERT` ZAWSZE pełnym wpisem.** Edge robi
+  `INSERT OR REPLACE` — częściowy payload (np. `{plate, owner}`) kasuje na Edge
+  `unit_label`, `vehicle_kind`, `vehicle_tags`, okno ważności i `auto_open`.
+  Tak działała ścieżka „kosmetyczna" mieszkańca (kolor, `notifyOnUse`) do
+  2026-09-25. Nowe ścieżki: `vehiclePlateSyncPayload(prisma, row)`.
+- Test: `apps/api/test/vehicle-auto-open.e2e-spec.ts` (outbox jest
+  asynchroniczny — test odpytuje z oczekiwaniem, nie od razu po odpowiedzi).
