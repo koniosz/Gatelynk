@@ -1285,6 +1285,7 @@ export class EdgeGateway implements OnModuleInit {
       licensePlate: string; kind: string; serviceName: string | null;
       make: string | null; model: string | null; color: string | null;
       tags: string[]; validFrom: Date | null; validTo: Date | null;
+      autoOpen: boolean | null;
       unitNumber: string | null; stairwellName: string | null; unitStreet: string | null;
       ownUnitNumber: string | null; ownStairwellName: string | null; ownUnitStreet: string | null;
     }>>`
@@ -1292,6 +1293,7 @@ export class EdgeGateway implements OnModuleInit {
              v.make, v.model, v.color,
              COALESCE(v.tags, '{}') AS tags,
              v."validFrom", v."validTo",
+             v."autoOpen",
              u.number AS "unitNumber", s.name AS "stairwellName", u.street AS "unitStreet",
              ou.number AS "ownUnitNumber", os.name AS "ownStairwellName", ou.street AS "ownUnitStreet"
         FROM "vehicles" v
@@ -1358,6 +1360,8 @@ export class EdgeGateway implements OnModuleInit {
         kind: v.kind,
         tags,
         unitLabel,
+        // 2026-09-25 — przełącznik mieszkańca (false = rozpoznaj, nie otwieraj).
+        autoOpen: v.autoOpen ?? true,
         ...(v.validFrom ? { validFrom: v.validFrom.toISOString() } : {}),
         ...(v.validTo ? { validUntil: v.validTo.toISOString() } : {}),
       })

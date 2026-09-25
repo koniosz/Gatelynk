@@ -260,6 +260,9 @@ struct Vehicle: Decodable, Identifiable {
     let photo: String?
     /// Push o przejeździe pojazdu (2026-08-21) — opt-in z karty pojazdu.
     let notifyOnUse: Bool?
+    /// 2026-09-25 — czy rozpoznanie tablicy ma OTWIERAĆ bramę/szlaban
+    /// (przełącznik w karcie pojazdu). nil (starszy backend) = włączone.
+    let autoOpen: Bool?
 
     /// Faza 1 bety Villa Natura — vehicle approval flow.
     /// `status` jest opcjonalny, bo starsze odpowiedzi go nie zwracają;
@@ -275,6 +278,13 @@ struct Vehicle: Decodable, Identifiable {
 
     /// Status używany w UI — nil → APPROVED (zgodnie z domyślnym wartością DB).
     var effectiveStatus: VehicleStatus { status ?? .approved }
+
+    /// Automatyczne otwieranie po rozpoznaniu — nil (starszy backend) = włączone.
+    var autoOpenEnabled: Bool { autoOpen ?? true }
+
+    /// Czy kamery FAKTYCZNIE otworzą bramę dla tej tablicy: pojazd zatwierdzony
+    /// (na białej liście Edge) I przełącznik włączony.
+    var opensGateAutomatically: Bool { effectiveStatus == .approved && autoOpenEnabled }
 }
 
 struct SimpleResident: Decodable {

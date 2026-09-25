@@ -84,7 +84,8 @@ struct GlassVehiclesSheet: View {
                     let ok = await deleteVehicle(v)
                     if ok { detail = nil }
                     return ok
-                }
+                },
+                onChanged: { await onReload() }
             )
             .glassNestedSheet()
         }
@@ -169,10 +170,10 @@ struct GlassVehiclesSheet: View {
                     GlassPlateBadge(plate: v.licensePlate)
                     // Status dostępu z danych (V01) — widać go bez otwierania.
                     HStack(spacing: 4) {
-                        Circle().fill(statusColor(v.effectiveStatus)).frame(width: 6, height: 6)
-                        Text(Self.accessStatusShort(v.effectiveStatus))
+                        Circle().fill(statusColor(v)).frame(width: 6, height: 6)
+                        Text(Self.accessStatusShort(v))
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(statusColor(v.effectiveStatus))
+                            .foregroundStyle(statusColor(v))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -194,7 +195,7 @@ struct GlassVehiclesSheet: View {
             .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(v.displayName), tablica \(v.licensePlate). \(Self.accessStatusShort(v.effectiveStatus)).")
+        .accessibilityLabel("\(v.displayName), tablica \(v.licensePlate). \(Self.accessStatusShort(v)).")
         .accessibilityHint("Otwiera szczegóły pojazdu")
         .overlay(alignment: .topTrailing) {
             // Jawne, nazwane akcje — przytrzymanie kafla zostaje skrótem (N01).
@@ -238,20 +239,20 @@ struct GlassVehiclesSheet: View {
         }
     }
 
-    /// Krótki status DOSTĘPU wynikający ze statusu pojazdu w rejestrze:
-    /// zatwierdzony = tablica na liście uprawnionych kamer LPR.
-    static func accessStatusShort(_ s: VehicleStatus) -> String {
-        switch s {
-        case .approved: return "Automatyczny wjazd włączony"
+    /// Krótki status DOSTĘPU: status w rejestrze (zatwierdzony = tablica na
+    /// liście kamer LPR) + przełącznik mieszkańca (2026-09-25).
+    static func accessStatusShort(_ v: Vehicle) -> String {
+        switch v.effectiveStatus {
+        case .approved: return v.autoOpenEnabled ? "Automatyczny wjazd włączony" : "Automatyczny wjazd wyłączony"
         case .pending:  return "Czeka na zatwierdzenie"
         case .rejected: return "Odrzucony"
-        default:        return "\(s.label) — bez automatycznego wjazdu"
+        default:        return "\(v.effectiveStatus.label) — bez automatycznego wjazdu"
         }
     }
 
-    private func statusColor(_ s: VehicleStatus) -> Color {
-        switch s {
-        case .approved: return GlassColor.successLight
+    private func statusColor(_ v: Vehicle) -> Color {
+        switch v.effectiveStatus {
+        case .approved: return v.autoOpenEnabled ? GlassColor.successLight : Color.white.opacity(0.7)
         case .pending:  return GlassColor.orbAmber1
         default:        return GlassColor.dangerSoft
         }
@@ -896,6 +897,9 @@ private struct GlassVehicleDetailSheet: View {
     let onEdit: () -> Void
     /// Usunięcie pojazdu (potwierdzane tutaj; realizuje lista).
     var onDelete: () async -> Bool = { false }
+    /// Zmiana ustawienia w karcie (autoOpen) — lista odświeża kafle, żeby
+    /// status „Automatyczny wjazd włączony/wyłączony" nie był nieaktualny.
+    var onChanged: () async -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @State private var historyExpanded = false
@@ -909,6 +913,12 @@ private struct GlassVehicleDetailSheet: View {
     /// Push o przejeździe (2026-08-21) — optimistic PATCH z rollbackiem.
     @State private var notifyPassage = false
     @State private var notifySyncing = false
+    /// Automatyczne otwieranie po rozpoznaniu (2026-09-25) — PATCH `autoOpen`.
+    /// Sukces ogłaszamy DOPIERO po odpowiedzi serwera (Edge dostaje wpis
+    /// przez trwały outbox); przy błędzie przełącznik wraca i mówi dlaczego.
+    @State private var autoOpen = true
+    @State private var autoOpenSyncing = false
+    @State private var autoOpenError: String?
     private var lastEvent: AccessEvent? { events.first }
 
     var body: some View {
@@ -962,6 +972,7 @@ private struct GlassVehicleDetailSheet: View {
         }
         .task {
             notifyPassage = vehicle.notifyOnUse ?? false
+            autoOpen = vehicle.autoOpenEnabled
             await loadLastEvent()
             historyLoaded = true
         }
@@ -1135,15 +1146,42 @@ private struct GlassVehicleDetailSheet: View {
         }
     }
 
-    // MARK: Karta statusu ANPR
+    // MARK: Karta statusu ANPR + przełącznik „otwieraj po rozpoznaniu" (2026-09-25)
+
+    private struct AutoOpenPatchBody: Encodable { let autoOpen: Bool }
+
+    /// PATCH /resident/vehicles/:id { autoOpen }. Bez optymizmu: przełącznik
+    /// zmienia się dopiero po 200 (to steruje realną bramą). Cloud dosyła
+    /// wpis do Edge trwałym outboxem — przy rozłączonym Edge stara wartość
+    /// obowiązuje na bramie do ponownego połączenia (mówimy to w karcie).
+    private func setAutoOpen(_ enabled: Bool) async {
+        guard !autoOpenSyncing, enabled != autoOpen else { return }
+        autoOpenSyncing = true
+        autoOpenError = nil
+        defer { autoOpenSyncing = false }
+        do {
+            let updated: Vehicle = try await APIClient.shared.patch(
+                "/resident/vehicles/\(vehicle.id)",
+                body: AutoOpenPatchBody(autoOpen: enabled)
+            )
+            autoOpen = updated.autoOpenEnabled
+            await onChanged()
+        } catch {
+            autoOpenError = GlassErrorText.save(error, fallback: "Nie udało się zmienić ustawienia. Spróbuj ponownie.")
+        }
+    }
 
     private var anprStatusCard: some View {
         let (icon, tint, title, subtitle): (String, Color, String, String) = {
             switch vehicle.effectiveStatus {
             case .approved:
-                return ("checkmark.shield.fill", GlassColor.successLight,
-                        "Automatyczny wjazd jest włączony",
-                        "Uprawnienia: \(Self.scopeLabel(vehicle)). Kamery rozpoznają tablicę i wysyłają polecenie otwarcia bramy.")
+                return autoOpen
+                    ? ("checkmark.shield.fill", GlassColor.successLight,
+                       "Automatyczny wjazd jest włączony",
+                       "Uprawnienia: \(Self.scopeLabel(vehicle)). Po rozpoznaniu tablicy kamera wysyła polecenie otwarcia bramy.")
+                    : ("pause.circle.fill", Color.white.opacity(0.8),
+                       "Automatyczny wjazd jest wyłączony",
+                       "Tablica pozostaje w rejestrze — przejazdy są rozpoznawane i zapisywane, ale brama nie otwiera się sama.")
             case .pending:
                 return ("clock.badge.exclamationmark.fill", GlassColor.orbAmber1,
                         "Oczekuje na zatwierdzenie",
@@ -1159,22 +1197,60 @@ private struct GlassVehicleDetailSheet: View {
             }
         }()
 
-        return HStack(spacing: 13) {
-            Image(systemName: icon)
-                .font(.system(size: 22))
-                .foregroundStyle(tint)
-                .frame(width: 40, height: 40)
-                .background { Circle().fill(tint.opacity(0.14)) }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(subtitle)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.white.opacity(0.6))
+        let approved = vehicle.effectiveStatus == .approved
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 13) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                    .foregroundStyle(tint)
+                    .frame(width: 40, height: 40)
+                    .background { Circle().fill(tint.opacity(0.14)) }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(subtitle)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Otwieraj bramę po rozpoznaniu tablicy")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(approved ? 1 : 0.55))
+                    Text(approved
+                         ? "Zmiana obowiązuje na bramie po potwierdzeniu przez sterownik osiedla."
+                         : "Dostępne po zatwierdzeniu pojazdu przez administratora.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if autoOpenSyncing {
+                    ProgressView().tint(.white).scaleEffect(0.8)
+                }
+                Toggle("", isOn: Binding(
+                    get: { autoOpen },
+                    set: { newValue in Task { await setAutoOpen(newValue) } }
+                ))
+                .labelsHidden()
+                .tint(GlassColor.success)
+                .disabled(!approved || autoOpenSyncing)
+                .accessibilityLabel("Otwieraj bramę po rozpoznaniu tablicy")
+            }
+
+            if let autoOpenError {
+                Label(autoOpenError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(GlassColor.dangerSoft)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 0)
         }
         .padding(14)
         .glassCard()

@@ -109,6 +109,9 @@ export interface PlateEntry {
   /** 2026-07-08 — id gościa (Cloud) dla tablic gości. Flow LPR sprawdza po nim
    *  ograniczenia (harmonogram/limit/allowlista AP) w guest_pins. */
   guestId?: number | null
+  /** 2026-09-25 — przełącznik mieszkańca: false = rozpoznaj (odczyt, push,
+   *  historia), ale NIE otwieraj bramy. Brak pola = otwieraj (jak dotąd). */
+  autoOpen?: boolean | null
 }
 
 /**
@@ -383,12 +386,14 @@ export class HikvisionLprService {
       kind: entry.kind,
       tags: entry.tags,
       guestId: typeof entry.guestId === 'number' && entry.guestId > 0 ? entry.guestId : null,
+      autoOpen: entry.autoOpen === false ? false : true,
     })
     // Log uses unitLabel (privacy-safe) + tags + kind w czytelnej formie.
     const labelParts: string[] = []
     if (entry.unitLabel) labelParts.push(entry.unitLabel)
     if (entry.kind && entry.kind !== 'RESIDENT') labelParts.push(entry.kind)
     if (entry.tags && entry.tags.length > 0) labelParts.push(`[${entry.tags.join(', ')}]`)
+    if (entry.autoOpen === false) labelParts.push('auto-open OFF')
     const tag = labelParts.length > 0 ? labelParts.join(' ') : (entry.owner ?? '')
     this.logger.log(`Plate whitelisted: ${plate}${tag ? ` (${tag})` : ''} on ${cameraDeviceId}`)
     return { ok: true, plate }
@@ -413,6 +418,7 @@ export class HikvisionLprService {
       validFrom: this.toMillis(d.validFrom),
       validUntil: this.toMillis(d.validUntil),
       guestId: typeof d.guestId === 'number' && d.guestId > 0 ? d.guestId : null,
+      autoOpen: d.autoOpen === false ? false : true,
     })).filter(r => r.plate.length > 0)
     this.store.lprReplaceAll(cameraDeviceId, rows)
     this.logger.log(`syncAll on ${cameraDeviceId}: ${rows.length} plate(s)`)
@@ -552,6 +558,22 @@ export class HikvisionLprService {
       this.logger.debug(`Cooldown active for ${plate} on ${cameraDeviceId} (${sinceLast}ms < ${cooldown}ms), skipping`)
       return this.finalizeRead(cameraDeviceId, plate, {
         matched: true, opened: false, reason: 'cooldown', ...matchSnapshot, extra,
+      })
+    }
+
+    // ── Przełącznik mieszkańca (2026-09-25) ────────────────────────────────
+    // Tablica jest ZNANA (matched=1 → historia, push „rozpoznano"), ale
+    // właściciel wyłączył automatyczne otwieranie w karcie pojazdu. Nie
+    // wyzwalamy żadnego przekaźnika; bez cooldownu — po włączeniu w apce
+    // kolejny odczyt (po PLATE_UPSERT z Cloud) otwiera od razu.
+    if (match.autoOpen === false) {
+      this.eventLog.info(
+        'LPR',
+        `⏸ ${plate}${match.unitLabel ? ` (${match.unitLabel})` : ''}: rozpoznano, automatyczne otwieranie wyłączone przez mieszkańca`,
+        { cameraDeviceId, plate },
+      )
+      return this.finalizeRead(cameraDeviceId, plate, {
+        matched: true, opened: false, reason: 'auto_open_disabled', ...matchSnapshot, extra,
       })
     }
 

@@ -739,6 +739,12 @@ function ReadRow({
           <span className="ba-pill amber" title="Tablica z jednej klatki lub poniżej progu, bez dopasowania do rejestru">
             odczyt niepotwierdzony
           </span>
+        ) : r.reason === "auto_open_disabled" ? (
+          // 2026-09-25: mieszkaniec wyłączył automatyczne otwieranie w apce —
+          // tablica rozpoznana, Edge celowo nie ruszył bramy.
+          <span className="ba-pill" title="Mieszkaniec wyłączył automatyczne otwieranie dla tego pojazdu">
+            auto-wjazd wył. · nie otwarto
+          </span>
         ) : r.matched ? (
           <span className="ba-pill amber">nie otwarto</span>
         ) : (

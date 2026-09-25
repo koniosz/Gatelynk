@@ -39,6 +39,8 @@ let nw = LprEventReading.read(type: "LPR_NO_MATCH", gateOpened: false, reason: "
 expect(nw.tone == .negative && nw.title.hasPrefix("Odmowa"), "brak na liście → odmowa z powodem")
 let un = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: nil, direction: nil)
 expect(un.tone == .neutral && un.detail == "Wynik nieznany", "brak danych o wyniku → „Wynik nieznany\", nie sukces i nie błąd")
+let ao = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "auto_open_disabled", direction: "IN")
+expect(ao.tone == .neutral && ao.title.hasPrefix("Rozpoznano") && ao.detail.contains("wyłączone"), "auto-open wyłączone → rozpoznano, bez otwarcia, neutralnie (nie błąd)")
 let ge = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "gate_error", direction: "IN")
 expect(ge.tone == .negative, "błąd bramy → problem")
 let odd = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "guest_limit_reached", direction: "IN")

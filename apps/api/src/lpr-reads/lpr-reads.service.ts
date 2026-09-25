@@ -359,24 +359,33 @@ export class LprReadsService {
 
     const isExit = String(ctx.direction ?? '').toUpperCase() === 'OUT'
     const probable = ctx.reason === 'probable_match'
+    // 2026-09-25 — mieszkaniec wyłączył automatyczne otwieranie: kamera
+    // rozpoznała tablicę, Edge celowo nie ruszył bramy. Push mówi to wprost,
+    // żeby nie wyglądało jak awaria.
+    const autoOpenOff = ctx.reason === 'auto_open_disabled'
     const dirWord = isExit ? 'wyjazd' : 'wjazd'
     await this.push.sendToResidentThrottled(
       `vehicle-${isExit ? 'exit' : 'entry'}-${v.id}`,
       3 * 60_000,
       v.residentId,
-      probable
-        ? (isExit ? '🚗 Prawdopodobnie Twój pojazd wyjechał' : '🚗 Prawdopodobnie Twój pojazd wjechał')
-        : (isExit ? '🚗 Twój pojazd wyjechał' : '🚗 Twój pojazd wjechał'),
-      probable
-        ? `${plate} — ${dirWord} przez bramę. Odczyt niepewny` +
-          (ctx.ocrRaw && ctx.ocrRaw !== plate ? ` (kamera odczytała ${ctx.ocrRaw}).` : '.')
-        : `${plate} — ${dirWord} przez bramę.`,
+      autoOpenOff
+        ? (isExit ? '🚗 Rozpoznano Twój pojazd przy wyjeździe' : '🚗 Rozpoznano Twój pojazd przy wjeździe')
+        : probable
+          ? (isExit ? '🚗 Prawdopodobnie Twój pojazd wyjechał' : '🚗 Prawdopodobnie Twój pojazd wjechał')
+          : (isExit ? '🚗 Twój pojazd wyjechał' : '🚗 Twój pojazd wjechał'),
+      autoOpenOff
+        ? `${plate} — brama nie została otwarta: automatyczne otwieranie jest wyłączone dla tego pojazdu.`
+        : probable
+          ? `${plate} — ${dirWord} przez bramę. Odczyt niepewny` +
+            (ctx.ocrRaw && ctx.ocrRaw !== plate ? ` (kamera odczytała ${ctx.ocrRaw}).` : '.')
+          : `${plate} — ${dirWord} przez bramę.`,
       {
         kind: isExit ? 'VEHICLE_EXIT' : 'VEHICLE_ENTRY',
         vehicleId: v.id,
         plate,
         ts: Date.now(),
         ...(probable ? { probable: true, ocrRaw: ctx.ocrRaw ?? undefined } : {}),
+        ...(autoOpenOff ? { autoOpenDisabled: true } : {}),
         ...(imageUrl ? { imageUrl } : {}),
       },
     )

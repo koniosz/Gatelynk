@@ -142,6 +142,11 @@ export class ResidentController {
       notes?: string
       // undefined = bez zmian, null = usuń zdjęcie.
       photo?: string | null
+      // Push o przejeździe własnego pojazdu (2026-08-21).
+      notifyOnUse?: boolean
+      // 2026-09-25 — czy rozpoznanie tablicy ma otwierać bramę/szlaban
+      // (przełącznik w karcie pojazdu). Egzekwowane offline na Edge.
+      autoOpen?: boolean
     },
   ) {
     return this.svc.updateVehicle(+id, req.user.residentId, body)

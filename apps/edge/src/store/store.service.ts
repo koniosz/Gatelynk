@@ -175,7 +175,8 @@ export class StoreService implements OnModuleInit {
         owner            TEXT,                 -- snapshot at read time (matched only)
         gate_opened      INTEGER NOT NULL,     -- 0/1: did Edge actually trigger the relay
         reason           TEXT,                 -- 'ok' | 'not_whitelisted' | 'cooldown' |
-                                               -- 'no_linked_intercom' | 'gate_error' | …
+                                               -- 'no_linked_intercom' | 'gate_error' |
+                                               -- 'auto_open_disabled' | …
         confidence       REAL,
         direction        TEXT,                 -- 'in' | 'out' | null
         ts               INTEGER NOT NULL,     -- epoch ms
@@ -489,6 +490,11 @@ export class StoreService implements OnModuleInit {
       // po nim ograniczenia (harmonogram/limit/allowlista AP) w guest_pins.
       // NULL = pojazd mieszkańca/serwisu (bez ograniczeń gościa).
       { name: 'guest_id',        ddl: 'INTEGER' },
+      // 2026-09-25 — przełącznik mieszkańca „otwieraj bramę po rozpoznaniu".
+      // 0 = tablica ZNANA (odczyt, historia, push), ale Edge NIE wyzwala
+      // przekaźnika (reason `auto_open_disabled`). NULL/1 = otwieraj
+      // (stare wpisy i Cloud bez pola zachowują się jak dotąd).
+      { name: 'auto_open',       ddl: 'INTEGER' },
     ])
     // ── Ograniczenia dostępu gościa (2026-07-08) — kolumny na guest_pins ──
     // Cloud śle w PIN_UPSERT/PIN_SYNC_ALL; Edge waliduje OFFLINE:
@@ -771,6 +777,8 @@ export class StoreService implements OnModuleInit {
       tags?: string[] | null
       /** 2026-07-08 — id gościa (Cloud) dla tablic gości; NULL dla pojazdów. */
       guestId?: number | null
+      /** 2026-09-25 — false = rozpoznaj, ale NIE otwieraj. Brak pola = otwieraj. */
+      autoOpen?: boolean | null
     } = {},
   ) {
     const tagsJson = Array.isArray(opts.tags) && opts.tags.length > 0
@@ -780,8 +788,8 @@ export class StoreService implements OnModuleInit {
       .prepare(
         `INSERT OR REPLACE INTO lpr_plates
           (camera_device_id, plate, owner, valid_from, valid_until, unit_label,
-           vehicle_kind, vehicle_tags, guest_id, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           vehicle_kind, vehicle_tags, guest_id, auto_open, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         cameraDeviceId, plate,
@@ -792,6 +800,7 @@ export class StoreService implements OnModuleInit {
         opts.kind ?? null,
         tagsJson,
         opts.guestId ?? null,
+        opts.autoOpen === false ? 0 : 1,
         Date.now(),
       )
   }
@@ -825,12 +834,14 @@ export class StoreService implements OnModuleInit {
     tags: string[]
     validFrom: number | null
     validUntil: number | null
+    /** false = mieszkaniec wyłączył automatyczne otwieranie dla tej tablicy. */
+    autoOpen: boolean
   }[] {
     // PRIVACY: kolumna `owner` celowo nie jest selektowana — Edge UI nie powinno
     // pokazywać imienia/nazwiska mieszkańca instalatorowi.
     const rows = this.db
       .prepare(
-        `SELECT plate, valid_from, valid_until, unit_label, vehicle_kind, vehicle_tags
+        `SELECT plate, valid_from, valid_until, unit_label, vehicle_kind, vehicle_tags, auto_open
            FROM lpr_plates WHERE camera_device_id = ? ORDER BY plate`,
       )
       .all(cameraDeviceId) as any[]
@@ -841,6 +852,7 @@ export class StoreService implements OnModuleInit {
       tags: parseTags(r.vehicle_tags),
       validFrom: r.valid_from,
       validUntil: r.valid_until,
+      autoOpen: autoOpenFromRow(r.auto_open),
     }))
   }
 
@@ -856,10 +868,13 @@ export class StoreService implements OnModuleInit {
     tags: string[]
     /** id gościa (Cloud) — flow LPR sprawdza po nim ograniczenia gościa. */
     guestId: number | null
+    /** 2026-09-25 — false = tablica znana, ale mieszkaniec wyłączył
+     *  automatyczne otwieranie (Edge NIE wyzwala przekaźnika). */
+    autoOpen: boolean
   } | null {
     const row = this.db
       .prepare(
-        `SELECT plate, owner, valid_from, valid_until, unit_label, vehicle_kind, vehicle_tags, guest_id
+        `SELECT plate, owner, valid_from, valid_until, unit_label, vehicle_kind, vehicle_tags, guest_id, auto_open
            FROM lpr_plates WHERE camera_device_id = ? AND plate = ?`,
       )
       .get(cameraDeviceId, plate) as any
@@ -874,6 +889,7 @@ export class StoreService implements OnModuleInit {
       kind: row.vehicle_kind,
       tags: parseTags(row.vehicle_tags),
       guestId: row.guest_id ?? null,
+      autoOpen: autoOpenFromRow(row.auto_open),
     }
   }
 
@@ -968,14 +984,15 @@ export class StoreService implements OnModuleInit {
     kind?: string | null
     tags?: string[] | null
     guestId?: number | null
+    autoOpen?: boolean | null
   }[]) {
     const tx = this.db.transaction((rows: typeof plates) => {
       this.db.prepare('DELETE FROM lpr_plates WHERE camera_device_id = ?').run(cameraDeviceId)
       const stmt = this.db.prepare(
         `INSERT INTO lpr_plates
            (camera_device_id, plate, owner, valid_from, valid_until, unit_label,
-            vehicle_kind, vehicle_tags, guest_id, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            vehicle_kind, vehicle_tags, guest_id, auto_open, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       const now = Date.now()
       for (const r of rows) {
@@ -989,6 +1006,7 @@ export class StoreService implements OnModuleInit {
           r.kind ?? null,
           tagsJson,
           r.guestId ?? null,
+          r.autoOpen === false ? 0 : 1,
           now,
         )
       }
@@ -3333,6 +3351,11 @@ export class StoreService implements OnModuleInit {
  * Cloud zawsze wysyła `tags: string[]` więc nieprawidłowy kształt = data
  * corruption, nie błąd user-input-u.
  */
+/** `lpr_plates.auto_open`: NULL (stary wpis / Cloud bez pola) i 1 = otwieraj; 0 = nie. */
+function autoOpenFromRow(v: unknown): boolean {
+  return v === null || v === undefined ? true : Number(v) !== 0
+}
+
 function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return []
   try {

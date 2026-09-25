@@ -103,6 +103,10 @@ struct LprEventReading: Equatable {
         case "no_linked_intercom", "no_vehicle_detect_trigger":
             return .init(title: "Rozpoznano \(place)",
                          detail: "Ta kamera nie steruje bramą — tylko odczyt", tone: .neutral)
+        case "auto_open_disabled":
+            return .init(title: "Rozpoznano \(place)",
+                         detail: "Automatyczne otwieranie było wyłączone dla tego pojazdu — brama nie została otwarta",
+                         tone: .neutral)
         case "overstay_denied":
             return .init(title: "Odmowa \(place)",
                          detail: "Przekroczony czas pobytu dla przepustki wyjazdowej", tone: .negative)

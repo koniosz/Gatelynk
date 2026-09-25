@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt'
 import { Prisma } from '@prisma/client'
 import * as crypto from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { vehiclePlateSyncPayload } from '../common/plate-sync'
 import { formatUnitLabel } from '../common/unit-label'
 import { MailService } from '../mail/mail.service'
 import { PushService } from '../push/push.service'
@@ -770,36 +771,7 @@ export class ConciergeService {
    * lokal mieszkańca), owner tylko dla usług (bez PII).
    */
   private async plateSyncPayload(v: VehicleRow): Promise<Record<string, any>> {
-    const isService = v.kind === 'SERVICE' || v.kind === 'DELIVERY'
-    const extra: string[] = []
-    if (isService && v.serviceName) extra.push(v.serviceName)
-    if (v.make) extra.push(v.make)
-    if (v.model) extra.push(v.model)
-    if (v.color) extra.push(v.color)
-    let unitLabel: string | null = v.unit?.label ?? null
-    if (!unitLabel && v.kind === 'RESIDENT' && v.residentId) {
-      const rows = await this.prisma.$queryRaw<Array<{ number: string; street: string | null; stairwell: string | null }>>`
-        SELECT u.number, u.street, s.name AS stairwell
-          FROM "unit_residents" ur
-          JOIN "units" u ON u.id = ur."unitId"
-          LEFT JOIN "stairwells" s ON s.id = u."stairwellId"
-         WHERE ur."residentId" = ${v.residentId}
-           AND (ur."untilDate" IS NULL OR ur."untilDate" > NOW())
-         ORDER BY ur."sinceDate" DESC
-         LIMIT 1
-      `.catch(() => [] as any[])
-      const r = rows[0]
-      if (r) unitLabel = formatUnitLabel({ number: r.number, street: r.street, stairwellName: r.stairwell })
-    }
-    return {
-      plate: v.licensePlate,
-      owner: isService && v.serviceName ? v.serviceName : '',
-      kind: v.kind,
-      tags: Array.from(new Set([...extra, ...(Array.isArray(v.tags) ? v.tags : [])])),
-      unitLabel,
-      ...(v.validFrom ? { validFrom: v.validFrom.toISOString() } : {}),
-      ...(v.validTo ? { validUntil: v.validTo.toISOString() } : {}),
-    }
+    return vehiclePlateSyncPayload(this.prisma, v)
   }
 
   /**

@@ -1352,6 +1352,12 @@ model Vehicle {
   rejectionReason String?
   // 2026-08-21 — push o przejeździe WŁASNEGO pojazdu (opt-in, kadr z LPR).
   notifyOnUse     Boolean   @default(false)
+  // 2026-09-25 — przełącznik mieszkańca: czy rozpoznanie tablicy ma OTWIERAĆ
+  // bramę/szlaban. false = tablica zostaje na białej liście Edge (odczyt,
+  // historia i powiadomienia działają), ale Edge NIE wyzwala przekaźnika
+  // (reason `auto_open_disabled`). Egzekwowane offline na Edge
+  // (lpr_plates.auto_open) — leci w każdym PLATE_UPSERT / PLATE_SYNC_ALL.
+  autoOpen        Boolean   @default(true)
   // Tagi opisowe wybierane ręcznie w panelu (chip multi-select). Słownik tagów
   // żyje po stronie front-endu (apps/web/src/lib/vehicle-tags.ts) — backend
   // trzyma to jako prosty TEXT[] bez normalizacji, żeby admin mógł też dorzucić

@@ -19,6 +19,7 @@ import {
   ownerForEdge,
 } from '../building-admin/building-admin.service'
 import type { VehicleKindStr, VehicleRow } from '../building-admin/building-admin.service'
+import { vehiclePlateSyncPayload } from '../common/plate-sync'
 import { ForbiddenException } from '@nestjs/common'
 import {
   hasPermission,
@@ -763,11 +764,17 @@ export class ResidentService {
       photo?: string | null
       /** Push o przejeździe pojazdu (2026-08-21) — opt-in z karty pojazdu. */
       notifyOnUse?: boolean
+      /** 2026-09-25 — przełącznik „otwieraj bramę po rozpoznaniu tablicy".
+       *  false = tablica zostaje na białej liście Edge, ale brama nie rusza. */
+      autoOpen?: boolean
     },
   ): Promise<VehicleRow> {
     const existing = await this.prisma.$queryRaw<VehicleRow[]>`${vehicleSelectSql(Prisma.sql`v.id = ${vehicleId} AND v."residentId" = ${residentId}`, Prisma.sql`v.id ASC`)}`
     const v = existing[0]
     if (!v) throw new NotFoundException()
+    if (dto.autoOpen !== undefined && typeof dto.autoOpen !== 'boolean') {
+      throw new BadRequestException('autoOpen musi być true/false')
+    }
 
     const nextPlate = dto.licensePlate ? dto.licensePlate.trim().toUpperCase() : v.licensePlate
     const nextKind: VehicleKindStr = (dto.kind as VehicleKindStr) ?? (v.kind as VehicleKindStr)
@@ -799,6 +806,7 @@ export class ResidentService {
           "notes"           = ${dto.notes !== undefined ? (dto.notes?.trim() || null) : v.notes},
           "photo"           = ${dto.photo !== undefined ? dto.photo : v.photo},
           "notifyOnUse"     = ${dto.notifyOnUse !== undefined ? dto.notifyOnUse : v.notifyOnUse},
+          "autoOpen"        = ${dto.autoOpen !== undefined ? dto.autoOpen : v.autoOpen},
           "status"          = 'PENDING'::"VehicleStatus",
           "approvedById"    = NULL,
           "approvedByType"  = NULL,
@@ -817,6 +825,7 @@ export class ResidentService {
           "serviceName"  = ${dto.serviceName !== undefined ? (dto.serviceName?.trim() || null) : v.serviceName},
           "notes"        = ${dto.notes !== undefined ? (dto.notes?.trim() || null) : v.notes},
           "notifyOnUse"  = ${dto.notifyOnUse !== undefined ? dto.notifyOnUse : v.notifyOnUse},
+          "autoOpen"     = ${dto.autoOpen !== undefined ? dto.autoOpen : v.autoOpen},
           "photo"        = ${dto.photo !== undefined ? dto.photo : v.photo}
         WHERE id = ${vehicleId} AND "residentId" = ${residentId}
       `
@@ -829,15 +838,17 @@ export class ResidentService {
         // stara tablica wypada z allowlist; nowa wraca do PENDING (admin re-approve).
         this.syncPlateToEdge(v.buildingId, 'DELETE', { plate: v.licensePlate })
       } else {
-        // tylko kosmetyka — odświeżamy owner-a (np. po zmianie serviceName).
-        this.syncPlateToEdge(v.buildingId, 'UPSERT', {
-          plate: nextPlate,
-          owner: ownerForEdge(
-            nextKind,
-            resident ? { firstName: resident.firstName, lastName: resident.lastName } : null,
-            dto.serviceName ?? v.serviceName,
-          ),
-        })
+        // Kosmetyka / powiadomienia / przełącznik autoOpen — PEŁNY wpis, bo
+        // Edge robi INSERT OR REPLACE: wcześniejszy payload `{plate, owner}`
+        // kasował na Edge etykietę lokalu, typ, tagi i okno ważności
+        // (błąd wykryty 2026-09-25). Jedna definicja z konsjerżem.
+        const refreshed = await this.prisma.$queryRaw<VehicleRow[]>`${vehicleSelectSql(Prisma.sql`v.id = ${vehicleId}`, Prisma.sql`v.id ASC`)}`
+        const current = refreshed[0] ?? v
+        this.edgeGateway.sendToBuilding(
+          v.buildingId,
+          'PLATE_UPSERT',
+          await vehiclePlateSyncPayload(this.prisma, current),
+        )
       }
     }
     const rows = await this.prisma.$queryRaw<VehicleRow[]>`${vehicleSelectSql(Prisma.sql`v.id = ${vehicleId}`, Prisma.sql`v.id ASC`)}`

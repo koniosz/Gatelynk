@@ -2938,6 +2938,9 @@ export class BuildingAdminService {
       /** 2026-07-08 — id gościa dla tablic gości (Edge egzekwuje po nim
        *  ograniczenia z guest_pins). Stary Edge ignoruje pole. */
       guestId?: number
+      /** 2026-09-25 — false = Edge rozpoznaje, ale NIE otwiera (przełącznik
+       *  mieszkańca). Stary Edge ignoruje pole (= otwiera). */
+      autoOpen?: boolean
     },
   ) {
     const action = op === 'UPSERT' ? 'PLATE_UPSERT' : 'PLATE_DELETE'
@@ -2950,6 +2953,7 @@ export class BuildingAdminService {
       if (payload.tags !== undefined)      out.tags = payload.tags
       if (payload.unitLabel !== undefined) out.unitLabel = payload.unitLabel
       if (payload.guestId)                 out.guestId = payload.guestId
+      if (payload.autoOpen !== undefined)  out.autoOpen = payload.autoOpen
       if (payload.validFrom !== undefined && payload.validFrom !== null) {
         out.validFrom = payload.validFrom instanceof Date
           ? payload.validFrom.toISOString()
@@ -3092,6 +3096,8 @@ export class BuildingAdminService {
     tags: string[]
     validFrom: Date | null
     validTo: Date | null
+    /** 2026-09-25 — przełącznik mieszkańca; brak pola (starsze wywołania) = true. */
+    autoOpen?: boolean
   }): Promise<{
     plate: string
     owner: string
@@ -3100,6 +3106,7 @@ export class BuildingAdminService {
     unitLabel: string | null
     validFrom: Date | null
     validTo: Date | null
+    autoOpen: boolean
   }> {
     // 2026-09-07: jawny lokal pojazdu > lokal mieszkańca (tylko RESIDENT).
     const unitLabel = await this.vehicleUnitLabel(vehicle)
@@ -3129,6 +3136,7 @@ export class BuildingAdminService {
       unitLabel,
       validFrom: vehicle.validFrom,
       validTo: vehicle.validTo,
+      autoOpen: vehicle.autoOpen ?? true,
     }
   }
 
@@ -3858,6 +3866,9 @@ export interface VehicleRow {
   photo: string | null
   // 2026-08-21 — push o przejeździe własnego pojazdu (opt-in mieszkańca).
   notifyOnUse: boolean
+  // 2026-09-25 — czy rozpoznanie tablicy ma otwierać bramę (przełącznik
+  // mieszkańca w karcie pojazdu). Leci do Edge jako `autoOpen`.
+  autoOpen: boolean
   // Tagi opisowe wybierane w UI (chip multi-select). Słownik trzymany w
   // apps/web/src/lib/vehicle-tags.ts; backend nie waliduje wartości — admin
   // może też wpisać własny tag (np. „obsługa basenu", „dziadek mieszkanki").
@@ -3884,7 +3895,7 @@ export function vehicleSelectSql(where: Prisma.Sql, orderBy: Prisma.Sql) {
   return Prisma.sql`
     SELECT v.id, v."buildingId", v."residentId", v."unitId", v.kind::text AS kind,
            v.make, v.model, v.color, v."licensePlate",
-           v."serviceName", v.notes, v.photo, v."notifyOnUse",
+           v."serviceName", v.notes, v.photo, v."notifyOnUse", v."autoOpen",
            COALESCE(v.tags, '{}') AS tags,
            v."createdAt",
            v.status::text AS status,

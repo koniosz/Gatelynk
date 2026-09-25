@@ -59,6 +59,9 @@ interface Vehicle {
   tags?: string[];
   // Ręcznie dodane zdjęcie pojazdu (data URI, jak avatary) — może być null.
   photo?: string | null;
+  // 2026-09-25 — przełącznik mieszkańca w apce: false = tablica rozpoznawana,
+  // ale brama NIE otwiera się automatycznie (starszy API nie zwraca → true).
+  autoOpen?: boolean | null;
 }
 
 interface Resident {
@@ -653,6 +656,11 @@ export default function VehiclesPage() {
                 </div>
                 <div>
                   <span className={`ba-pill ${meta.tone === "default" ? "" : meta.tone}`}>{meta.label}</span>
+                  {status === "APPROVED" && v.autoOpen === false ? (
+                    <span className="ba-pill" title="Mieszkaniec wyłączył w aplikacji automatyczne otwieranie bramy dla tej tablicy">
+                      auto-wjazd wył.
+                    </span>
+                  ) : null}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
                   {isPending ? (
@@ -901,6 +909,11 @@ function VehicleDetails({
           <div className="k">Status</div>
           <div className="v">
             <span className={`ba-pill ${meta.tone === "default" ? "" : meta.tone}`}>{meta.label}</span>
+            {status === "APPROVED" && vehicle.autoOpen === false ? (
+              <span className="ba-pill" title="Mieszkaniec wyłączył w aplikacji automatyczne otwieranie bramy dla tej tablicy">
+                auto-wjazd wył.
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="ba-kv">
@@ -1159,6 +1172,8 @@ function VehiclePhotos({
 // Surowe kody z Edge (reason w access_events) → czytelny polski opis.
 // Nieznane kody pokazujemy bez zmian.
 const REASON_LABEL: Record<string, string> = {
+  // 2026-09-25 — mieszkaniec wyłączył automatyczne otwieranie w apce.
+  auto_open_disabled: "automatyczne otwieranie wyłączone przez mieszkańca",
   not_whitelisted: "tablica nie była wtedy na białej liście",
   plate_not_in_allowlist: "tablica nie była wtedy na białej liście",
   expired: "ważność pojazdu minęła",

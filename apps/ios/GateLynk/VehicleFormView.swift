@@ -28,6 +28,8 @@ struct VehicleFormView: View {
     @State private var saving = false
     @State private var deleting = false
     @State private var error: String?
+    /// 2026-09-25 — czy rozpoznanie tablicy ma otwierać bramę (PATCH `autoOpen`).
+    @State private var autoOpen = true
 
     var body: some View {
         NavigationStack {
@@ -69,6 +71,19 @@ struct VehicleFormView: View {
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
+                    }
+                    Section {
+                        Toggle("Otwieraj bramę po rozpoznaniu tablicy", isOn: $autoOpen)
+                            .disabled(v.effectiveStatus != .approved)
+                    } header: {
+                        Text("Automatyczny wjazd")
+                    } footer: {
+                        Text(v.effectiveStatus == .approved
+                             ? (autoOpen
+                                ? "Po rozpoznaniu tablicy kamera wysyła polecenie otwarcia bramy. Zapisz, aby zmiana trafiła na sterownik osiedla."
+                                : "Przejazdy będą rozpoznawane i zapisywane, ale brama nie otworzy się sama. Zapisz, aby zmiana trafiła na sterownik osiedla.")
+                             : "Dostępne po zatwierdzeniu pojazdu przez administratora.")
+                            .font(.caption)
                     }
                     Section {
                         Button(role: .destructive) {
@@ -115,6 +130,7 @@ struct VehicleFormView: View {
                     model = v.model ?? ""
                     color = v.color
                     licensePlate = v.licensePlate
+                    autoOpen = v.autoOpenEnabled
                 }
             }
         }
@@ -164,6 +180,7 @@ struct VehicleFormView: View {
         let model: String?
         let color: String
         let licensePlate: String
+        let autoOpen: Bool
     }
 
     private func update() async {
@@ -177,6 +194,7 @@ struct VehicleFormView: View {
                     model: model.trimmingCharacters(in: .whitespaces).isEmpty ? nil : model.trimmingCharacters(in: .whitespaces),
                     color: color.trimmingCharacters(in: .whitespaces),
                     licensePlate: licensePlate.trimmingCharacters(in: .whitespaces).uppercased(),
+                    autoOpen: autoOpen,
                 ),
             )
             await onChange()
