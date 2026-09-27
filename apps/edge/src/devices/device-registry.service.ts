@@ -19,6 +19,7 @@ import {
 } from './driver-engine'
 import { guessDriverId, type DeviceDriver } from '@gatelynk/device-drivers'
 import type { TestMatrix, TestMatrixEntry } from './test-matrix.types'
+import { isCompleteJpeg } from './cameras/jpeg.util'
 
 // Shared agent for self-signed camera/intercom HTTPS certs
 const rejectUnauthorizedHttpsAgent = lanHttpsAgent
@@ -56,6 +57,17 @@ export class DeviceRegistryService implements OnModuleInit {
   private readonly logger = new Logger(DeviceRegistryService.name)
   // Snapshot cache: deviceId → {image, fetchedAt, refreshing}
   private readonly snapCache = new Map<string, SnapCache>()
+  /**
+   * 2026-09-27 — Akuvox R29: firmware ma sztywny bufor snapshotu (~700 KB);
+   * nocne, zaszumione JPEG-i są ucinane (brak FFD9 → szary pas u dołu obrazu).
+   * To samo dotyczy każdej klatki natywnego MJPEG z :8080. Po wykryciu ucięcia
+   * snapshoty i stream tego urządzenia idą z RTSP przez ffmpeg (kompletne
+   * klatki, sub-stream 704×576). Klucz: IP urządzenia.
+   */
+  private readonly akuvoxTruncatedAt = new Map<string, number>()
+  /** Memo ostatniej klatki RTSP (ffmpeg ~1.8 s) — podgląd „live" pyta co ~2 s. */
+  private readonly rtspSnapMemo = new Map<string, { image: string; at: number }>()
+  private static readonly AKUVOX_TRUNCATED_TTL_MS = 10 * 60_000
   private readonly pingCache = new Map<string, PingCache>()
   private readonly PING_TTL  = 30_000 // 30 s
 
@@ -544,9 +556,14 @@ export class DeviceRegistryService implements OnModuleInit {
     if (m.includes('akuvox')) {
       const snap = await this.akuvoxHttpSnapshot(cfg)
       if (snap) return snap
-      // RTSP fallback if HTTP failed
+      // RTSP fallback — HTTP padł ALBO JPEG ucięty przez firmware (2026-09-27).
+      const memo = this.rtspSnapMemo.get(cfg.ipAddress)
+      if (memo && Date.now() - memo.at < 2000) return memo.image
       const rtsp = await this.rtspSnapshot(cfg)
-      if (rtsp) return rtsp
+      if (rtsp) {
+        this.rtspSnapMemo.set(cfg.ipAddress, { image: rtsp, at: Date.now() })
+        return rtsp
+      }
       return null
     }
 
@@ -779,9 +796,17 @@ export class DeviceRegistryService implements OnModuleInit {
 
     // ── Akuvox: proxy native MJPEG from https://IP:8080/video.cgi (no ffmpeg) ────
     if (m.includes('akuvox')) {
-      const proxied = await this.proxyAkuvoxMjpeg(cfg, res)
-      if (proxied) return
-      this.logger.warn(`Akuvox MJPEG proxy failed for ${deviceId}, falling back to RTSP`)
+      // 2026-09-27: gdy firmware ucina JPEG-i (noc), natywny MJPEG z :8080 ma
+      // ten sam bufor — każda klatka z szarym pasem. Sonda picture.jpg
+      // (~100 ms) rozstrzyga; przy ucięciu od razu RTSP → ffmpeg.
+      if (!this.isAkuvoxTruncatedFresh(cfg.ipAddress)) await this.akuvoxHttpSnapshot(cfg)
+      if (this.isAkuvoxTruncatedFresh(cfg.ipAddress)) {
+        this.logger.log(`Akuvox ${cfg.ipAddress}: stream z RTSP (ffmpeg) — snapshoty kasety ucięte`)
+      } else {
+        const proxied = await this.proxyAkuvoxMjpeg(cfg, res)
+        if (proxied) return
+        this.logger.warn(`Akuvox MJPEG proxy failed for ${deviceId}, falling back to RTSP`)
+      }
     }
 
     const rtspUser  = cfg.rtspLogin    ?? cfg.login    ?? 'admin'
@@ -960,6 +985,14 @@ export class DeviceRegistryService implements OnModuleInit {
       const ct = String(res.headers?.['content-type'] ?? '').toLowerCase()
       const isJpeg = buf.length > 2 && buf[0] === 0xff && buf[1] === 0xd8
       if (res.status === 200 && buf.length > 500 && (ct.startsWith('image/') || isJpeg)) {
+        // 2026-09-27: kaseta odsyła JPEG bez FFD9, gdy kadr przekroczy jej
+        // bufor (noc/szum) — dekoder dorysowałby szary pas. Odrzucamy →
+        // fallback RTSP; flaga przełącza też stream na ffmpeg.
+        if (isJpeg && !isCompleteJpeg(buf)) {
+          this.noteAkuvoxTruncated(cfg.ipAddress, buf.length, url)
+          throw new Error(`JPEG ucięty przez urządzenie (${buf.length} B, brak FFD9)`)
+        }
+        this.akuvoxTruncatedAt.delete(cfg.ipAddress)
         this.logger.log(`Akuvox HTTP snapshot OK (${buf.length}B) ${url}`)
         return `data:image/jpeg;base64,${buf.toString('base64')}`
       }
@@ -976,6 +1009,23 @@ export class DeviceRegistryService implements OnModuleInit {
       this.logger.debug(`Akuvox snapshot: obie sondy :8080 nieudane (${reasons}) ${cfg.ipAddress}`)
       return null
     }
+  }
+
+  /** Ucięty snapshot Akuvox — log raz na TTL (nie przy każdym pollingu). */
+  private noteAkuvoxTruncated(ip: string, bytes: number, url: string) {
+    const prev = this.akuvoxTruncatedAt.get(ip) ?? 0
+    this.akuvoxTruncatedAt.set(ip, Date.now())
+    if (Date.now() - prev > DeviceRegistryService.AKUVOX_TRUNCATED_TTL_MS) {
+      this.logger.warn(
+        `Akuvox ${ip}: snapshot ucięty przez firmware (${bytes} B, brak FFD9 — limit bufora kasety, ` +
+        `typowo noc/szum) → podgląd i stream z RTSP przez ffmpeg. ${url}`,
+      )
+    }
+  }
+
+  private isAkuvoxTruncatedFresh(ip: string): boolean {
+    const at = this.akuvoxTruncatedAt.get(ip)
+    return !!at && Date.now() - at < DeviceRegistryService.AKUVOX_TRUNCATED_TTL_MS
   }
 
   // ── Akuvox native MJPEG proxy (https://IP:8080/video.cgi, no ffmpeg) ─────────
