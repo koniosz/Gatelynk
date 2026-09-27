@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Zap, PowerOff, Bot, ChevronRight, ClipboardCheck, RefreshCw } from 'lucide-react'
+import { Zap, PowerOff, Bot, ChevronRight, ClipboardCheck, RefreshCw, Cctv } from 'lucide-react'
 import { integratorApi } from '@/lib/integrator-api'
 import { useActiveProperty } from '@/components/integrator/active-property-context'
 import { Spinner } from '@/components/integrator/property/shared/Spinner'
@@ -108,6 +108,12 @@ export default function IntegratorBuildingPage() {
       {/* FAZA e — Permissions Matrix (2026-06-02). */}
       <IntegratorPermissionsMatrix buildingId={buildingId} onSaved={load} />
 
+      {/* 2026-09-27 — podstrona „Urządzenia" (mirror Edge, powiązania kamer
+          LPR → punkty dostępu, ustawienia kamer) NIE miała żadnego linku
+          w nawigacji; dało się na nią wejść tylko z ręcznie wpisanego adresu
+          (właściciel nie znalazł jej przy incydencie VN 26.09). */}
+      <DevicesLink buildingId={buildingId} />
+
       {/* FAZA 8.h.25 — tymczasowy panel oceny odpowiedzi GateLynk AI */}
       <AssistantLogsLink buildingId={buildingId} />
 
@@ -182,6 +188,31 @@ function SetupHubLink({ buildingId }: { buildingId: string }) {
         </p>
       </div>
       <ChevronRight size={16} className="text-gray-300 group-hover:text-brand transition-colors" />
+    </Link>
+  )
+}
+
+/**
+ * 2026-09-27 — link do podstrony „Urządzenia": mirror urządzeń Edge,
+ * POWIĄZANIA KAMER LPR Z PUNKTAMI DOSTĘPU (bez nich Edge nie otwiera bramy
+ * po rozpoznaniu tablicy — reason `camera_not_linked`), ustawienia kamer.
+ */
+function DevicesLink({ buildingId }: { buildingId: string }) {
+  return (
+    <Link
+      href={`/integrator/buildings/${buildingId}/devices`}
+      className="bg-white rounded-xl border border-gray-200 p-4 mb-5 flex items-center gap-3 hover:border-emerald-300 transition-colors group"
+    >
+      <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+        <Cctv size={16} className="text-emerald-600" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold text-ink-2">Urządzenia i powiązania kamer LPR</p>
+        <p className="text-[11px] text-muted">
+          Która kamera otwiera który punkt dostępu (wjazd / wyjazd), ustawienia kamer, lista urządzeń z Edge
+        </p>
+      </div>
+      <ChevronRight size={16} className="text-gray-300 group-hover:text-emerald-400 transition-colors" />
     </Link>
   )
 }
