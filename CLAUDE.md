@@ -2179,3 +2179,16 @@ Decyzja: **fallback usunięty** (`firstIntercomId` skasowany). Kolejność w
 Deploy tej wersji na osiedle bez powiązań ZATRZYMUJE automatyczne otwieranie —
 najpierw powiązania w panelu, potem Edge. Etykiety reason w iOS
 (`LprEventReading`) i panelu (vehicles/lpr-reads/LprViewer).
+
+## Akuvox R29: ucięte nocne snapshoty = szary pas na podglądzie (2026-09-27)
+
+Firmware kasety ma sztywny bufor snapshotu (~700 KB): nocny, zaszumiony kadr
+1920×1080 nie mieści się i `:8080/picture.jpg` ORAZ każda klatka
+`:8080/video.cgi` wracają ucięte — poprawny nagłówek, stałe `Content-Length`
+(VN .23: 724 801 B), brak FFD9. Dekoder rysuje tyle, ile dostał, resztę
+wypełnia szarością. Parametry `?resolution=…/?quality=…` → 404 (brak wsparcia).
+Edge: `isCompleteJpeg` (`devices/cameras/jpeg.util.ts`) odrzuca taki plik →
+fallback RTSP przez ffmpeg (`live/ch00_0`, 704×576, ~1.8 s, memo 2 s), a
+`pipeVideoStream` po sondzie przełącza stream na ffmpeg (flaga per IP,
+TTL 10 min). Objaw w logu: `Akuvox <ip>: snapshot ucięty przez firmware`.
+Test: `jpeg.util.spec.ts` (node:test, kompilacja standalone jak exit-grace).
