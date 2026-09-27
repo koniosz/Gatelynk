@@ -1174,6 +1174,9 @@ function VehiclePhotos({
 const REASON_LABEL: Record<string, string> = {
   // 2026-09-25 — mieszkaniec wyłączył automatyczne otwieranie w apce.
   auto_open_disabled: "automatyczne otwieranie wyłączone przez mieszkańca",
+  // 2026-09-27 — kamera LPR bez powiązania z punktem dostępu: Edge nie zgaduje przekaźnika.
+  camera_not_linked: "kamera nie jest powiązana z punktem dostępu — brama nie otwarta",
+  no_linked_intercom: "kamera nie steruje żadną bramą",
   not_whitelisted: "tablica nie była wtedy na białej liście",
   plate_not_in_allowlist: "tablica nie była wtedy na białej liście",
   expired: "ważność pojazdu minęła",

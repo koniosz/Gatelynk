@@ -2157,3 +2157,25 @@ pusha; w panelu przejazd nie istniał.
   2026-09-25. Nowe ścieżki: `vehiclePlateSyncPayload(prisma, row)`.
 - Test: `apps/api/test/vehicle-auto-open.e2e-spec.ts` (outbox jest
   asynchroniczny — test odpytuje z oczekiwaniem, nie od razu po odpowiedzi).
+
+## LPR: kamera MUSI mieć jawne powiązanie z punktem dostępu (2026-09-27)
+
+Incydent VN (WE1MH70, 26.09 22:37): obie kamery LPR na VN nie miały ani
+`lpr_camera_ap_links`, ani `linkedAccessPointId`, ani
+`linkedIntercomDeviceId`/`linkedRelayIndex`. Edge wpadał w fallback „pierwszy
+zarejestrowany domofon + przekaźnik 1 (DoorNum=2)" — przez 7 tygodni każde
+dopasowanie z kamery WJAZDOWEJ i WYJAZDOWEJ pulsowało ten sam przekaźnik nr 2
+domofonu wjazdowego (.10), a szlaban wjazdowy wisi na przekaźniku 0 (tak
+otwiera go apka). Akuvox odpowiada OK także na przekaźnik bez szlabanu →
+`gate_opened=1` w odczycie mimo zamkniętej bramy. Ta sama wada na b9 (kamera
+wjazdowa → domofon WYJAZDOWY .100), niewidoczna, bo kamera .64 leży.
+
+Decyzja: **fallback usunięty** (`firstIntercomId` skasowany). Kolejność w
+`handleAnprEvent`: (1) `lpr_camera_ap_links` (integrator: Urządzenia →
+„Powiązania kamer LPR", z kierunkiem IN/OUT — zasila też exit-grace),
+(2) `config.linkedAccessPointId` (BA: `PATCH …/lpr-cameras/:uuid/linked-ap`),
+(3) JAWNE `linkedIntercomDeviceId` + `linkedRelayIndex`. Bez żadnego z nich →
+`reason='camera_not_linked'`, brama NIE otwierana, wpis `error` w event_log.
+Deploy tej wersji na osiedle bez powiązań ZATRZYMUJE automatyczne otwieranie —
+najpierw powiązania w panelu, potem Edge. Etykiety reason w iOS
+(`LprEventReading`) i panelu (vehicles/lpr-reads/LprViewer).

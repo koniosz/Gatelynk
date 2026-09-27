@@ -739,6 +739,10 @@ function ReadRow({
           <span className="ba-pill amber" title="Tablica z jednej klatki lub poniżej progu, bez dopasowania do rejestru">
             odczyt niepotwierdzony
           </span>
+        ) : r.reason === "camera_not_linked" ? (
+          <span className="ba-pill red" title="Kamera LPR nie ma powiązanego punktu dostępu — Edge nie wysłał polecenia (Urządzenia → kamera → punkt dostępu)">
+            kamera bez powiązania · nie otwarto
+          </span>
         ) : r.reason === "auto_open_disabled" ? (
           // 2026-09-25: mieszkaniec wyłączył automatyczne otwieranie w apce —
           // tablica rozpoznana, Edge celowo nie ruszył bramy.

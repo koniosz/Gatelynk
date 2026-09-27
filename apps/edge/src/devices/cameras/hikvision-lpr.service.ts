@@ -727,15 +727,34 @@ export class HikvisionLprService {
       })
     }
 
-    // Legacy path — gdy linkedAccessPointId nie ustawione, działamy jak dawniej.
-    // Po backfillu w produkcji to powinno zostać już głównie historyczne.
-    const intercomId = dev.config.linkedIntercomDeviceId ?? this.firstIntercomId()
-    const relayIdx = dev.config.linkedRelayIndex ?? 1
-    if (!intercomId) {
-      this.logger.warn(`No intercom linked for LPR camera ${cameraDeviceId}`)
-      this.eventLog.warn('LPR', `⚠️ No linked intercom for camera ${cameraDeviceId} — set linkedAccessPointId or linkedIntercomDeviceId in config`, { plate })
+    // Legacy path — TYLKO przy JAWNEJ konfiguracji kamery
+    // (`linkedIntercomDeviceId` + `linkedRelayIndex`).
+    //
+    // 2026-09-27 (incydent VN, WE1MH70 22:37): dotychczasowy fallback
+    // „pierwszy zarejestrowany domofon + przekaźnik 1 (DoorNum=2)" ZGADYWAŁ
+    // urządzenie i przekaźnik. Na VN obie kamery (wjazd i wyjazd) przez 7
+    // tygodni pulsowały ten sam przekaźnik nr 2 domofonu WJAZDOWEGO, a na b9
+    // kamera wjazdowa — domofon WYJAZDOWY. Akuvox odpowiada OK także dla
+    // przekaźnika bez podłączonego szlabanu, więc odczyt lądował jako
+    // „gate_opened=1", choć właściwa brama nie ruszyła. Bez jawnej
+    // konfiguracji NIE wysyłamy nic: reason `camera_not_linked`, głośny wpis
+    // w event_log — administrator powiąże kamerę z punktem dostępu w panelu
+    // (Urządzenia → kamera LPR → punkt dostępu / integrator → powiązania).
+    const intercomId: string | undefined = dev.config.linkedIntercomDeviceId
+    const relayIdx: number | undefined = dev.config.linkedRelayIndex
+    if (!intercomId || typeof relayIdx !== 'number') {
+      const camName = (dev.config as { name?: string }).name ?? cameraDeviceId
+      this.logger.error(
+        `LPR camera "${camName}" (${cameraDeviceId}) has NO access-point link and no explicit ` +
+        `linkedIntercomDeviceId/linkedRelayIndex — refusing to guess a relay for ${plate}`,
+      )
+      this.eventLog.error(
+        'LPR',
+        `⛔ Kamera „${camName}” nie jest powiązana z żadnym punktem dostępu — tablica ${plate} rozpoznana, brama NIE otwarta. Powiąż kamerę z punktem dostępu w panelu.`,
+        { cameraDeviceId, plate, hint: 'lpr_camera_ap_links / linkedAccessPointId / linkedIntercomDeviceId+linkedRelayIndex' },
+      )
       return this.finalizeRead(cameraDeviceId, plate, {
-        matched: true, opened: false, reason: 'no_linked_intercom', ...matchSnapshot, extra,
+        matched: true, opened: false, reason: 'camera_not_linked', ...matchSnapshot, extra,
       })
     }
 
@@ -1583,16 +1602,6 @@ export class HikvisionLprService {
     if (!d) throw new Error(`LPR camera ${id} not registered`)
     return d
   }
-
-  private firstIntercomId(): string | null {
-    // IntercomService exposes a Map via iteration — we peek at the first key.
-    // Keeps the dependency one-way (no circular import) and matches single-gate setups.
-    const ids = (this.intercom as any).devices?.keys?.()
-    if (!ids) return null
-    const first = ids.next?.()
-    return first && !first.done ? first.value as string : null
-  }
-
   /** Username for ISAPI. Hikvision default is 'admin' — use it if the config omits login. */
   private user(cfg: LprCameraConfig): string {
     return cfg.login && cfg.login.trim().length > 0 ? cfg.login : 'admin'

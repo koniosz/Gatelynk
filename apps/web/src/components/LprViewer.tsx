@@ -306,6 +306,8 @@ function SidePanel({
           <span className="text-blue-700">prawdopodobne dopasowanie (odczyt niepewny), nie otwarto</span>
         ) : read.reason === 'unconfirmed' ? (
           <span className="text-amber-600">odczyt niepotwierdzony (1 klatka / niski próg)</span>
+        ) : read.reason === 'camera_not_linked' ? (
+          <span className="text-red-700 font-medium">kamera bez powiązania z punktem dostępu — nie otwarto</span>
         ) : read.reason === 'auto_open_disabled' ? (
           <span className="text-gray-700">rozpoznana, automatyczne otwieranie wyłączone przez mieszkańca</span>
         ) : read.matched ? (

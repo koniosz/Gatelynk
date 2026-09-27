@@ -41,6 +41,8 @@ let un = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: nil,
 expect(un.tone == .neutral && un.detail == "Wynik nieznany", "brak danych o wyniku → „Wynik nieznany\", nie sukces i nie błąd")
 let ao = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "auto_open_disabled", direction: "IN")
 expect(ao.tone == .neutral && ao.title.hasPrefix("Rozpoznano") && ao.detail.contains("wyłączone"), "auto-open wyłączone → rozpoznano, bez otwarcia, neutralnie (nie błąd)")
+let cl = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "camera_not_linked", direction: "IN")
+expect(cl.tone == .negative && cl.detail.contains("nie jest powiązana"), "kamera bez powiązania z bramą → problem do zgłoszenia, nie sukces")
 let ge = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "gate_error", direction: "IN")
 expect(ge.tone == .negative, "błąd bramy → problem")
 let odd = LprEventReading.read(type: "LPR_MATCH", gateOpened: false, reason: "guest_limit_reached", direction: "IN")
