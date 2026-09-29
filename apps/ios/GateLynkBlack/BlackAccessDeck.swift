@@ -20,6 +20,8 @@ struct BlackAccessDeck: View {
     var isSuspended = false
     var fixtureImages: [Int: UIImage] = [:]
     var demoMode = false
+    /// Podgląd (Debug): wymusza stan „obraz nieaktualny" — referencja compact-offline.
+    var demoCameraOffline = false
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -31,6 +33,8 @@ struct BlackAccessDeck: View {
     @State private var accessibleTarget: AccessPoint?
     @State private var favoriteApplied = false
     @State private var appeared = false
+    /// Ręczne „Odśwież podgląd" restartuje pętlę pobierania (część `cameraTaskID`).
+    @State private var refreshTick = 0
 
     private struct CameraFrame {
         let image: UIImage
@@ -51,7 +55,7 @@ struct BlackAccessDeck: View {
     private var infoHeight: CGFloat { max(54, gateFont * 2.18) }
     private var actionHeight: CGFloat { max(48, actionFont * 3.4) }
     private var slideHeight: CGFloat { cameraHeight + infoHeight + actionHeight + 12 }
-    private var cameraTaskID: String { "\(interaction.selectedID ?? -1)|\(suspended)|\(isDemo)" }
+    private var cameraTaskID: String { "\(interaction.selectedID ?? -1)|\(suspended)|\(isDemo)|\(refreshTick)" }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -116,8 +120,19 @@ struct BlackAccessDeck: View {
             HStack(spacing: 4) {
                 ForEach(accessPoints) { ap in entranceTab(ap).frame(maxWidth: .infinity) }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) { ForEach(accessPoints) { ap in entranceTab(ap) } }
+            // Więcej wejść niż mieści szerokość (P1: >3 wejścia): selektor
+            // przewijany, a wybrany segment zawsze dosunięty do widoku — także
+            // po zmianie karty gestem.
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) { ForEach(accessPoints) { ap in entranceTab(ap).id("tab-\(ap.id)") } }
+                }
+                .onChange(of: interaction.selectedID, initial: true) { _, id in
+                    guard let id else { return }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        proxy.scrollTo("tab-\(id)", anchor: .center)
+                    }
+                }
             }
         }
         .padding(3)
@@ -199,6 +214,10 @@ struct BlackAccessDeck: View {
             let fixture = isDemo ? fixtureImages[ap.id] : nil
             let image = fixture ?? frame?.image
             let stale = frame.map { context.date.timeIntervalSince($0.receivedAt) >= 15 } ?? false
+            // Obraz jest, ale nieaktualny (kamera przestała odpowiadać) albo demo
+            // wymusza ten stan. Nakładka dotyczy WYŁĄCZNIE podglądu — sterowanie
+            // bramą pozostaje dostępne (stan kamery ≠ możliwość wysłania polecenia).
+            let offline = (isDemo && demoCameraOffline) || (image != nil && (stale || cameraFailed.contains(ap.id)))
             ZStack(alignment: .topLeading) {
                 Color(hex: 0x272D31)
                 if let image {
@@ -213,6 +232,16 @@ struct BlackAccessDeck: View {
                         if cameraFailed.contains(ap.id) || isDemo {
                             BlackIcon(name: "video-off", size: 24)
                             Text("Podgląd niedostępny")
+                            if !isDemo {
+                                Button("Odśwież podgląd") { refreshTick += 1 }
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color(hex: 0xECE7F5))
+                                    .buttonStyle(.plain)
+                                    .padding(.horizontal, 10)
+                                    .frame(minHeight: 35)
+                                    .background(Color(hex: 0x35303F), in: RoundedRectangle(cornerRadius: 7))
+                                    .accessibilityLabel("Odśwież podgląd kamery: \(ap.label)")
+                            }
                         } else {
                             ProgressView().tint(BlackTheme.accent)
                             Text("Ładowanie podglądu…")
@@ -224,8 +253,11 @@ struct BlackAccessDeck: View {
                 }
                 LinearGradient(colors: [.black.opacity(0.3), .clear, .black.opacity(0.18)], startPoint: .top, endPoint: .bottom)
                     .allowsHitTesting(false)
+                if offline {
+                    offlineOverlay(ap)
+                }
                 HStack(alignment: .top, spacing: 3) {
-                    cameraLabel(frame: frame, stale: stale)
+                    cameraLabel(frame: frame, stale: stale || offline)
                         .padding(.top, 4)
                     Spacer(minLength: 0)
                     cameraButton(name: "maximize-2", label: "Powiększ kamerę: \(ap.label)", green: false) { onCamera(ap) }
@@ -253,6 +285,39 @@ struct BlackAccessDeck: View {
             .frame(height: cameraHeight)
             .clipped()
         }
+    }
+
+    /// Makieta `.gc-offline`: przyciemnienie #11151a/80 %, ikona 24, tekst 12,
+    /// przycisk 35 pt (#35303f, obrys #bba3f7/25 %, promień 7). Przycisk tylko
+    /// odświeża podgląd — nie ma związku z poleceniem otwarcia.
+    private func offlineOverlay(_ ap: AccessPoint) -> some View {
+        VStack(spacing: 8) {
+            BlackIcon(name: "video-off", size: 24)
+                .foregroundStyle(Color(hex: 0xC3BCCF))
+            Text("Obraz nieaktualny")
+                .font(.system(size: 12))
+                .foregroundStyle(BlackTheme.text)
+            Button {
+                refreshTick += 1
+            } label: {
+                Text("Odśwież podgląd")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: 0xECE7F5))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .frame(minHeight: 35)
+                    .background(Color(hex: 0x35303F), in: RoundedRectangle(cornerRadius: 7))
+                    .overlay { RoundedRectangle(cornerRadius: 7).strokeBorder(Color(hex: 0xBBA3F7).opacity(0.25)) }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Odśwież podgląd kamery: \(ap.label)")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(hex: 0x11151A).opacity(0.8))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Obraz z kamery \(ap.label) jest nieaktualny")
     }
 
     private func cameraLabel(frame: CameraFrame?, stale: Bool) -> some View {

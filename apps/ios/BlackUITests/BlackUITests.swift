@@ -112,4 +112,47 @@ final class BlackUITests: XCTestCase {
         app.buttons["Wybierz wejście: Wjazd"].tap()
         expectValue(idle, on: app.buttons["Otwórz: Wjazd"])
     }
+
+    // MARK: Warianty podglądu (2026-09-30) — stany P1 z raportu weryfikacji
+
+    @MainActor
+    private func launchPreview(variant: String) -> XCUIApplication {
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "com.gatelynk.app.black")
+        app.launchArguments = ["-black-design-preview", "-black-preview-variant", variant]
+        app.launch()
+        return app
+    }
+
+    /// Kamera offline to stan PODGLĄDU: nakładka „Obraz nieaktualny" z akcją
+    /// odświeżenia nie blokuje świadomego otwarcia i nie zmienia wyniku polecenia.
+    @MainActor
+    func testOfflineCameraOverlayDoesNotBlockDeliberateOpen() {
+        let app = launchPreview(variant: "camera-offline")
+        XCTAssertTrue(app.staticTexts["Obraz nieaktualny"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Odśwież podgląd kamery: Wjazd"].exists)
+        let open = app.buttons["Otwórz: Wjazd"]
+        expectValue(idle, on: open)
+        open.press(forDuration: 2.2)
+        expectValue(accepted, on: open)
+        XCTAssertTrue(app.staticTexts["Obraz nieaktualny"].exists, "wynik polecenia nie „naprawia” stanu kamery")
+        attach("Offline camera — command accepted independently", app: app)
+    }
+
+    /// Więcej niż trzy wejścia: selektor się przewija, wybrany segment jest
+    /// dosuwany do widoku, a karta i sterowanie należą do wybranego wejścia.
+    @MainActor
+    func testMoreThanThreeEntrancesKeepSelectorAndCardInSync() {
+        let app = launchPreview(variant: "many-gates")
+        XCTAssertTrue(app.buttons["Wybierz wejście: Wjazd"].waitForExistence(timeout: 10))
+        app.buttons["Wybierz wejście: Furtka od ul. Niewinnej"].tap()
+        expectValue(idle, on: app.buttons["Otwórz: Furtka od ul. Niewinnej"])
+        let last = app.buttons["Wybierz wejście: Garaż podziemny"]
+        XCTAssertTrue(last.waitForExistence(timeout: 4))
+        last.tap()
+        expectValue(idle, on: app.buttons["Otwórz: Garaż podziemny"])
+        // Karty spoza wyboru są ukryte dla dostępności — sterowanie należy tylko do wybranego wejścia.
+        XCTAssertFalse(app.buttons["Otwórz: Wjazd"].exists)
+        attach("Five entrances — last selected", app: app)
+    }
 }

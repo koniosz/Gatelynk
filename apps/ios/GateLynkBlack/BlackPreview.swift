@@ -5,6 +5,19 @@ import SwiftUI
 /// push, contacts APIClient or supplies production identifiers to an action.
 enum BlackPreviewMode {
     static var enabled: Bool { ProcessInfo.processInfo.arguments.contains("-black-design-preview") }
+
+    /// Warianty do kontroli wizualnej stanów P1 (2026-09-30) — argument
+    /// `-black-preview-variant <nazwa>`. Bez argumentu: dotychczasowy podgląd,
+    /// z którego korzystają testy UI.
+    ///   many-gates      pięć wejść (w tym długa nazwa) — selektor przewijany
+    ///   long-names      długa nazwa nieruchomości i długie imię
+    ///   empty           brak wejść, brak paczki, brak modułów kontekstowych
+    ///   camera-offline  nakładka „Obraz nieaktualny" (referencja compact-offline)
+    static var variant: String {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-black-preview-variant"), i + 1 < args.count else { return "default" }
+        return args[i + 1]
+    }
 }
 
 struct BlackPreview: View {
@@ -12,11 +25,24 @@ struct BlackPreview: View {
     @State private var tab: GlassHomeTab = .home
     @State private var panel: String?
     @State private var confirmFire = false
-    private let points: [AccessPoint] = [
-        AccessPoint(id: -101, label: "Wjazd", icon: "gate", deviceId: "design-preview", relayIndex: 0, sortOrder: 0, category: "MAIN_ENTRY", unitId: nil),
-        AccessPoint(id: -102, label: "Wyjazd", icon: "gate", deviceId: "design-preview", relayIndex: 0, sortOrder: 1, category: "EXIT", unitId: nil),
-        AccessPoint(id: -103, label: "Brama pożarowa", icon: "flame", deviceId: "design-preview", relayIndex: 0, sortOrder: 2, category: "FIRE_ESCAPE", unitId: nil)
-    ]
+    private let variant = BlackPreviewMode.variant
+    private var points: [AccessPoint] {
+        let base = [
+            AccessPoint(id: -101, label: "Wjazd", icon: "gate", deviceId: "design-preview", relayIndex: 0, sortOrder: 0, category: "MAIN_ENTRY", unitId: nil),
+            AccessPoint(id: -102, label: "Wyjazd", icon: "gate", deviceId: "design-preview", relayIndex: 0, sortOrder: 1, category: "EXIT", unitId: nil),
+            AccessPoint(id: -103, label: "Brama pożarowa", icon: "flame", deviceId: "design-preview", relayIndex: 0, sortOrder: 2, category: "FIRE_ESCAPE", unitId: nil)
+        ]
+        switch variant {
+        case "empty": return []
+        case "many-gates": return base + [
+            AccessPoint(id: -104, label: "Furtka od ul. Niewinnej", icon: "door", deviceId: "design-preview", relayIndex: 0, sortOrder: 3, category: "PEDESTRIAN", unitId: nil),
+            AccessPoint(id: -105, label: "Garaż podziemny", icon: "gate", deviceId: "design-preview", relayIndex: 0, sortOrder: 4, category: "GARAGE", unitId: nil)
+        ]
+        default: return base
+        }
+    }
+    private var propertyName: String { variant == "long-names" ? "Osiedle Villa Natura Etap II — Niewinna 4" : "Osiedle VN" }
+    private var greeting: String { variant == "long-names" ? "Cześć, Konstantyna-Aleksandra" : "Cześć, Konrad" }
     private var pictures: [Int: UIImage] {
         var output: [Int: UIImage] = [:]
         for (id, name) in [(-101, "BlackPreviewEntrance"), (-102, "BlackPreviewExit"), (-103, "BlackPreviewFire")] {
@@ -45,14 +71,17 @@ struct BlackPreview: View {
                                 onIntercom: { panel = "Domofon · \($0.label)" },
                                 cameraHeight: BlackTheme.cameraHeight(for: geometry.size.height),
                                 isSuspended: panel != nil || confirmFire,
-                                fixtureImages: pictures, demoMode: true
+                                fixtureImages: pictures, demoMode: true,
+                                demoCameraOffline: variant == "camera-offline"
                             )
                         }
                         if tab == .home {
                             BlackShortcutGrid(modules: BlackModule.allCases) { panel = $0.title }
                                 .padding(.top, 7)
                                 .padding(.bottom, 12)
-                            BlackContextNotice(title: "Paczka czeka w recepcji", detail: "Odbierz dzisiaj do 20:00") { panel = "Przesyłki" }
+                            if variant != "empty" {
+                                BlackContextNotice(title: "Paczka czeka w recepcji", detail: "Odbierz dzisiaj do 20:00") { panel = "Przesyłki" }
+                            }
                             BlackAssistantLink { panel = "Asystent GateLynk" }
                         } else if tab != .access {
                             BlackContextNotice(title: tab.title, detail: "Podgląd wyglądu · dane przykładowe", icon: "info") { panel = tab.title }
@@ -62,7 +91,7 @@ struct BlackPreview: View {
                     .padding(.horizontal, 18)
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    BlackHomeHeader(propertyName: "Osiedle VN", title: "Cześć, Konrad", compact: geometry.size.height < 750,
+                    BlackHomeHeader(propertyName: propertyName, title: greeting, compact: geometry.size.height < 750,
                                     onProperty: { panel = "Nieruchomość" }, onAccount: { panel = "Konto" })
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) { BlackTabBar(selection: $tab) }
