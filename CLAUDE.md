@@ -2192,3 +2192,25 @@ fallback RTSP przez ffmpeg (`live/ch00_0`, 704×576, ~1.8 s, memo 2 s), a
 `pipeVideoStream` po sondzie przełącza stream na ffmpeg (flaga per IP,
 TTL 10 min). Objaw w logu: `Akuvox <ip>: snapshot ucięty przez firmware`.
 Test: `jpeg.util.spec.ts` (node:test, kompilacja standalone jak exit-grace).
+
+## LPR (edge-ocr): decyzja w trakcie serii klatek + wyzwalacz ruchem (2026-09-29)
+
+Pomiar VN (7 dni): od zdarzenia kamery do decyzji ~3,7 s (5 klatek co 500 ms +
+wspólny OCR), a w 52 % przejazdów tablica czytelna tylko na 2/5 klatek; dla aut
+z rejestru 30–50 % przejazdów kończyło się `probable_match` (bez otwarcia).
+Zmiana w `lpr-alertstream.service.ts` + czysty `lpr-pass.ts` (`PassAccumulator`,
+testy node:test):
+- klatki bez przerw (~4–5/s, ISAPI picture ~200 ms), OCR każdej od razu
+  (≤2 równolegle), głosowanie po każdej klatce; pisownie różniące się znakami
+  mylonymi przez OCR (O/0, I/1, S/5, Z/2, B/8) scalają się w jeden głos;
+- WCZESNE OTWARCIE: jedna tablica z rejestru kamery (`resolveWhitelistPlate`:
+  ścisłe → OCR-fuzzy) z ≥2 zgodnymi klatkami (pewność ≥0.4) albo 1 klatką
+  ≥0.85 → `handleAnprEvent` natychmiast; dwie różne tablice z rejestru = czekaj;
+- bez decyzji: okno 3,5 s / 14 klatek, potem dawne reguły (≥2 klatki, ≥0.55,
+  inaczej odczyt niepotwierdzony po 8 s);
+- debounce 8 s TYLKO po serii z decyzją; po serii bez decyzji kolejne zdarzenie
+  kamery (co ~1 s) startuje nową serię po 300 ms (4 nieudane z rzędu → 8 s ciszy);
+- `VMD` (ruch) z alertStream jako wczesny wyzwalacz (min. odstęp 2,5 s), obok
+  `vehicledetection`; w logu: „decyzja po N ms od zdarzenia [motion|vehicle]".
+Weryfikacja po deployu: `grep "decyzja po" edge.log` — oczekiwane setki ms,
+nie tysiące; udział `probable_match` dla tablic z rejestru powinien spaść.

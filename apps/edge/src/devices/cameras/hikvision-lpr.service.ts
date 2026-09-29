@@ -1811,6 +1811,18 @@ export class HikvisionLprService {
    * wariant nie match-uje. Maksymalnie 32 lookupów do sqlite — tanio
    * (indeksowane `lpr_plates_plate_idx`).
    */
+  /**
+   * 2026-09-29 — dla decyzji W TRAKCIE serii klatek (alertStream): tablica z
+   * rejestru tej kamery (ścisłe → OCR-fuzzy) albo null. Respektuje okna
+   * ważności (goście) przez `lprMatchPlate`.
+   */
+  resolveWhitelistPlate(cameraDeviceId: string, rawPlate: string): string | null {
+    const plate = this.normalizePlate(rawPlate)
+    if (!plate) return null
+    if (this.store.lprMatchPlate(cameraDeviceId, plate)) return plate
+    return this.tryOcrFuzzyMatch(cameraDeviceId, plate)?.plate ?? null
+  }
+
   private tryOcrFuzzyMatch(
     cameraDeviceId: string,
     plate: string,

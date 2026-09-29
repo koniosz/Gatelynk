@@ -6,7 +6,8 @@ import * as http from 'http'
 import * as os from 'os'
 import * as path from 'path'
 import { requestWithDigest } from '../http-digest'
-import { matchPlates, voteAcrossFrames } from './plate-matcher'
+import { matchPlates } from './plate-matcher'
+import { PassAccumulator, type PassCandidate } from './lpr-pass'
 import { matchBrand } from './brand-matcher'
 import * as nativeOcr from './native-ocr'
 import { HikvisionLprService } from './hikvision-lpr.service'
@@ -50,22 +51,34 @@ interface StreamState {
   lastDataAt: number
   /** Kiedy zaplanowano ostatni retry — watchdog nie dubluje żywego retry. */
   retryAt: number
+  /** Ostatnia seria zakończona DECYZJĄ (otwarcie / wpis) — po niej 8 s ciszy. */
+  lastDecisionAt: number
+  /** Koniec ostatniej serii (dowolny wynik). */
+  lastPassEndAt: number
+  /** Start ostatniej serii wyzwolonej ruchem (VMD) — ruch bez auta nie może mielić OCR bez końca. */
+  lastMotionPassAt: number
+  /** Kolejne serie bez decyzji — po kilku wymuszamy ciszę (auto stoi w polu bez czytelnej tablicy). */
+  failStreak: number
 }
 
 /**
- * Ile klatek na jeden przejazd.
- *
- * Tablica jest czytelna tylko przez moment: przy podjeździe auto najpierw
- * jest za daleko, a chwilę później za blisko (maska wypełnia kadr, tablica
- * wypada poza obiektyw — widać to na materiale z VN). Seria musi objąć to
- * wąskie okno, więc rozciągamy ją na ~2,5 s zamiast 1 s.
- *
- * Koszt jest niewielki: odczyt jednej klatki to ~110 ms na akceleratorze,
- * a serię i tak przetwarzamy po przejeździe, nie w czasie rzeczywistym.
+ * Seria klatek (2026-09-29): klatki lecą BEZ przerw (pobranie z kamery trwa
+ * ~200 ms, więc ~4–5 klatek/s), każda jest czytana od razu po pobraniu,
+ * a decyzja zapada w trakcie — patrz `lpr-pass.ts`. Dawniej: 5 klatek co 500 ms
+ * i wspólny OCR na końcu = ~3,7 s do decyzji, a tablica czytelna tylko na 2 z 5.
  */
-const FRAMES_PER_PASS = 5
-/** Odstęp między klatkami: auto ma się przesunąć, ale nie zdążyć wyjechać z kadru. */
-const FRAME_INTERVAL_MS = 500
+const MAX_PASS_MS = 3_500
+const MAX_FRAMES_PER_PASS = 14
+/** Minimalna przerwa między pobraniami — auto ma się przesunąć choć trochę. */
+const MIN_FRAME_GAP_MS = 60
+/** Ile klatek może być czytanych równolegle (ANE + spawn procesu). */
+const MAX_OCR_IN_FLIGHT = 2
+/** Po serii bez decyzji kolejne zdarzenie może zacząć nową serię już po tej przerwie. */
+const RETRY_GAP_MS = 300
+/** Serie z ruchu (VMD, przed „vehicledetection") nie częściej niż co tyle. */
+const MOTION_PASS_MIN_GAP_MS = 2_500
+/** Tyle serii bez decyzji z rzędu → 8 s ciszy (auto stoi w polu, tablicy nie widać). */
+const MAX_FAIL_STREAK = 4
 /**
  * Jedno auto wyzwala serię zdarzeń (kamera raportuje je co ~sekundę, dopóki
  * pojazd jest w polu). Bez tego progu OCR-owalibyśmy ten sam samochód
@@ -102,6 +115,8 @@ type LprHost = {
     plate: string,
     extra: Record<string, any>,
   ): Promise<any>
+  /** 2026-09-29 — tablica z rejestru kamery (ścisłe/OCR-fuzzy) dla decyzji w trakcie serii. */
+  resolveWhitelistPlate?(cameraDeviceId: string, plate: string): string | null
 }
 
 /**
@@ -145,6 +160,7 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
     this.streams.set(cameraDeviceId, {
       stopped: false, retryMs: RETRY_MIN_MS, lastEventAt: 0, busy: false,
       lastDataAt: Date.now(), retryAt: 0,
+      lastDecisionAt: 0, lastPassEndAt: 0, lastMotionPassAt: 0, failStreak: 0,
     })
     this.connect(cameraDeviceId)
   }
@@ -294,60 +310,163 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
   private onEventBlock(cameraDeviceId: string, block: string) {
     const type = block.match(/<eventType>([^<]*)</i)?.[1]?.toLowerCase()
     const state = block.match(/<eventState>([^<]*)</i)?.[1]?.toLowerCase()
-    if (type !== 'vehicledetection' || state !== 'active') return
+    if (state !== 'active') return
+    // 2026-09-29: RUCH (VMD) jako wczesny wyzwalacz. Kamera zgłasza
+    // „vehicledetection" dopiero, gdy auto wjedzie w jej strefę ANPR — na VN
+    // tablica bywała czytelna ~3 s wcześniej (widział ją próbkujący VisionDetect).
+    // Detekcja ruchu jest włączona na kamerach wjazd/wyjazd; jeśli kamera nie
+    // wysyła VMD w alertStream, nic się nie zmienia.
+    const trigger = type === 'vehicledetection' ? 'vehicle' : type === 'vmd' ? 'motion' : null
+    if (!trigger) return
 
     const st = this.streams.get(cameraDeviceId)
     if (!st || st.busy) return
     const now = Date.now()
-    if (now - st.lastEventAt < PASS_DEBOUNCE_MS) return
+    // Po serii ZAKOŃCZONEJ DECYZJĄ (otwarcie/wpis) — 8 s ciszy, jak dotąd
+    // (kamera raportuje to samo auto co ~1 s). Po serii BEZ decyzji — krótka
+    // przerwa i kolejna próba: auto podjeżdża, tablica robi się czytelna.
+    if (now - st.lastDecisionAt < PASS_DEBOUNCE_MS) return
+    if (now - st.lastPassEndAt < RETRY_GAP_MS) return
+    if (trigger === 'motion' && now - st.lastMotionPassAt < MOTION_PASS_MIN_GAP_MS) return
     st.lastEventAt = now
+    if (trigger === 'motion') st.lastMotionPassAt = now
     st.busy = true
 
-    void this.readPlateForPass(cameraDeviceId)
-      .catch((e) => this.logger.warn(`[${cameraDeviceId}] odczyt tablicy nieudany: ${e?.message ?? e}`))
+    void this.readPlateForPass(cameraDeviceId, trigger)
+      .then((outcome) => {
+        st.lastPassEndAt = Date.now()
+        if (outcome === 'decided') {
+          st.lastDecisionAt = Date.now()
+          st.failStreak = 0
+        } else if (++st.failStreak >= MAX_FAIL_STREAK) {
+          st.lastDecisionAt = Date.now()   // cisza, jak po decyzji
+          st.failStreak = 0
+        }
+      })
+      .catch((e) => {
+        st.lastPassEndAt = Date.now()
+        this.logger.warn(`[${cameraDeviceId}] odczyt tablicy nieudany: ${e?.message ?? e}`)
+      })
       .finally(() => { st.busy = false })
   }
 
-  /** Pobiera klatki, czyta tablicę i oddaje wynik do zwykłej ścieżki LPR. */
-  private async readPlateForPass(cameraDeviceId: string) {
+  /**
+   * Seria klatek z decyzją W TRAKCIE (2026-09-29).
+   *
+   * Pętla: pobierz klatkę → od razu OCR (równolegle z pobieraniem następnej)
+   * → dołóż głosy → jeśli JEDNA tablica z rejestru ma już dwie zgodne klatki
+   * (albo jedną bardzo pewną) → otwieraj natychmiast, nie czekając na resztę.
+   * Bez decyzji do końca okna → dawne reguły (≥2 zgodne klatki i próg pewności
+   * → wpis; inaczej odczyt niepotwierdzony po 8 s).
+   *
+   * Zwraca 'decided' (otwarcie lub wpis do historii) albo 'none' — od tego
+   * zależy, czy kolejne zdarzenie kamery może od razu zacząć nową serię.
+   */
+  private async readPlateForPass(
+    cameraDeviceId: string,
+    trigger: 'vehicle' | 'motion',
+  ): Promise<'decided' | 'none'> {
     if (!nativeOcr.isAvailable()) {
       this.logger.warn(
         `[${cameraDeviceId}] brak natywnego czytnika OCR — zbuduj: ` +
         `swiftc -O -o native/gatelynk-ocr native/gatelynk-ocr.swift`,
       )
-      return
+      return 'none'
     }
 
-    const frames = await this.grabFrames(cameraDeviceId, FRAMES_PER_PASS)
-    if (!frames.length) {
-      this.logger.debug(`[${cameraDeviceId}] pojazd wykryty, ale nie udało się pobrać klatek`)
-      return
-    }
-
+    const t0 = Date.now()
+    const acc = new PassAccumulator()
+    const resolve = (p: string) => this.host?.resolveWhitelistPlate?.(cameraDeviceId, p) ?? null
+    const frames: Buffer[] = []
+    const perFrame: PassCandidate[][] = []
+    const perFrameText: Array<Array<[string, number]>> = []
     const tmpFiles: string[] = []
+    const inFlight = new Set<Promise<void>>()
+    let ocrMs = 0
+    let engine = 'apple-vision'
+    let decision: ReturnType<PassAccumulator['earlyDecision']> = null
+    let decidedAtFrame = -1
+    let fetchFails = 0
+
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'gatelynk-anpr-'))
     try {
-      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'gatelynk-anpr-'))
-      for (const buf of frames) {
-        const f = path.join(dir, `${randomBytes(4).toString('hex')}.jpg`)
-        await fs.writeFile(f, buf)
-        tmpFiles.push(f)
+      const deadline = t0 + MAX_PASS_MS
+      while (!decision && frames.length < MAX_FRAMES_PER_PASS && Date.now() < deadline) {
+        const fetchedAt = Date.now()
+        const buf = await this.grabFrame(cameraDeviceId)
+        if (!buf) {
+          if (++fetchFails >= 3 && frames.length === 0) break
+          await new Promise((r) => setTimeout(r, 200))
+          continue
+        }
+        const idx = frames.length
+        frames.push(buf)
+        const file = path.join(dir, `${idx}-${randomBytes(3).toString('hex')}.jpg`)
+        await fs.writeFile(file, buf)
+        tmpFiles.push(file)
+
+        const task = nativeOcr.readText([file], 6_000).then((ocr) => {
+          ocrMs += ocr.ms
+          engine = ocr.engine
+          perFrameText[idx] = ocr.perFile[0] ?? []
+          const cands = matchPlates(perFrameText[idx])
+          perFrame[idx] = cands
+          acc.add(idx, cands, resolve)
+          if (!decision) {
+            decision = acc.earlyDecision()
+            if (decision) decidedAtFrame = idx
+          }
+        }).finally(() => { inFlight.delete(task) })
+        inFlight.add(task)
+        // Nie więcej niż 2 odczyty naraz — kolejna klatka czeka na wolny slot.
+        if (inFlight.size >= MAX_OCR_IN_FLIGHT) await Promise.race(inFlight)
+
+        const gap = MIN_FRAME_GAP_MS - (Date.now() - fetchedAt)
+        if (gap > 0 && !decision) await new Promise((r) => setTimeout(r, gap))
+      }
+      await Promise.all(inFlight)
+      if (!decision) {
+        decision = acc.earlyDecision()
+        if (decision) decidedAtFrame = frames.length - 1
       }
 
-      const ocr = await nativeOcr.readText(tmpFiles)
-      const perFrame = ocr.perFile.map((pairs) => matchPlates(pairs))
-      const { best, agreedFrames, candidates } = voteAcrossFrames(perFrame)
+      if (!frames.length) {
+        this.logger.debug(`[${cameraDeviceId}] pojazd wykryty, ale nie udało się pobrać klatek`)
+        return 'none'
+      }
 
-      // Marka z burty (DPD, InPost, Frisco…) — z TEGO SAMEGO tekstu OCR, więc
-      // bez dodatkowego kosztu. Napis firmowy jest wielokrotnie większy niż
-      // tablica, więc bywa czytelny nawet wtedy, gdy tablicy nie da się odczytać.
-      // Marka z NAJLEPSZEJ klatki, czytanej kafelkowo. Zwykły przebieg po całym
-      // kadrze gubi logo kuriera: pomiar na obiekcie VN (2026-08-09, DPD) —
-      // „dpd" na masce było wyraźnie widoczne, a mimo to nieodczytane, dopóki
-      // nie podzieliliśmy kadru na kafelki. Robimy to RAZ na przejazd, nie na
-      // każdej z pięciu klatek, żeby nie mnożyć kosztu.
-      let brand = matchBrand(ocr.perFile.flat())
-      if (!brand && tmpFiles.length) {
-        const bestIdx = best ? this.bestFrameFor(best.plate, perFrame, frames.length) : 0
+      // Marka z burty (DPD, InPost, Frisco…) — z TEGO SAMEGO tekstu OCR, bez
+      // dodatkowego kosztu. Kosztowny przebieg kafelkowy TYLKO, gdy nie ma
+      // otwarcia z rejestru (kurierzy nie są w rejestrze) — nie opóźnia bramy.
+      let brand = matchBrand(perFrameText.flat())
+      const elapsed = () => Date.now() - t0
+
+      if (decision) {
+        const bestIdx = this.bestFrameFor(decision.plate, perFrame, frames.length, resolve)
+        this.logger.log(
+          `[${cameraDeviceId}] 🚗 tablica ${decision.plate} ` +
+          `(pewność ${decision.confidence.toFixed(2)}, zgodnych klatek ${decision.frames}/${frames.length}, ` +
+          `decyzja po ${elapsed()} ms od zdarzenia [${trigger}], klatka ${decidedAtFrame + 1}, OCR ${ocrMs} ms)`,
+        )
+        this.cancelUncertain(cameraDeviceId)
+        await this.host?.handleAnprEvent(cameraDeviceId, decision.plate, {
+          confidence: decision.confidence,
+          image: frames[bestIdx],
+          vehicleBrand: brand?.brand,
+          source: 'edge-ocr',
+          ocrEngine: engine,
+          agreedFrames: decision.frames,
+          candidates: acc.final().candidates.map((c) => `${c.plate}:${c.confidence.toFixed(2)}`),
+          trigger,
+          decisionMs: elapsed(),
+          framesTotal: frames.length,
+        })
+        return 'decided'
+      }
+
+      const { best, agreedFrames, candidates } = acc.final()
+      if (!brand && best && tmpFiles.length) {
+        const bestIdx = this.bestFrameFor(best.plate, perFrame, frames.length, resolve)
         const tiled = await nativeOcr.readText([tmpFiles[bestIdx]], 20_000, { tiles: true })
         brand = matchBrand(tiled.perFile.flat())
       }
@@ -359,56 +478,52 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (!best) {
-        this.logger.debug(`[${cameraDeviceId}] pojazd wykryty, tablicy nie odczytano (${ocr.ms} ms)`)
-        return
+        this.logger.debug(`[${cameraDeviceId}] pojazd wykryty [${trigger}], tablicy nie odczytano (${frames.length} klatek, ${elapsed()} ms)`)
+        return 'none'
       }
 
+      const image = frames[this.bestFrameFor(best.plate, perFrame, frames.length, resolve)]
       // 2026-09-15: odczyty niepotwierdzone NIE giną — po 8 s trafiają do
       // `handleUncertainRead` (rejestr: dopasowanie łagodne → „prawdopodobny",
       // inaczej wpis „niepotwierdzony"). Bramy to nie otwiera.
       if (agreedFrames < MIN_AGREED_FRAMES) {
         this.logger.log(
           `[${cameraDeviceId}] odczyt z jednej klatki: ${best.plate} ` +
-          `(pewność ${best.confidence.toFixed(2)}) — za mało potwierdzeń, wstrzymany jako niepotwierdzony`,
+          `(pewność ${best.confidence.toFixed(2)}, ${frames.length} klatek, ${elapsed()} ms) — za mało potwierdzeń, wstrzymany jako niepotwierdzony`,
         )
-        this.scheduleUncertain(cameraDeviceId, best, agreedFrames, candidates, {
-          image: frames[this.bestFrameFor(best.plate, perFrame, frames.length)],
-          vehicleBrand: brand?.brand,
-        })
-        return
+        this.scheduleUncertain(cameraDeviceId, best, agreedFrames, candidates, { image, vehicleBrand: brand?.brand })
+        return 'none'
       }
-
       if (best.confidence < MIN_CONFIDENCE) {
         this.logger.log(
           `[${cameraDeviceId}] odczyt poniżej progu: ${best.plate} ` +
           `(pewność ${best.confidence.toFixed(2)}, ${agreedFrames}/${frames.length} klatek) — wstrzymany jako niepotwierdzony`,
         )
-        this.scheduleUncertain(cameraDeviceId, best, agreedFrames, candidates, {
-          image: frames[this.bestFrameFor(best.plate, perFrame, frames.length)],
-          vehicleBrand: brand?.brand,
-        })
-        return
+        this.scheduleUncertain(cameraDeviceId, best, agreedFrames, candidates, { image, vehicleBrand: brand?.brand })
+        return 'none'
       }
 
       this.logger.log(
         `[${cameraDeviceId}] 🚗 tablica ${best.plate} ` +
-        `(pewność ${best.confidence.toFixed(2)}, zgodnych klatek ${agreedFrames}/${frames.length}, ${ocr.ms} ms)`,
+        `(pewność ${best.confidence.toFixed(2)}, zgodnych klatek ${agreedFrames}/${frames.length}, ${elapsed()} ms, OCR ${ocrMs} ms)`,
       )
-
-      // Pewny odczyt unieważnia wstrzymany niepotwierdzony z tej kamery.
       this.cancelUncertain(cameraDeviceId)
-
       await this.host?.handleAnprEvent(cameraDeviceId, best.plate, {
         confidence: best.confidence,
-        image: frames[this.bestFrameFor(best.plate, perFrame, frames.length)],
+        image,
         vehicleBrand: brand?.brand,
         source: 'edge-ocr',
-        ocrEngine: ocr.engine,
+        ocrEngine: engine,
         agreedFrames,
         candidates: candidates.map((c) => `${c.plate}:${c.confidence.toFixed(2)}`),
+        trigger,
+        decisionMs: elapsed(),
+        framesTotal: frames.length,
       })
+      return 'decided'
     } finally {
       await Promise.all(tmpFiles.map((f) => fs.unlink(f).catch(() => {})))
+      await fs.rmdir(dir).catch(() => {})
     }
   }
 
@@ -461,11 +576,13 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
     plate: string,
     perFrame: Array<Array<{ plate: string; confidence: number }>>,
     frameCount: number,
+    resolve?: (p: string) => string | null,
   ): number {
     let bestIdx = -1
     let bestConf = -1
     perFrame.forEach((candidates, idx) => {
-      const hit = candidates.find((c) => c.plate === plate)
+      if (!candidates) return
+      const hit = candidates.find((c) => c.plate === plate || (resolve && resolve(c.plate) === plate))
       if (hit && hit.confidence > bestConf) {
         bestConf = hit.confidence
         bestIdx = idx
@@ -476,37 +593,29 @@ export class LprAlertStreamService implements OnModuleInit, OnModuleDestroy {
     return bestIdx >= 0 ? bestIdx : Math.max(0, frameCount - 1)
   }
 
-  /** Kilka zrzutów pod rząd — materiał do głosowania między klatkami. */
-  private async grabFrames(cameraDeviceId: string, count: number): Promise<Buffer[]> {
+  /** Jeden zrzut z kamery (ISAPI picture, ~200 ms) — materiał do serii. */
+  private async grabFrame(cameraDeviceId: string): Promise<Buffer | null> {
     const cfg = this.host?.getConfig(cameraDeviceId)
-    if (!cfg) return []
+    if (!cfg) return null
     const port = cfg.httpPort ? `:${cfg.httpPort}` : ''
     const user = cfg.rtspLogin ?? cfg.login ?? 'admin'
     const urls = [
       `http://${cfg.ipAddress}${port}/ISAPI/Streaming/channels/101/picture`,
       `http://${cfg.ipAddress}${port}/ISAPI/Streaming/channels/1/picture`,
     ]
-
-    const out: Buffer[] = []
-    for (let i = 0; i < count; i++) {
-      for (const url of urls) {
-        try {
-          const res = await requestWithDigest('GET', url, user, cfg.password, {
-            responseType: 'arraybuffer',
-            timeout: 4000,
-            validateStatus: (s: number) => s === 200,
-          })
-          const buf = Buffer.from(res.data as ArrayBuffer)
-          // Sanity: prawdziwy JPEG i sensowny rozmiar (odsiewa strony błędów).
-          if (buf.length > 5_000 && buf[0] === 0xff && buf[1] === 0xd8) {
-            out.push(buf)
-            break
-          }
-        } catch { /* następny URL / następna klatka */ }
-      }
-      if (i < count - 1) await new Promise((r) => setTimeout(r, FRAME_INTERVAL_MS))
+    for (const url of urls) {
+      try {
+        const res = await requestWithDigest('GET', url, user, cfg.password, {
+          responseType: 'arraybuffer',
+          timeout: 3000,
+          validateStatus: (s: number) => s === 200,
+        })
+        const buf = Buffer.from(res.data as ArrayBuffer)
+        // Sanity: prawdziwy JPEG i sensowny rozmiar (odsiewa strony błędów).
+        if (buf.length > 5_000 && buf[0] === 0xff && buf[1] === 0xd8) return buf
+      } catch { /* następny URL */ }
     }
-    return out
+    return null
   }
 
   // ── Digest dla długożyjącego strumienia ─────────────────────────────────
