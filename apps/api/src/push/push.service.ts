@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { sanitizePushText, pushThreadId } from './push-text'
 
 // apn is loaded dynamically so the app starts even without the package installed
 // Install with: npm install apn && npm install --save-dev @types/apn
@@ -350,16 +351,24 @@ export class PushService {
     note.expiry = Math.floor(Date.now() / 1000) + 3600 // 1h TTL
     note.badge = 1
     note.sound = 'default'
+    // 2026-09-29: jeden punkt wyjścia wszystkich pushy — bez emoji/piktogramów
+    // (także z tekstów AI), spójna typografia. Patrz `push-text.ts`.
+    const cleanTitle = sanitizePushText(title)
+    const cleanBody = sanitizePushText(body)
+    const cleanBuilding = sanitizePushText(buildingName)
     // Layout APNs alert na lock screenie iOS:
     //   GateLynk           ← app name (auto)
     //   Villa Natura       ← title       (nazwa budynku)
-    //   🔔 Awaria windy    ← subtitle    (oryginalny title z call-site)
+    //   Awaria windy       ← subtitle    (oryginalny title z call-site)
     //   Wymagana wymiana…  ← body
     // Jeśli buildingName jest pusty (edge case — np. budynek bez nazwy),
     // wracamy do prostego layoutu title+body żeby nie pokazać pustej linii.
-    note.alert = buildingName
-      ? { title: buildingName, subtitle: title, body }
-      : { title, body }
+    note.alert = cleanBuilding
+      ? { title: cleanBuilding, subtitle: cleanTitle, body: cleanBody }
+      : { title: cleanTitle, body: cleanBody }
+    // Grupowanie na iOS per rodzaj zdarzenia (pojazdy / goście / przesyłki…).
+    const threadId = pushThreadId(data)
+    if (threadId) note.threadId = threadId
     note.topic = topic
     if (data) note.payload = data
     // Zdjęcie w powiadomieniu (2026-08-12): mutable-content budzi

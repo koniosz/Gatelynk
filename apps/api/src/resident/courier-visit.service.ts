@@ -216,7 +216,7 @@ export class CourierVisitService {
 
   private async broadcastNewVisit(visit: CourierVisitRow, mac?: string) {
     const title = 'Kurier przy bramie'
-    const body = `Kod ${visit.code}${visit.courierBrand ? ` (${visit.courierBrand})` : ''} — wpuscic?`
+    const body = `Kurier${visit.courierBrand ? ` ${visit.courierBrand}` : ''} podał kod ${visit.code}. Czy wpuścić?`
     // PushService.sendToBuilding wysyla do wszystkich rezydentow w budynku.
     // iOS Notification category 'COURIER_VISIT' przekazany w data.category
     // (klient iOS odczyta i pokaze przyciski 'Wpusc'/'Nie znam' — Faza d iOS).

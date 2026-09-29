@@ -301,7 +301,7 @@ export class ConciergeService {
         data: { buildingId, residentId: dto.residentId, title: dto.title, body: dto.body },
         include: { resident: true },
       })
-      this.push.sendToResident(dto.residentId, `🔔 ${dto.title}`, dto.body, { type: 'notification' })
+      this.push.sendToResident(dto.residentId, dto.title, dto.body, { type: 'notification' })
         .catch(() => {/* fire-and-forget */})
       return notification
     }
@@ -313,7 +313,7 @@ export class ConciergeService {
         }),
       ),
     )
-    this.push.sendToBuilding(buildingId, `🔔 ${dto.title}`, dto.body, { type: 'notification' })
+    this.push.sendToBuilding(buildingId, dto.title, dto.body, { type: 'notification' })
       .catch(() => {/* fire-and-forget */})
     return { sent: notifications.length, notifications }
   }
@@ -369,8 +369,8 @@ export class ConciergeService {
     })
 
     const courierLabel = { DHL: 'DHL', INPOST: 'InPost', ALLEGRO: 'Allegro', OTHER: 'Inne' }[dto.courier.toUpperCase()] ?? dto.courier
-    const notifTitle = '📦 Nowa przesyłka w depozycie'
-    const notifBody = `Przesyłka od kuriera ${courierLabel} (${dto.trackingNumber}) dla lokalu ${unit.number} oczekuje na odbiór w lobby.`
+    const notifTitle = 'Nowa przesyłka'
+    const notifBody = `Przesyłka ${courierLabel} (${dto.trackingNumber}) dla lokalu ${unit.number} czeka na odbiór w recepcji.`
 
     await Promise.all(
       unitResidents.map(async (ur) => {
@@ -415,8 +415,8 @@ export class ConciergeService {
     })
 
     const courierLabel = { DHL: 'DHL', INPOST: 'InPost', ALLEGRO: 'Allegro', OTHER: 'Inne' }[parcel.courier] ?? parcel.courier
-    const notifTitle = '✅ Przesyłka wydana'
-    const notifBody = `Przesyłka od kuriera ${courierLabel} (${parcel.trackingNumber}) dla lokalu ${parcel.unit.number} została wydana.`
+    const notifTitle = 'Przesyłka wydana'
+    const notifBody = `Przesyłka ${courierLabel} (${parcel.trackingNumber}) dla lokalu ${parcel.unit.number} została wydana.`
 
     await Promise.all(
       unitResidents.map(async (ur) => {
@@ -460,8 +460,8 @@ export class ConciergeService {
     const daysText =
       daysWaiting === 0 ? 'dzisiaj' : daysWaiting === 1 ? '1 dzień' : `${daysWaiting} dni`
 
-    const notifTitle = '📦 Przypomnienie o przesyłce'
-    const notifBody = `Przesyłka od kuriera ${courierLabel} (${parcel.trackingNumber}) czeka na odbiór od ${daysText} w lobby.`
+    const notifTitle = 'Przypomnienie o przesyłce'
+    const notifBody = `Przesyłka ${courierLabel} (${parcel.trackingNumber}) czeka na odbiór w recepcji od ${daysText}.`
 
     await Promise.all(
       unitResidents.map(async (ur) => {
@@ -620,7 +620,7 @@ export class ConciergeService {
 
     // Notification + email
     const unitName = `${unit.unitType.name} ${unit.number}`
-    const notifTitle = '📅 Rezerwacja potwierdzona'
+    const notifTitle = 'Rezerwacja potwierdzona'
     const notifBody = `Rezerwacja ${unitName} na ${startAt.toLocaleDateString('pl-PL')} ${startAt.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–${endAt.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} została potwierdzona.`
 
     await this.prisma.notification.create({
@@ -655,7 +655,7 @@ export class ConciergeService {
     })
 
     const unitName = `${reservation.unit.unitType.name} ${reservation.unit.number}`
-    const notifTitle = '❌ Rezerwacja anulowana'
+    const notifTitle = 'Rezerwacja anulowana'
     const notifBody = `Rezerwacja ${unitName} na ${reservation.startAt.toLocaleDateString('pl-PL')} została anulowana.`
 
     await this.prisma.notification.create({
@@ -1012,7 +1012,7 @@ export class ConciergeService {
       `
     }
     // Push do mieszkańca — analogicznie do BA flow.
-    this.push.sendToResident(ticket.residentId, '🛎 Odpowiedź konsjerża', dto.body.slice(0, 100), {
+    this.push.sendToResident(ticket.residentId, 'Odpowiedź konsjerża', dto.body.slice(0, 100), {
       type: 'ticket_reply',
       ticketId: ticket.id,
     }).catch(() => {/* fire-and-forget */})

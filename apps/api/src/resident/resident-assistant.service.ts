@@ -564,8 +564,8 @@ export class ResidentAssistantService {
        LIMIT 2
     `
     for (const g of guests) {
-      if (g.arrivedAt) lines.push(`👥 Twój gość ${g.name} wjechał dziś o ${fmtT(g.arrivedAt)}.`)
-      else lines.push(`👥 ${g.name} ma aktywne zaproszenie (do ${fmtD(g.validTo)}).`)
+      if (g.arrivedAt) lines.push(`Gość ${g.name} wjechał(a) dziś o ${fmtT(g.arrivedAt)}.`)
+      else lines.push(`${g.name} ma aktywne zaproszenie (ważne do ${fmtD(g.validTo)}).`)
     }
 
     // Zaległości — pełna logika naliczeń/wpłat z handleMyArrears.
@@ -577,7 +577,7 @@ export class ResidentAssistantService {
         const data = arrears?.data as { overdueTotal?: number } | null
         if (data?.overdueTotal && data.overdueTotal > 0) {
           const zl = `${(Math.round(data.overdueTotal * 100) / 100).toFixed(2).replace('.', ',')} zł`
-          lines.push(`💰 Masz zaległość ${zl} — szczegóły w zakładce Płatności.`)
+          lines.push(`Zaległość w opłatach: ${zl}. Szczegóły w zakładce Płatności.`)
         }
       } catch {
         // płatności nieskonfigurowane — pomijamy linię
@@ -594,7 +594,7 @@ export class ResidentAssistantService {
        LIMIT 1
     `
     if (ann[0]?.title)
-      lines.push(`📢 Nowe ogłoszenie: „${ann[0].title.slice(0, 70)}” — otwórz w Ogłoszeniach.`)
+      lines.push(`Nowe ogłoszenie: „${ann[0].title.slice(0, 70)}”. Treść w zakładce Ogłoszenia.`)
 
     return lines
   }

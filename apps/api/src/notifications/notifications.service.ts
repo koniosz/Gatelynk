@@ -32,7 +32,7 @@ export class NotificationsService {
         data: { buildingId, residentId: dto.residentId, title: dto.title, body: dto.body },
         include: { resident: true },
       })
-      this.push.sendToResident(dto.residentId, `🔔 ${dto.title}`, dto.body, { type: 'notification' })
+      this.push.sendToResident(dto.residentId, dto.title, dto.body, { type: 'notification' })
         .catch(() => {/* fire-and-forget */})
       return notification
     } else {
@@ -45,7 +45,7 @@ export class NotificationsService {
           }),
         ),
       )
-      this.push.sendToBuilding(buildingId, `🔔 ${dto.title}`, dto.body, { type: 'notification' })
+      this.push.sendToBuilding(buildingId, dto.title, dto.body, { type: 'notification' })
         .catch(() => {/* fire-and-forget */})
       return { sent: notifications.length, notifications }
     }

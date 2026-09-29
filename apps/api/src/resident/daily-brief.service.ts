@@ -106,8 +106,8 @@ export class DailyBriefService {
         const label = this.wasteLabel(events)
         await this.push.sendToBuilding(
           buildingId,
-          '🗑️ Jutro odbiór odpadów',
-          `Jutro: ${label}. Wystaw kubły dziś wieczorem.`,
+          'Odbiór odpadów jutro',
+          `Jutro: ${label}. Prosimy wystawić pojemniki dziś wieczorem.`,
           { type: 'waste-reminder', date: tomorrow },
         )
         this.logger.log(`evening waste reminder → b${buildingId}: ${label}`)
@@ -150,7 +150,7 @@ export class DailyBriefService {
         if (lines.length === 0) continue // cisza > pusty push
         await this.push.sendToResident(
           r.id,
-          'Dzień dobry 👋 Twój dzień na osiedlu',
+          'Poranne podsumowanie',
           lines.slice(0, 3).join('\n'),
           { type: 'morning-brief', date: today },
         )
@@ -176,7 +176,7 @@ export class DailyBriefService {
         if (!chronicle?.push_text) continue
         await this.push.sendToBuilding(
           buildingId,
-          '📖 Kronika dnia na osiedlu',
+          'Kronika dnia',
           chronicle.push_text,
           { type: 'evening-chronicle', date: chronicle.date ?? warsawDayKey(0) },
         )
@@ -226,7 +226,7 @@ export class DailyBriefService {
     const todayWaste =
       opts.todayWaste ?? (await this.wasteEventsForDay(buildingId, warsawDayKey(0)))
     if (todayWaste.length > 0)
-      lines.push(`🗑️ Dziś odbiór: ${this.wasteLabel(todayWaste)} — wystaw kubły.`)
+      lines.push(`Dziś odbiór odpadów: ${this.wasteLabel(todayWaste)}. Prosimy wystawić pojemniki.`)
     const personal = await this.assistant
       .buildPersonalDayLines(buildingId, residentId, { includeArrears: opts.includeArrears })
       .catch(() => [] as string[])

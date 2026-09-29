@@ -31,6 +31,7 @@ import {
   verifyGuestOpenNonce,
   guestOpenNonceHash,
 } from './guest-nonce.util'
+import { warsawTime } from '../push/push-text'
 
 /** TTL prośby o zatwierdzenie przez hosta (UNIT_DOOR approvalRequired). */
 const APPROVAL_TTL_MS = 90_000
@@ -478,8 +479,8 @@ export class GuestPortalService {
       this.push
         .sendToResident(
           guest.residentId,
-          '🚪 Twój gość otworzył drzwi mieszkania',
-          `${guest.name} — ${apLabel}`,
+          'Drzwi mieszkania otwarte przez gościa',
+          `${guest.name} otworzył(a) ${apLabel}.`,
           { kind: 'GUEST_UNIT_DOOR_OPEN', guestId: guest.id },
         )
         .catch((err) =>
@@ -602,8 +603,8 @@ export class GuestPortalService {
     this.push
       .sendToResident(
         guest.residentId,
-        '🔔 Gość prosi o otwarcie drzwi mieszkania',
-        `${guest.name} — ${apLabel}. Zatwierdź w aplikacji (90 s).`,
+        'Prośba o otwarcie drzwi',
+        `${guest.name} czeka przy: ${apLabel}. Zatwierdź w aplikacji w ciągu 90 sekund.`,
         { kind: 'GUEST_APPROVAL', requestId: String(row.id), guestId: guest.id },
       )
       .catch((err) =>
@@ -1053,8 +1054,8 @@ export class GuestPortalService {
           `guest-use-${guestId}`,
           GUEST_USE_PUSH_THROTTLE_MS,
           residentId,
-          '🚪 Gość otworzył wjazd',
-          `${guestName} — ${apLabel}`,
+          'Gość otworzył wejście',
+          `${guestName} otworzył(a) ${apLabel} o ${warsawTime()}.`,
           { kind: firstUse ? 'GUEST_PORTAL_OPEN' : 'GUEST_USE', guestId },
         )
         .catch((err) =>

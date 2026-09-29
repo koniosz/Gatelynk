@@ -372,8 +372,8 @@ export class InviteService {
     this.push
       .sendToResident(
         guest.residentId,
-        '⚠️ Zgłoszenie nadużycia zaproszenia',
-        `Zaproszenie dla "${guest.name}" zostało zgłoszone jako nadużycie i automatycznie anulowane.`,
+        'Zaproszenie zgłoszone jako nadużycie',
+        `Zaproszenie dla „${guest.name}” zostało zgłoszone jako nadużycie i automatycznie anulowane.`,
         { type: 'invite_reported', guestId: guest.id },
       )
       .catch(() => {/* fire-and-forget */})

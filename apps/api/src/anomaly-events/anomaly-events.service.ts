@@ -126,8 +126,8 @@ export class AnomalyEventsService {
     `
     const cameraName = camRows[0]?.name ?? input.cameraDeviceId
     const likelihoodPct = Math.round(input.likelihood * 100)
-    const title = '🚨 Możliwy upadek osoby'
-    const body = `Kamera ${cameraName} — wykryto upadek (${likelihoodPct}%)`
+    const title = 'Możliwy upadek osoby'
+    const body = `Kamera ${cameraName}: wykryto możliwy upadek (pewność ${likelihoodPct}%). Sprawdź podgląd z kamery.`
 
     // Opt-in residents — tylko ci z notifyAnomalies=true w tym budynku.
     const residents = await this.prisma.$queryRaw<{ id: number }[]>`

@@ -845,7 +845,7 @@ export class BuildingAdminService {
       `
       // Push to single resident. `notificationId` (2026-08-15) — tap w push
       // otwiera w apce ekran TEGO ogłoszenia (deep-link), nie tylko apkę.
-      this.push.sendToResident(dto.residentId, `🔔 ${dto.title}`, dto.body, {
+      this.push.sendToResident(dto.residentId, dto.title, dto.body, {
         type: 'notification',
         notificationId: row.id,
       }).catch(() => {/* fire-and-forget */})
@@ -867,7 +867,7 @@ export class BuildingAdminService {
       inserted = residents.length
     }
     // Push to entire building
-    this.push.sendToBuilding(buildingId, `🔔 ${dto.title}`, dto.body, { type: 'notification' })
+    this.push.sendToBuilding(buildingId, dto.title, dto.body, { type: 'notification' })
       .catch(() => {/* fire-and-forget */})
     return { sent: inserted, sentAt: sentAt.toISOString() }
   }
@@ -1140,7 +1140,7 @@ export class BuildingAdminService {
       await this.prisma.ticket.update({ where: { id: ticketId }, data: { status: 'IN_PROGRESS' } })
     }
     // Push notification to resident
-    this.push.sendToResident(ticket.residentId, '📋 Odpowiedź na zgłoszenie', dto.body.slice(0, 100), {
+    this.push.sendToResident(ticket.residentId, 'Odpowiedź na zgłoszenie', dto.body.slice(0, 100), {
       type: 'ticket_reply',
       ticketId: ticket.id,
     }).catch(() => {/* fire-and-forget */})
@@ -2277,16 +2277,16 @@ export class BuildingAdminService {
         }
         nextStatus = 'APPROVED'
         edgeOp = 'UPSERT'
-        pushTitle = '✅ Pojazd zatwierdzony'
-        pushBody  = `Tablica ${vehicle.licensePlate} (${vehicle.make} ${vehicle.model ?? ''}) została zatwierdzona`
+        pushTitle = 'Pojazd zatwierdzony'
+        pushBody  = `Tablica ${vehicle.licensePlate} (${[vehicle.make, vehicle.model].filter(Boolean).join(' ')}) została zatwierdzona. Automatyczny wjazd jest aktywny.`
         break
       case 'reject':
         if (vehicle.status !== 'PENDING') {
           throw new BadRequestException(`Nie można odrzucić pojazdu w stanie ${vehicle.status}`)
         }
         nextStatus = 'REJECTED'
-        pushTitle = '❌ Pojazd odrzucony'
-        pushBody  = `Tablica ${vehicle.licensePlate} została odrzucona: ${reason}`
+        pushTitle = 'Pojazd odrzucony'
+        pushBody  = `Tablica ${vehicle.licensePlate} została odrzucona. Powód: ${reason}`
         break
       case 'block':
         if (vehicle.status !== 'APPROVED') {
@@ -2294,8 +2294,8 @@ export class BuildingAdminService {
         }
         nextStatus = 'BLOCKED'
         edgeOp = 'DELETE'
-        pushTitle = '🚫 Pojazd zablokowany'
-        pushBody  = `Tablica ${vehicle.licensePlate} została tymczasowo zablokowana${reason ? `: ${reason}` : ''}`
+        pushTitle = 'Pojazd zablokowany'
+        pushBody  = `Tablica ${vehicle.licensePlate} została tymczasowo zablokowana${reason ? `. Powód: ${reason}` : '.'}`
         break
       case 'unblock':
         if (vehicle.status !== 'BLOCKED') {
@@ -2303,8 +2303,8 @@ export class BuildingAdminService {
         }
         nextStatus = 'APPROVED'
         edgeOp = 'UPSERT'
-        pushTitle = '✅ Pojazd odblokowany'
-        pushBody  = `Tablica ${vehicle.licensePlate} została odblokowana`
+        pushTitle = 'Pojazd odblokowany'
+        pushBody  = `Tablica ${vehicle.licensePlate} została odblokowana. Automatyczny wjazd jest ponownie aktywny.`
         break
     }
 

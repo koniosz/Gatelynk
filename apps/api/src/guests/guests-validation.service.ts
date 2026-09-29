@@ -5,6 +5,7 @@ import { AccessEventsService } from '../access-events/access-events.service'
 import { isWithinSchedule, type RecurringSchedule } from './guest-restrictions.util'
 import { signPushMediaToken } from '../lpr-reads/push-media-token'
 import { isRegisteredVehiclePlate } from './guest-plate-guard'
+import { warsawTime } from '../push/push-text'
 
 /**
  * GuestValidationService — Faza 2B/3 Villa Natura.
@@ -249,8 +250,8 @@ export class GuestsValidationService {
       `guest-exit-${guestId}`,
       GUEST_USE_PUSH_THROTTLE_MS,
       residentId,
-      '🚗 Gość wyjechał',
-      `${guestName} wyjechał(a) z terenu.`,
+      'Wyjazd gościa',
+      `${guestName} opuścił(a) teren osiedla o ${warsawTime()}.`,
       {
         kind: 'GUEST_EXIT',
         guestId,
@@ -294,10 +295,10 @@ export class GuestsValidationService {
       // i zawsze dochodzą.
       if (!notifyOnUse) return
 
-      const title = via === 'PIN' ? '🔔 Gość przy domofonie' : '🚗 Gość wjechał'
+      const title = via === 'PIN' ? 'Gość przy domofonie' : 'Wjazd gościa'
       const body  = via === 'PIN'
-        ? `${guestName} użył(a) PIN-u, żeby wejść.`
-        : `${guestName} wjechał(a) na teren.`
+        ? `${guestName} użył(a) kodu PIN przy domofonie o ${warsawTime()}.`
+        : `${guestName} wjechał(a) na teren osiedla o ${warsawTime()}.`
 
       // Fire-and-forget — push errors są logowane wewnątrz PushService.
       this.push.sendToResidentThrottled(

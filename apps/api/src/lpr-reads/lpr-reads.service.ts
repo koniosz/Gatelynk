@@ -7,6 +7,7 @@ import { GuestsValidationService } from '../guests/guests-validation.service'
 import { AccessEventsService } from '../access-events/access-events.service'
 import { PushService } from '../push/push.service'
 import { signPushMediaToken } from './push-media-token'
+import { warsawTime } from '../push/push-text'
 
 /**
  * 2026-07-30 — meta przepustki wyjazdowej z Edge (docs/exit-grace-pass.md).
@@ -288,10 +289,10 @@ export class LprReadsService {
     }
     const dwell = payload.exitPass?.dwellMinutes
     const denied = payload.reason === 'overstay_denied'
-    const title = denied ? '⏱ Przekroczony czas pobytu — wyjazd zablokowany' : '⏱ Przekroczony czas pobytu'
+    const title = denied ? 'Przekroczony czas pobytu — wyjazd zablokowany' : 'Przekroczony czas pobytu'
     const body = denied
-      ? `Pojazd ${plate} próbował wyjechać po przekroczeniu okna przepustki${dwell ? ` (${dwell} min na osiedlu)` : ''} — szlaban nie został otwarty (polityka DENY).`
-      : `Pojazd ${plate} wyjechał po przekroczeniu okna przepustki${dwell ? ` (${dwell} min na osiedlu)` : ''} — szlaban otwarto (OPEN_AND_FLAG).`
+      ? `Pojazd ${plate} próbował wyjechać po przekroczeniu okna przepustki${dwell ? ` (${dwell} min na terenie)` : ''}. Szlaban nie został otwarty.`
+      : `Pojazd ${plate} wyjechał po przekroczeniu okna przepustki${dwell ? ` (${dwell} min na terenie)` : ''}. Szlaban został otwarty, zdarzenie oznaczono.`
     await Promise.all(
       admins.map((a) =>
         this.push.sendToResident(
@@ -363,22 +364,26 @@ export class LprReadsService {
     // rozpoznała tablicę, Edge celowo nie ruszył bramy. Push mówi to wprost,
     // żeby nie wyglądało jak awaria.
     const autoOpenOff = ctx.reason === 'auto_open_disabled'
-    const dirWord = isExit ? 'wyjazd' : 'wjazd'
+    const at = warsawTime()
+    // Tytuł = nazwa zdarzenia, treść = pełne zdanie z tablicą i godziną.
+    const title = autoOpenOff
+      ? (isExit ? 'Pojazd rozpoznany przy wyjeździe' : 'Pojazd rozpoznany przy wjeździe')
+      : probable
+        ? (isExit ? 'Prawdopodobny wyjazd pojazdu' : 'Prawdopodobny wjazd pojazdu')
+        : (isExit ? 'Wyjazd pojazdu' : 'Wjazd pojazdu')
+    const body = autoOpenOff
+      ? `${plate} — ${isExit ? 'wyjazd' : 'wjazd'} o ${at}. Szlaban nie został otwarty automatycznie: automatyczne otwieranie jest wyłączone dla tego pojazdu.`
+      : probable
+        ? `${plate} — ${isExit ? 'wyjazd' : 'wjazd'} o ${at}. Odczyt tablicy był niepewny` +
+          (ctx.ocrRaw && ctx.ocrRaw !== plate ? ` (kamera odczytała ${ctx.ocrRaw})` : '') +
+          `, szlaban nie został otwarty automatycznie.`
+        : `${plate} ${isExit ? 'opuścił teren osiedla' : 'wjechał na teren osiedla'} o ${at}.`
     await this.push.sendToResidentThrottled(
       `vehicle-${isExit ? 'exit' : 'entry'}-${v.id}`,
       3 * 60_000,
       v.residentId,
-      autoOpenOff
-        ? (isExit ? '🚗 Rozpoznano Twój pojazd przy wyjeździe' : '🚗 Rozpoznano Twój pojazd przy wjeździe')
-        : probable
-          ? (isExit ? '🚗 Prawdopodobnie Twój pojazd wyjechał' : '🚗 Prawdopodobnie Twój pojazd wjechał')
-          : (isExit ? '🚗 Twój pojazd wyjechał' : '🚗 Twój pojazd wjechał'),
-      autoOpenOff
-        ? `${plate} — brama nie została otwarta: automatyczne otwieranie jest wyłączone dla tego pojazdu.`
-        : probable
-          ? `${plate} — ${dirWord} przez bramę. Odczyt niepewny` +
-            (ctx.ocrRaw && ctx.ocrRaw !== plate ? ` (kamera odczytała ${ctx.ocrRaw}).` : '.')
-          : `${plate} — ${dirWord} przez bramę.`,
+      title,
+      body,
       {
         kind: isExit ? 'VEHICLE_EXIT' : 'VEHICLE_ENTRY',
         vehicleId: v.id,
