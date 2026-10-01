@@ -232,6 +232,10 @@ export class BaUpdateVehicleDto {
   @IsOptional() @IsString() serviceName?: string
   @IsOptional() @IsString() notes?: string
   @IsOptional() @IsString({ each: true }) tags?: string[]
+  // 2026-10-01 — przełącznik „otwieraj szlaban po rozpoznaniu tablicy" w panelu
+  // (ten sam co w karcie pojazdu w iOS). false = tablica rozpoznawana, Edge
+  // NIE wyzwala przekaźnika (reason auto_open_disabled).
+  @IsOptional() @IsBoolean() autoOpen?: boolean
 }
 
 // PATCH /buildings/:id/vehicles/:vehicleId/status
@@ -2214,6 +2218,7 @@ export class BuildingAdminService {
         "licensePlate" = ${nextPlate},
         "serviceName"  = ${dto.serviceName !== undefined ? (dto.serviceName?.trim() || null) : vehicle.serviceName},
         "notes"        = ${dto.notes !== undefined ? (dto.notes?.trim() || null) : vehicle.notes},
+        "autoOpen"     = ${dto.autoOpen !== undefined ? dto.autoOpen : vehicle.autoOpen},
         "tags"         = ${nextTags}::text[]
       WHERE id = ${vehicleId}
     `
@@ -2228,6 +2233,24 @@ export class BuildingAdminService {
     if (wasApproved && updated) {
       const syncPayload = await this.buildPlateSyncPayload(updated)
       this.syncPlateToEdge(buildingId, 'UPSERT', syncPayload)
+    }
+    // Zmiana automatycznego wjazdu przez administratora — mieszkaniec musi
+    // wiedzieć, dlaczego szlaban przestał (albo zaczął) otwierać się sam.
+    if (
+      updated?.residentId &&
+      dto.autoOpen !== undefined &&
+      dto.autoOpen !== vehicle.autoOpen
+    ) {
+      void this.push
+        .sendToResident(
+          updated.residentId,
+          dto.autoOpen ? 'Automatyczny wjazd włączony' : 'Automatyczny wjazd wyłączony',
+          dto.autoOpen
+            ? `Administrator osiedla włączył automatyczne otwieranie szlabanu dla pojazdu ${updated.licensePlate}.`
+            : `Administrator osiedla wyłączył automatyczne otwieranie szlabanu dla pojazdu ${updated.licensePlate}. Tablica jest nadal rozpoznawana.`,
+          { type: 'vehicle_status', vehicleId, autoOpen: dto.autoOpen },
+        )
+        .catch(() => undefined)
     }
     return updated
   }

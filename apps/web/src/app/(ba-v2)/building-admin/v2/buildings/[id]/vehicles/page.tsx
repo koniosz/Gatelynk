@@ -166,6 +166,8 @@ export default function VehiclesPage() {
   // Drawer szczegółów/edycji
   const [sel, setSel] = useState<Vehicle | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Przełącznik „automatyczny wjazd" (2026-10-01) — id pojazdów w trakcie zapisu.
+  const [autoBusy, setAutoBusy] = useState<Set<number>>(new Set());
 
   const load = useCallback(async () => {
     if (!Number.isFinite(buildingId)) return;
@@ -315,6 +317,33 @@ export default function VehiclesPage() {
     await buildingAdminApi.delete(`/building-admin/buildings/${buildingId}/vehicles/${vehicleId}`);
     closeDrawer();
     await load();
+  };
+
+  // Automatyczne otwieranie szlabanu po rozpoznaniu tablicy (ten sam przełącznik
+  // co w karcie pojazdu w iOS). Stan zmienia się DOPIERO po odpowiedzi API —
+  // to steruje realną bramą; Edge dostaje wpis trwałym outboxem.
+  const setAutoOpen = async (v: Vehicle, value: boolean) => {
+    if (autoBusy.has(v.id)) return;
+    setAutoBusy((prev) => new Set(prev).add(v.id));
+    try {
+      const res = await buildingAdminApi.patch<Vehicle>(
+        `/building-admin/buildings/${buildingId}/vehicles/${v.id}`,
+        { autoOpen: value },
+      );
+      const next = res.data?.autoOpen ?? value;
+      setVehicles((prev) => prev.map((x) => (x.id === v.id ? { ...x, autoOpen: next } : x)));
+      setSel((prev) => (prev && prev.id === v.id ? { ...prev, autoOpen: next } : prev));
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { message?: string | string[] } } };
+      const msg = e2.response?.data?.message;
+      alert((Array.isArray(msg) ? msg.join(", ") : msg) ?? "Nie udało się zmienić automatycznego wjazdu");
+    } finally {
+      setAutoBusy((prev) => {
+        const n = new Set(prev);
+        n.delete(v.id);
+        return n;
+      });
+    }
   };
 
   const onAction = async (
@@ -654,12 +683,18 @@ export default function VehiclesPage() {
                     <div style={{ fontSize: 11.5, color: "var(--red)", marginTop: 2 }}>Powód: {v.rejectionReason}</div>
                   ) : null}
                 </div>
-                <div>
+                <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
                   <span className={`ba-pill ${meta.tone === "default" ? "" : meta.tone}`}>{meta.label}</span>
-                  {status === "APPROVED" && v.autoOpen === false ? (
-                    <span className="ba-pill" title="Mieszkaniec wyłączył w aplikacji automatyczne otwieranie bramy dla tej tablicy">
-                      auto-wjazd wył.
-                    </span>
+                  {status === "APPROVED" ? (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <AutoOpenSwitch
+                        plate={v.licensePlate}
+                        checked={v.autoOpen !== false}
+                        busy={autoBusy.has(v.id)}
+                        onChange={(value) => void setAutoOpen(v, value)}
+                        compact
+                      />
+                    </div>
                   ) : null}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
@@ -720,6 +755,8 @@ export default function VehiclesPage() {
             residents={residents}
             units={units}
             onSaved={() => void refreshSel(sel.id)}
+            autoOpenBusy={autoBusy.has(sel.id)}
+            onAutoOpenChange={(value) => void setAutoOpen(sel, value)}
           />
         ) : null}
       </ResidentDrawer>
@@ -734,12 +771,16 @@ function VehicleDetails({
   residents,
   units,
   onSaved,
+  autoOpenBusy = false,
+  onAutoOpenChange,
 }: {
   buildingId: number;
   vehicle: Vehicle;
   residents: Resident[];
   units: UnitLite[];
   onSaved: () => void;
+  autoOpenBusy?: boolean;
+  onAutoOpenChange?: (value: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -909,11 +950,6 @@ function VehicleDetails({
           <div className="k">Status</div>
           <div className="v">
             <span className={`ba-pill ${meta.tone === "default" ? "" : meta.tone}`}>{meta.label}</span>
-            {status === "APPROVED" && vehicle.autoOpen === false ? (
-              <span className="ba-pill" title="Mieszkaniec wyłączył w aplikacji automatyczne otwieranie bramy dla tej tablicy">
-                auto-wjazd wył.
-              </span>
-            ) : null}
           </div>
         </div>
         <div className="ba-kv">
@@ -959,6 +995,35 @@ function VehicleDetails({
           </div>
         ) : null}
       </div>
+      {/* ── Automatyczny wjazd (2026-10-01) — ten sam przełącznik co w iOS ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "12px 14px",
+          border: "1px solid var(--line, #e5e7eb)",
+          borderRadius: 12,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>Otwieraj szlaban po rozpoznaniu tablicy</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+            {status !== "APPROVED"
+              ? "Dostępne po zatwierdzeniu pojazdu."
+              : vehicle.autoOpen === false
+                ? "Wyłączone — kamera rozpoznaje tablicę i zapisuje przejazd, ale szlaban nie otwiera się sam."
+                : "Włączone — po rozpoznaniu tablicy kamera wysyła polecenie otwarcia szlabanu."}
+          </div>
+        </div>
+        <AutoOpenSwitch
+          plate={vehicle.licensePlate}
+          checked={vehicle.autoOpen !== false}
+          busy={autoOpenBusy}
+          disabled={status !== "APPROVED" || !onAutoOpenChange}
+          onChange={(value) => onAutoOpenChange?.(value)}
+        />
+      </div>
       {vehicle.rejectionReason ? (
         <div className="ba-pill red" style={{ display: "block", padding: "8px 12px" }}>
           Powód odmowy: {vehicle.rejectionReason}
@@ -989,6 +1054,84 @@ function VehicleDetails({
       {/* ── Historia przejazdów (access_events po tablicy) ── */}
       <VehicleHistory buildingId={buildingId} plate={vehicle.licensePlate} />
     </div>
+  );
+}
+
+/**
+ * Przełącznik automatycznego wjazdu (role="switch"). Zmiana idzie od razu do
+ * API; w trakcie zapisu kontrolka jest zablokowana i pokazuje „Zapisywanie…".
+ */
+function AutoOpenSwitch({
+  plate,
+  checked,
+  busy = false,
+  disabled = false,
+  compact = false,
+  onChange,
+}: {
+  plate: string;
+  checked: boolean;
+  busy?: boolean;
+  disabled?: boolean;
+  compact?: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const off = disabled || busy;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={`Automatyczny wjazd dla ${plate}`}
+      title={checked ? "Automatyczny wjazd włączony — kliknij, aby wyłączyć" : "Automatyczny wjazd wyłączony — kliknij, aby włączyć"}
+      disabled={off}
+      onClick={() => onChange(!checked)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        background: "transparent",
+        border: 0,
+        padding: 0,
+        cursor: off ? "default" : "pointer",
+        opacity: disabled ? 0.45 : 1,
+        font: "inherit",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: "relative",
+          width: 36,
+          height: 20,
+          borderRadius: 999,
+          background: checked ? "var(--green, #16a34a)" : "var(--line-strong, #cbd5e1)",
+          transition: "background .15s",
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 2,
+            left: checked ? 18 : 2,
+            width: 16,
+            height: 16,
+            borderRadius: 999,
+            background: "#fff",
+            boxShadow: "0 1px 2px rgba(0,0,0,.25)",
+            transition: "left .15s",
+          }}
+        />
+      </span>
+      {compact ? (
+        <span style={{ fontSize: 11.5, color: checked ? "var(--green, #16a34a)" : "var(--muted)" }}>
+          {busy ? "Zapisywanie…" : checked ? "Auto-wjazd" : "Auto-wjazd wył."}
+        </span>
+      ) : busy ? (
+        <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Zapisywanie…</span>
+      ) : null}
+    </button>
   );
 }
 

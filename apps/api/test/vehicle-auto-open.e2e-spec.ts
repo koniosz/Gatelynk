@@ -136,6 +136,35 @@ describe('Vehicle autoOpen switch (e2e)', () => {
     expect(upserts[upserts.length - 1].autoOpen).toBe(true)
   })
 
+  it('panel administratora: PATCH autoOpen=false → 200, mieszkaniec widzi zmianę, Edge dostaje pełny wpis', async () => {
+    const before = (await outboxUpserts('WE387YT')).length
+    const res = await request(app.getHttpServer())
+      .patch(`/api/building-admin/buildings/${buildingId}/vehicles/${vehicleId}`)
+      .set('Authorization', `Bearer ${baToken}`)
+      .send({ autoOpen: false })
+    expect(res.status).toBe(200)
+    expect(res.body.autoOpen).toBe(false)
+    expect(res.body.status).toBe('APPROVED')
+
+    const list = await request(app.getHttpServer())
+      .get('/api/resident/vehicles')
+      .set('Authorization', `Bearer ${residentToken}`)
+    expect(list.body.find((v: any) => v.id === vehicleId)?.autoOpen).toBe(false)
+
+    const upserts = await waitForUpserts('WE387YT', before + 1)
+    const last = upserts[upserts.length - 1]
+    expect(last).toEqual(expect.objectContaining({ autoOpen: false, kind: 'RESIDENT' }))
+    expect(last.unitLabel).toBeTruthy()
+
+    // Przywrócenie — kolejne testy zakładają stan włączony.
+    const back = await request(app.getHttpServer())
+      .patch(`/api/building-admin/buildings/${buildingId}/vehicles/${vehicleId}`)
+      .set('Authorization', `Bearer ${baToken}`)
+      .send({ autoOpen: true })
+    expect(back.status).toBe(200)
+    expect(back.body.autoOpen).toBe(true)
+  })
+
   it('PATCH autoOpen nie-boolean → 400, wartość bez zmian', async () => {
     const res = await request(app.getHttpServer())
       .patch(`/api/resident/vehicles/${vehicleId}`)
