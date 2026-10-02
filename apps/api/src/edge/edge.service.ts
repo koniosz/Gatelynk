@@ -201,11 +201,12 @@ export class EdgeService {
         for (const relay of relays) {
           // Faza 5 — przy update NIE nadpisujemy `label`/`icon`. Admin może
           // override-ować nazwę („Brama N" zamiast „Przekaźnik 0") w panelu
-          // BA, a sync co 5 min nie powinien tego cofać. Update tylko refresh-uje
-          // `edgeDeviceId` (gdyby Edge został wymieniony) i `isActive=true`
-          // (gdyby admin wcześniej dezaktywował AP, ale Edge dalej widzi go
-          // jako działający — przywracamy stan „dostępny", ale resident może
-          // dalej go nie widzieć przez `displayedToResident` flag w przyszłości).
+          // BA, a sync co 5 min nie powinien tego cofać. Update odświeża TYLKO
+          // `edgeDeviceId` (gdyby Edge został wymieniony) — `isActive` zostaje
+          // nietknięte, więc wejście ukryte przez admina („Pokazuj mieszkańcom
+          // w aplikacji" odznaczone) nie wraca po kolejnym syncu. Uwaga: zmiana
+          // numeru przekaźnika w configu urządzenia na Edge tworzy NOWY AP
+          // (klucz to deviceId+relayIndex) — stary zostaje, stąd duplikaty.
           await this.prisma.accessPoint.upsert({
             where: { buildingId_deviceId_relayIndex: { buildingId, deviceId: d.deviceId, relayIndex: relay.index } },
             create: {
