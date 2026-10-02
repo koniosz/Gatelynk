@@ -2235,3 +2235,18 @@ nie tysiące; udział `probable_match` dla tablic z rejestru powinien spaść.
 - UI: panel BA › Powiadomienia › „Powiadomienia automatyczne"; Glass › Konto ›
   Powiadomienia; GateLynk › Profil › Powiadomienia; etykieta „Śmieciarka"
   w Zdarzeniach (web + Glass admin).
+
+## Glass ma wygląd Black (2026-10-02)
+
+Gałąź `codex/gatelynk-black-vnext` scalona do `main`; target **GateLynkGlass**
+(bundle `com.gatelynk.app.glass`, ten sam co na TestFlight) kompiluje pliki
+`GateLynkBlack/*.swift`, `BlackAssets.xcassets` i fonty Barlow (UIAppFonts
+w `GateLynkGlass/Info.plist`) oraz ma `SWIFT_ACTIVE_COMPILATION_CONDITIONS =
+"$(inherited) GATELYNK_BLACK"` (Debug i Release). Pod flagą: ekran główny
+Black (`blackResidentRoot`), paleta/promienie w `GlassTheme`, `GlassBackground`
+renderuje `BlackBackground` (bez zdjęcia budynku — logowanie, formularze),
+splash i nagłówek logowania w palecie/kroju Black. Podgląd `-black-design-preview`
+działa też w Glass (Debug). Powrót do starego wyglądu = usunąć flagę z dwóch
+konfiguracji targetu Glass. PUŁAPKA: konfiguracje targetu znajdować po
+`INFOPLIST_FILE = GateLynkGlass/Info.plist` — lista tuż za `DD01` w pbxproj
+należy do GlassNotificationService.

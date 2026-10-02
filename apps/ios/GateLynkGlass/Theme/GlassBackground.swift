@@ -23,6 +23,16 @@ struct GlassBackground: View {
     @State private var kenBurns = false
 
     var body: some View {
+        #if GATELYNK_BLACK
+        // Wygląd Black (2026-10-02): bez zdjęcia budynku i efektów pory dnia —
+        // jedno spokojne tło dla logowania, formularzy i ekranów aplikacji.
+        BlackBackground()
+        #else
+        photoBackground
+        #endif
+    }
+
+    private var photoBackground: some View {
         ZStack {
             GlassColor.scene
 

@@ -84,11 +84,19 @@ struct GlassSplashView: View {
     /// Fade-in całości przy pierwszym renderze (elegancki entrance).
     @State private var appeared = false
 
+    #if GATELYNK_BLACK
+    private let bgTop = BlackTheme.background
+    private let bgMid = BlackTheme.background
+    private let bgBottom = Color(hex: 0x14131C)
+    /// Akcent marki w palecie Black.
+    private let brandBlue = BlackTheme.accent
+    #else
     private let bgTop = Color(hex: 0x06080F)
     private let bgMid = Color(hex: 0x0B1020)
     private let bgBottom = Color(hex: 0x16203A)
     /// Brand royal blue, rozjaśniony pod ciemne tło.
     private let brandBlue = Color(hex: 0x3B5BFF)
+    #endif
 
     var body: some View {
         ZStack {

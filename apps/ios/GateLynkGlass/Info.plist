@@ -6,17 +6,6 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>GateLynk</string>
-	<!-- Docelowa nazwa App Store (decyzja 2026-07-16): po prostu "GateLynk".
-	     INAlternativeAppNames zostaje jako podpowiedz wymowy dla Siri PL. -->
-	<key>INAlternativeAppNames</key>
-	<array>
-		<dict>
-			<key>INAlternativeAppName</key>
-			<string>GateLynk</string>
-			<key>INAlternativeAppNamePronunciationHint</key>
-			<string>gejt link</string>
-		</dict>
-	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -31,6 +20,15 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>GateLynk</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>gejt link</string>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -46,16 +44,22 @@
 	<string>Mikrofon jest używany do rozmowy głosowej z gościem podczas połączenia domofonowego.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Zapis zdjęcia gościa z kamery domofonu do Twojej biblioteki Zdjęć.</string>
-	<key>UIBackgroundModes</key>
+	<key>UIAppFonts</key>
 	<array>
-		<string>voip</string>
-		<string>audio</string>
+		<string>BarlowSemiCondensed-Regular.ttf</string>
+		<string>BarlowSemiCondensed-Medium.ttf</string>
+		<string>BarlowSemiCondensed-SemiBold.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>voip</string>
+		<string>audio</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

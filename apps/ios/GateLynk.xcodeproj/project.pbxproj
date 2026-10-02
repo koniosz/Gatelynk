@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA000000000000000000FF2F /* BlackTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* BlackTheme.swift */; };
+		AA000000000000000000FF30 /* BlackHomeComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* BlackHomeComponents.swift */; };
+		AA000000000000000000FF31 /* BlackAccessDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* BlackAccessDeck.swift */; };
+		AA000000000000000000FF32 /* BlackAccessState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* BlackAccessState.swift */; };
+		AA000000000000000000FF33 /* BlackPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* BlackPreview.swift */; };
+		AA000000000000000000FF34 /* BlackAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000C /* BlackAssets.xcassets */; };
+		AA000000000000000000FF35 /* BarlowSemiCondensed-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000D /* BarlowSemiCondensed-Regular.ttf */; };
+		AA000000000000000000FF36 /* BarlowSemiCondensed-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* BarlowSemiCondensed-Medium.ttf */; };
+		AA000000000000000000FF37 /* BarlowSemiCondensed-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* BarlowSemiCondensed-SemiBold.ttf */; };
 		3D6204AF2FA408F60007F3EE /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6204AE2FA408F60007F3EE /* MessageComposer.swift */; };
 		3D6220242FB23E5400D2FCF1 /* GLComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6220212FB23E5400D2FCF1 /* GLComponents.swift */; };
 		3D6220252FB23E5400D2FCF1 /* GLTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6220222FB23E5400D2FCF1 /* GLTokens.swift */; };
@@ -1216,6 +1225,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000000000000000000FF34 /* BlackAssets.xcassets in Resources */,
+				AA000000000000000000FF35 /* BarlowSemiCondensed-Regular.ttf in Resources */,
+				AA000000000000000000FF36 /* BarlowSemiCondensed-Medium.ttf in Resources */,
+				AA000000000000000000FF37 /* BarlowSemiCondensed-SemiBold.ttf in Resources */,
 				AA000000000000000000FF12 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1343,6 +1356,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000000000000000000FF2F /* BlackTheme.swift in Sources */,
+				AA000000000000000000FF30 /* BlackHomeComponents.swift in Sources */,
+				AA000000000000000000FF31 /* BlackAccessDeck.swift in Sources */,
+				AA000000000000000000FF32 /* BlackAccessState.swift in Sources */,
+				AA000000000000000000FF33 /* BlackPreview.swift in Sources */,
 				AA000000000000000000FF01 /* GlassApp.swift in Sources */,
 				AA000000000000000000FF27 /* GlassAppIntents.swift in Sources */,
 				AA000000000000000000FF28 /* GlassCalendarSheet.swift in Sources */,
@@ -1754,6 +1772,7 @@
 		AA000000000000000000DD06 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) GATELYNK_BLACK";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GateLynkGlass/GateLynkGlass.entitlements;
@@ -1779,6 +1798,7 @@
 		AA000000000000000000DD07 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) GATELYNK_BLACK";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GateLynkGlass/GateLynkGlass.entitlements;

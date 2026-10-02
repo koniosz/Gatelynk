@@ -31,6 +31,11 @@ struct GlassLoginView: View {
                         Image(systemName: "sparkles")
                             .font(.system(size: 32, weight: .semibold))
                             .foregroundStyle(GlassColor.accentGradient)
+                        #if GATELYNK_BLACK
+                        Text("GateLynk")
+                            .font(BlackTheme.heading(36))
+                            .foregroundStyle(BlackTheme.text)
+                        #else
                         Text("GateLynk")
                             .font(.system(size: 34, weight: .bold))
                             .tracking(-1)
@@ -39,6 +44,7 @@ struct GlassLoginView: View {
                             .font(.system(size: 11, weight: .semibold))
                             .tracking(2.2)
                             .foregroundStyle(.white.opacity(0.62))
+                        #endif
                     }
                     .glassRiseIn(delay: 0.1)
 
