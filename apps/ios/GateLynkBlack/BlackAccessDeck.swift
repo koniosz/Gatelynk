@@ -25,8 +25,9 @@ struct BlackAccessDeck: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .headline) private var gateFont: CGFloat = 23
-    @ScaledMetric(relativeTo: .footnote) private var actionFont: CGFloat = 12
+    @ScaledMetric(relativeTo: .body) private var actionFont: CGFloat = 15
     @ScaledMetric(relativeTo: .caption) private var statusFont: CGFloat = 10
     @State private var frames: [Int: CameraFrame] = [:]
     @State private var cameraFailed: Set<Int> = []
@@ -53,7 +54,9 @@ struct BlackAccessDeck: View {
     private var suspended: Bool { isSuspended || scenePhase != .active || !appeared }
     private var selectedAP: AccessPoint? { accessPoints.first { $0.id == interaction.selectedID } }
     private var infoHeight: CGFloat { max(54, gateFont * 2.18) }
-    private var actionHeight: CGFloat { max(48, actionFont * 3.4) }
+    /// 2026-10-02 (uwaga Konrada: „pasek za wąski, czas mało widoczny"): 60 pt
+    /// zamiast 48 — wygodniejszy cel dla kciuka, większy tekst i licznik.
+    private var actionHeight: CGFloat { max(60, actionFont * 4) }
     private var slideHeight: CGFloat { cameraHeight + infoHeight + actionHeight + 12 }
     private var cameraTaskID: String { "\(interaction.selectedID ?? -1)|\(suspended)|\(isDemo)|\(refreshTick)" }
 
@@ -256,6 +259,12 @@ struct BlackAccessDeck: View {
                 if offline {
                     offlineOverlay(ap)
                 }
+                // Kciuk zasłania przycisk — odliczanie pokazujemy NAD nim, na
+                // kadrze kamery: duża cyfra 2 → 1 i pierścień postępu.
+                if interaction.phase(for: ap.id) == .holding {
+                    BlackHoldCountdown(interaction: interaction, accessPointID: ap.id)
+                        .transition(.opacity)
+                }
                 HStack(alignment: .top, spacing: 3) {
                     cameraLabel(frame: frame, stale: stale || offline)
                         .padding(.top, 4)
@@ -392,24 +401,29 @@ struct BlackAccessDeck: View {
                     RoundedRectangle(cornerRadius: 9).fill(BlackTheme.actionGradient)
                 }
                 if phase == .holding {
+                    // Wyraźny, pełny zielony postęp (wcześniej biały 32 % na
+                    // gradiencie — przy przytrzymaniu prawie niewidoczny).
                     GeometryReader { geo in
-                        Color.white.opacity(0.32).frame(width: geo.size.width * progress)
+                        BlackTheme.green.frame(width: geo.size.width * progress)
                     }
                     .allowsHitTesting(false)
                 }
-                HStack(spacing: 9) {
-                    BlackIcon(name: actionIcon(phase), size: 19)
+                HStack(spacing: 10) {
+                    BlackIcon(name: actionIcon(phase), size: 22)
                     Text(actionLabel(phase))
-                        .font(.system(size: actionFont, weight: .medium))
-                        .lineLimit(2)
+                        .font(.system(size: actionFont, weight: .semibold))
+                        // Jedna linia na telefonie (lekko zmniejszana przy długich
+                        // tekstach); przy dużym tekście dostępności — dwie.
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                        .minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Rectangle().fill(Color.black.opacity(0.18)).frame(width: 1, height: 20)
-                    Text(phase == .holding ? String(format: "%.1f s", max(0, 2 * (1 - progress))) : phase == .idle ? "2 s" : phase == .sending ? "…" : "OK")
-                        .font(.system(size: 11).monospacedDigit())
-                        .frame(minWidth: 20)
+                    Rectangle().fill(Color.black.opacity(0.2)).frame(width: 1, height: 26)
+                    Text(phase == .holding ? Self.seconds(interaction.holdDuration * (1 - progress)) : phase == .idle ? "2 s" : phase == .sending ? "…" : "OK")
+                        .font(.system(size: actionFont, weight: .bold).monospacedDigit())
+                        .frame(minWidth: 44)
                 }
                 .foregroundStyle(phase == .accepted ? Color(hex: 0xA3F1C8) : Color(hex: 0x151222))
-                .padding(.horizontal, 13)
+                .padding(.horizontal, 16)
             }
             .frame(height: actionHeight)
             .clipShape(RoundedRectangle(cornerRadius: 9))
@@ -445,10 +459,15 @@ struct BlackAccessDeck: View {
         }
     }
 
+    /// „0,8 s" — przecinek dziesiętny jak w polskim zapisie.
+    private static func seconds(_ value: Double) -> String {
+        max(0, value).formatted(.number.precision(.fractionLength(1)).locale(Locale(identifier: "pl_PL"))) + " s"
+    }
+
     private func actionLabel(_ phase: BlackAccessState.Phase) -> String {
         switch phase {
         case .idle: return "Przytrzymaj, aby otworzyć"
-        case .holding: return "Przytrzymaj…"
+        case .holding: return "Trzymaj — otwieram…"
         case .sending: return "Wysyłanie polecenia…"
         case .accepted: return "Polecenie otwarcia przyjęte"
         case .unknown: return "Wynik nieznany — sprawdź wejście"
@@ -549,6 +568,46 @@ struct BlackAccessDeck: View {
             }
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
         }
+    }
+}
+
+/// Odliczanie przytrzymania na kadrze kamery (2026-10-02). Duża cyfra
+/// (2 → 1) i pierścień postępu są nad kciukiem, więc widać je przez cały czas
+/// trzymania; co pełną sekundę lekki sygnał haptyczny.
+private struct BlackHoldCountdown: View {
+    let interaction: BlackAccessState
+    let accessPointID: Int
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+            let progress = interaction.progress(id: accessPointID, now: context.date)
+            let left = max(0, interaction.holdDuration * (1 - progress))
+            let digit = Int(left.rounded(.up))
+            ZStack {
+                Color.black.opacity(0.55)
+                VStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.18), lineWidth: 7)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(BlackTheme.green, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                        Text(digit > 0 ? "\(digit)" : "✓")
+                            .font(.system(size: 46, weight: .heavy, design: .rounded).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .contentTransition(.numericText(countsDown: true))
+                    }
+                    .frame(width: 104, height: 104)
+                    Text("Nie puszczaj")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+            }
+            .sensoryFeedback(.impact(weight: .medium), trigger: digit)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
