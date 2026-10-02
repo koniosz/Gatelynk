@@ -9,6 +9,12 @@ import Observation
 // nagłówkach (README dopuszcza "fallback systemowy").
 
 enum GlassColor {
+    #if GATELYNK_BLACK
+    static let scene = BlackTheme.background
+    static let sheetBg = BlackTheme.surface
+    static let accentLight = Color(hex: 0xC2ADFF)
+    static let accentBlue = Color(hex: 0x7698FF)
+    #else
     /// Scena — tło całego ekranu (#0a0d16).
     static let scene = Color(red: 10/255, green: 13/255, blue: 22/255)
     /// Tło sheetów rgba(16,20,34,.85).
@@ -17,6 +23,7 @@ enum GlassColor {
     static let accentLight = Color(red: 197/255, green: 176/255, blue: 255/255)
     /// Akcent niebieski #5B7CFA.
     static let accentBlue = Color(red: 91/255, green: 124/255, blue: 250/255)
+    #endif
     /// Success #34D399 / jaśniejszy #7BE2A3.
     static let success = Color(red: 52/255, green: 211/255, blue: 153/255)
     static let successLight = Color(red: 123/255, green: 226/255, blue: 163/255)
@@ -37,7 +44,11 @@ enum GlassColor {
 
     /// Główny gradient akcentu (CTA, pille, user-bubble).
     static var accentGradient: LinearGradient {
+        #if GATELYNK_BLACK
+        BlackTheme.actionGradient
+        #else
         LinearGradient(colors: [accentLight, accentBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
+        #endif
     }
     static var dangerGradient: LinearGradient {
         LinearGradient(colors: [dangerSoft, dangerDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -47,10 +58,17 @@ enum GlassColor {
 // MARK: - Promienie (README: karta główna 32 · kafelki 24 · sheet 34)
 
 enum GlassRadius {
+    #if GATELYNK_BLACK
+    static let primary: CGFloat = 18
+    static let tile: CGFloat = 12
+    static let sheet: CGFloat = 22
+    static let row: CGFloat = 11
+    #else
     static let primary: CGFloat = 32
     static let tile: CGFloat = 24
     static let sheet: CGFloat = 34
     static let row: CGFloat = 20
+    #endif
 }
 
 // MARK: - Glass card modifier
@@ -65,12 +83,17 @@ struct GlassCardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background {
+                #if GATELYNK_BLACK
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(BlackTheme.surface)
+                #else
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay {
                         RoundedRectangle(cornerRadius: radius, style: .continuous)
                             .fill(Color.white.opacity(0.10))
                     }
+                #endif
             }
             .overlay {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)

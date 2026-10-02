@@ -122,6 +122,227 @@
 		AA000000000000000000FF29 /* GlassPushContentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1E /* GlassPushContentSheet.swift */; };
 		AA000000000000000000FF2A /* GlassAdminHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE1F /* GlassAdminHomeView.swift */; };
 		AA000000000000000000FF2B /* GlassAdminSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000EE20 /* GlassAdminSheets.swift */; };
+		B10000000000000000000015 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE01;
+		};
+		B10000000000000000000016 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE1C;
+		};
+		B10000000000000000000017 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE1D;
+		};
+		B10000000000000000000018 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE1E;
+		};
+		B10000000000000000000019 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE1F;
+		};
+		B1000000000000000000001A /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE20;
+		};
+		B1000000000000000000001B /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE02;
+		};
+		B1000000000000000000001C /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE03;
+		};
+		B1000000000000000000001D /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE04;
+		};
+		B1000000000000000000001E /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE05;
+		};
+		B1000000000000000000001F /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE06;
+		};
+		B10000000000000000000020 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE07;
+		};
+		B10000000000000000000021 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE08;
+		};
+		B10000000000000000000022 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE09;
+		};
+		B10000000000000000000023 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE0A;
+		};
+		B10000000000000000000024 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE0B;
+		};
+		B10000000000000000000025 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE1B;
+		};
+		B10000000000000000000026 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE0C;
+		};
+		B10000000000000000000027 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE0D;
+		};
+		B10000000000000000000028 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE0E;
+		};
+		B10000000000000000000029 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE0F;
+		};
+		B1000000000000000000002A /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE10;
+		};
+		B1000000000000000000002B /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE11;
+		};
+		B1000000000000000000002C /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000BB18;
+		};
+		B1000000000000000000002D /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000BB02;
+		};
+		B1000000000000000000002E /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000BB03;
+		};
+		B1000000000000000000002F /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000BB04;
+		};
+		B10000000000000000000030 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000BB05;
+		};
+		B10000000000000000000031 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000BB1B;
+		};
+		B10000000000000000000032 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 3D99EDEB2FE001B8003E6631;
+		};
+		B10000000000000000000033 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 3D99EDEA2FE001B8003E6631;
+		};
+		B10000000000000000000034 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 3D99EDEE2FE001C9003E6631;
+		};
+		B10000000000000000000035 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000BB25;
+		};
+		B10000000000000000000036 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE21;
+		};
+		B10000000000000000000037 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE16;
+		};
+		B10000000000000000000038 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE17;
+		};
+		B10000000000000000000039 /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE18;
+		};
+		B1000000000000000000003A /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE22;
+		};
+		B1000000000000000000003B /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE19;
+		};
+		B1000000000000000000003C /* Shared Glass source in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE1A;
+		};
+		B1000000000000000000003D /* BlackTheme.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000005 /* BlackTheme.swift */;
+		};
+		B1000000000000000000003E /* BlackHomeComponents.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000006 /* BlackHomeComponents.swift */;
+		};
+		B1000000000000000000003F /* BlackAccessDeck.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000007 /* BlackAccessDeck.swift */;
+		};
+		B10000000000000000000040 /* BlackAccessState.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000008 /* BlackAccessState.swift */;
+		};
+		B10000000000000000000041 /* BlackPreview.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000009 /* BlackPreview.swift */;
+		};
+		B10000000000000000000043 /* Shared Glass assets in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = AA000000000000000000EE13;
+		};
+		B10000000000000000000044 /* BlackAssets.xcassets in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = B1000000000000000000000C /* BlackAssets.xcassets */;
+		};
+		B10000000000000000000045 /* BarlowSemiCondensed-Regular.ttf in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = B1000000000000000000000D /* BarlowSemiCondensed-Regular.ttf */;
+		};
+		B10000000000000000000046 /* BarlowSemiCondensed-Medium.ttf in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = B1000000000000000000000E /* BarlowSemiCondensed-Medium.ttf */;
+		};
+		B10000000000000000000047 /* BarlowSemiCondensed-SemiBold.ttf in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = B1000000000000000000000F /* BarlowSemiCondensed-SemiBold.ttf */;
+		};
+		B1000000000000000000004A /* WebRTC in Frameworks */ = {
+			isa = PBXBuildFile;
+			productRef = B10000000000000000000049 /* WebRTC */;
+		};
+		B1000000000000000000004C /* NotificationService.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000012 /* NotificationService.swift */;
+		};
+		B10000000000000000000052 /* BlackNotificationService.appex in Embed Foundation Extensions */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000004 /* BlackNotificationService.appex */;
+			settings = {
+				ATTRIBUTES = (
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
+		B20000000000000000000005 /* BlackUITests.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B20000000000000000000003 /* BlackUITests.swift */;
+		};
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -131,6 +352,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = 3D99EE0F302CD0AE003E6631;
 			remoteInfo = GlassNotificationService;
+		};
+		B10000000000000000000050 /* Black Extension Proxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA000000000000000000AA01;
+			proxyType = 1;
+			remoteGlobalIDString = B10000000000000000000002 /* BlackNotificationService */;
+			remoteInfo = BlackNotificationService;
+		};
+		B20000000000000000000009 /* Black App Proxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA000000000000000000AA01;
+			proxyType = 1;
+			remoteGlobalIDString = B10000000000000000000001;
+			remoteInfo = GateLynk_black;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -142,6 +377,17 @@
 			dstSubfolderSpec = 13;
 			files = (
 				3D99EE17302CD0AE003E6631 /* GlassNotificationService.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000053 /* Black Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B10000000000000000000052 /* BlackNotificationService.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -254,6 +500,111 @@
 		AA000000000000000000EE1F /* GlassAdminHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAdminHomeView.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE20 /* GlassAdminSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassAdminSheets.swift; sourceTree = "<group>"; };
 		AA000000000000000000EE21 /* GlassAccessLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlassAccessLogic.swift; path = Logic/GlassAccessLogic.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* GateLynk_black.app */ = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = GateLynk_black.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		B10000000000000000000004 /* BlackNotificationService.appex */ = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.app-extension";
+			includeInIndex = 0;
+			path = BlackNotificationService.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		B10000000000000000000005 /* BlackTheme.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BlackTheme.swift;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000006 /* BlackHomeComponents.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BlackHomeComponents.swift;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000007 /* BlackAccessDeck.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BlackAccessDeck.swift;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000008 /* BlackAccessState.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BlackAccessState.swift;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000009 /* BlackPreview.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BlackPreview.swift;
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000A /* Info.plist */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000B /* GateLynkBlack.entitlements */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			path = GateLynkBlack.entitlements;
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000C /* BlackAssets.xcassets */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			path = BlackAssets.xcassets;
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000D /* BarlowSemiCondensed-Regular.ttf */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file;
+			path = "BarlowSemiCondensed-Regular.ttf";
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000E /* BarlowSemiCondensed-Medium.ttf */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file;
+			path = "BarlowSemiCondensed-Medium.ttf";
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000F /* BarlowSemiCondensed-SemiBold.ttf */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file;
+			path = "BarlowSemiCondensed-SemiBold.ttf";
+			sourceTree = "<group>";
+		};
+		B10000000000000000000012 /* NotificationService.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = GlassNotificationService/NotificationService.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		B10000000000000000000013 /* Info.plist */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = GlassNotificationService/Info.plist;
+			sourceTree = SOURCE_ROOT;
+		};
+		B20000000000000000000002 /* GateLynkBlackUITests.xctest */ = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.cfbundle;
+			includeInIndex = 0;
+			path = GateLynkBlackUITests.xctest;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		B20000000000000000000003 /* BlackUITests.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BlackUITests.swift;
+			sourceTree = "<group>";
+		};
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -299,6 +650,28 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000000000000000000FF18 /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1000000000000000000004B /* Black Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000000000000000000004A /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1000000000000000000004E /* Black Notification Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000007 /* UI Test Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -372,6 +745,9 @@
 				AA000000000000000000EE14 /* GateLynkGlass.app */,
 				AA000000000000000000A214 /* GateLynkGamma.app */,
 				3D99EE10302CD0AE003E6631 /* GlassNotificationService.appex */,
+				B10000000000000000000003 /* GateLynk_black.app */,
+				B10000000000000000000004 /* BlackNotificationService.appex */,
+				B20000000000000000000002 /* GateLynkBlackUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -495,6 +871,9 @@
 				3D99EE00302CCF04003E6631 /* NotificationService */,
 				3D99EE11302CD0AE003E6631 /* GlassNotificationService */,
 				AA000000000000000000AA03 /* Products */,
+				B10000000000000000000011 /* GateLynkBlack */,
+				B10000000000000000000014 /* BlackNotificationService (shared sources) */,
+				B20000000000000000000004 /* BlackUITests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -568,6 +947,49 @@
 				AA000000000000000000EE19 /* GlassCameraSheet.swift */,
 			);
 			path = Sheets;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000010 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				B1000000000000000000000D /* BarlowSemiCondensed-Regular.ttf */,
+				B1000000000000000000000E /* BarlowSemiCondensed-Medium.ttf */,
+				B1000000000000000000000F /* BarlowSemiCondensed-SemiBold.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000011 /* GateLynkBlack */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000005 /* BlackTheme.swift */,
+				B10000000000000000000006 /* BlackHomeComponents.swift */,
+				B10000000000000000000007 /* BlackAccessDeck.swift */,
+				B10000000000000000000008 /* BlackAccessState.swift */,
+				B10000000000000000000009 /* BlackPreview.swift */,
+				B1000000000000000000000A /* Info.plist */,
+				B1000000000000000000000B /* GateLynkBlack.entitlements */,
+				B1000000000000000000000C /* BlackAssets.xcassets */,
+				B10000000000000000000010 /* Fonts */,
+			);
+			path = GateLynkBlack;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000014 /* BlackNotificationService (shared sources) */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000012 /* NotificationService.swift */,
+				B10000000000000000000013 /* Info.plist */,
+			);
+			name = BlackNotificationService;
+			sourceTree = "<group>";
+		};
+		B20000000000000000000004 /* BlackUITests */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000003 /* BlackUITests.swift */,
+			);
+			path = BlackUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -648,6 +1070,63 @@
 			productReference = AA000000000000000000EE14 /* GateLynkGlass.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B10000000000000000000001 /* GateLynk_black */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B10000000000000000000058 /* Build configuration list for PBXNativeTarget "GateLynk_black" */;
+			buildPhases = (
+				B10000000000000000000042 /* Black Sources */,
+				B10000000000000000000048 /* Black Resources */,
+				B1000000000000000000004B /* Black Frameworks */,
+				B10000000000000000000053 /* Black Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B10000000000000000000051 /* Black Extension Dependency */,
+			);
+			name = GateLynk_black;
+			packageProductDependencies = (
+				B10000000000000000000049 /* WebRTC */,
+			);
+			productName = GateLynk_black;
+			productReference = B10000000000000000000003 /* GateLynk_black.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B10000000000000000000002 /* BlackNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B10000000000000000000059 /* Build configuration list for PBXNativeTarget "BlackNotificationService" */;
+			buildPhases = (
+				B1000000000000000000004D /* Black Notification Sources */,
+				B1000000000000000000004E /* Black Notification Frameworks */,
+				B1000000000000000000004F /* Black Notification Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BlackNotificationService;
+			productName = BlackNotificationService;
+			productReference = B10000000000000000000004 /* BlackNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		B20000000000000000000001 /* GateLynkBlackUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2000000000000000000000D /* Build configuration list for PBXNativeTarget "GateLynkBlackUITests" */;
+			buildPhases = (
+				B20000000000000000000006 /* UI Test Sources */,
+				B20000000000000000000007 /* UI Test Frameworks */,
+				B20000000000000000000008 /* UI Test Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2000000000000000000000A /* Black App Dependency */,
+			);
+			name = GateLynkBlackUITests;
+			productName = GateLynkBlackUITests;
+			productReference = B20000000000000000000002 /* GateLynkBlackUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -658,6 +1137,16 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
+					B20000000000000000000001 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = B10000000000000000000001;
+					};
+					B10000000000000000000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					B10000000000000000000002 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					3D99EE0F302CD0AE003E6631 = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -692,6 +1181,9 @@
 				AA000000000000000000DD01 /* GateLynkGlass */,
 				AA000000000000000000A101 /* GateLynkGamma */,
 				3D99EE0F302CD0AE003E6631 /* GlassNotificationService */,
+				B10000000000000000000001 /* GateLynk_black */,
+				B10000000000000000000002 /* BlackNotificationService */,
+				B20000000000000000000001 /* GateLynkBlackUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -725,6 +1217,32 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000000000000000000FF12 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000048 /* Black Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000043 /* Shared Glass assets in Resources */,
+				B10000000000000000000044 /* BlackAssets.xcassets in Resources */,
+				B10000000000000000000045 /* BarlowSemiCondensed-Regular.ttf in Resources */,
+				B10000000000000000000046 /* BarlowSemiCondensed-Medium.ttf in Resources */,
+				B10000000000000000000047 /* BarlowSemiCondensed-SemiBold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1000000000000000000004F /* Black Notification Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000008 /* UI Test Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -868,6 +1386,74 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000000000000000000042 /* Black Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000015 /* Shared Glass source in Sources */,
+				B10000000000000000000016 /* Shared Glass source in Sources */,
+				B10000000000000000000017 /* Shared Glass source in Sources */,
+				B10000000000000000000018 /* Shared Glass source in Sources */,
+				B10000000000000000000019 /* Shared Glass source in Sources */,
+				B1000000000000000000001A /* Shared Glass source in Sources */,
+				B1000000000000000000001B /* Shared Glass source in Sources */,
+				B1000000000000000000001C /* Shared Glass source in Sources */,
+				B1000000000000000000001D /* Shared Glass source in Sources */,
+				B1000000000000000000001E /* Shared Glass source in Sources */,
+				B1000000000000000000001F /* Shared Glass source in Sources */,
+				B10000000000000000000020 /* Shared Glass source in Sources */,
+				B10000000000000000000021 /* Shared Glass source in Sources */,
+				B10000000000000000000022 /* Shared Glass source in Sources */,
+				B10000000000000000000023 /* Shared Glass source in Sources */,
+				B10000000000000000000024 /* Shared Glass source in Sources */,
+				B10000000000000000000025 /* Shared Glass source in Sources */,
+				B10000000000000000000026 /* Shared Glass source in Sources */,
+				B10000000000000000000027 /* Shared Glass source in Sources */,
+				B10000000000000000000028 /* Shared Glass source in Sources */,
+				B10000000000000000000029 /* Shared Glass source in Sources */,
+				B1000000000000000000002A /* Shared Glass source in Sources */,
+				B1000000000000000000002B /* Shared Glass source in Sources */,
+				B1000000000000000000002C /* Shared Glass source in Sources */,
+				B1000000000000000000002D /* Shared Glass source in Sources */,
+				B1000000000000000000002E /* Shared Glass source in Sources */,
+				B1000000000000000000002F /* Shared Glass source in Sources */,
+				B10000000000000000000030 /* Shared Glass source in Sources */,
+				B10000000000000000000031 /* Shared Glass source in Sources */,
+				B10000000000000000000032 /* Shared Glass source in Sources */,
+				B10000000000000000000033 /* Shared Glass source in Sources */,
+				B10000000000000000000034 /* Shared Glass source in Sources */,
+				B10000000000000000000035 /* Shared Glass source in Sources */,
+				B10000000000000000000036 /* Shared Glass source in Sources */,
+				B10000000000000000000037 /* Shared Glass source in Sources */,
+				B10000000000000000000038 /* Shared Glass source in Sources */,
+				B10000000000000000000039 /* Shared Glass source in Sources */,
+				B1000000000000000000003A /* Shared Glass source in Sources */,
+				B1000000000000000000003B /* Shared Glass source in Sources */,
+				B1000000000000000000003C /* Shared Glass source in Sources */,
+				B1000000000000000000003D /* BlackTheme.swift in Sources */,
+				B1000000000000000000003E /* BlackHomeComponents.swift in Sources */,
+				B1000000000000000000003F /* BlackAccessDeck.swift in Sources */,
+				B10000000000000000000040 /* BlackAccessState.swift in Sources */,
+				B10000000000000000000041 /* BlackPreview.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1000000000000000000004D /* Black Notification Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000000000000000000004C /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000006 /* UI Test Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000000000000000000005 /* BlackUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -875,6 +1461,16 @@
 			isa = PBXTargetDependency;
 			target = 3D99EE0F302CD0AE003E6631 /* GlassNotificationService */;
 			targetProxy = 3D99EE15302CD0AE003E6631 /* PBXContainerItemProxy */;
+		};
+		B10000000000000000000051 /* Black Extension Dependency */ = {
+			isa = PBXTargetDependency;
+			target = B10000000000000000000002 /* BlackNotificationService */;
+			targetProxy = B10000000000000000000050 /* Black Extension Proxy */;
+		};
+		B2000000000000000000000A /* Black App Dependency */ = {
+			isa = PBXTargetDependency;
+			target = B10000000000000000000001;
+			targetProxy = B20000000000000000000009 /* Black App Proxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1205,6 +1801,173 @@
 			};
 			name = Release;
 		};
+		B10000000000000000000054 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				SWIFT_VERSION = 5.0;
+				MARKETING_VERSION = 1.1;
+				INFOPLIST_FILE = GateLynkBlack/Info.plist;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				GENERATE_INFOPLIST_FILE = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GateLynkBlack/GateLynkBlack.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.black;
+				CURRENT_PROJECT_VERSION = 1;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) GATELYNK_BLACK";
+			};
+			name = Debug;
+		};
+		B10000000000000000000055 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				MARKETING_VERSION = 1.1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				CURRENT_PROJECT_VERSION = 1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.black.BlackNotificationService;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = BlackNotificationService;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_STYLE = Automatic;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				SKIP_INSTALL = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				INFOPLIST_FILE = GlassNotificationService/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				APPLICATION_EXTENSION_API_ONLY = YES;
+			};
+			name = Debug;
+		};
+		B10000000000000000000056 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				SWIFT_VERSION = 5.0;
+				MARKETING_VERSION = 1.1;
+				INFOPLIST_FILE = GateLynkBlack/Info.plist;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				GENERATE_INFOPLIST_FILE = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GateLynkBlack/GateLynkBlack.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.black;
+				CURRENT_PROJECT_VERSION = 1;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) GATELYNK_BLACK";
+			};
+			name = Release;
+		};
+		B10000000000000000000057 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				MARKETING_VERSION = 1.1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				CURRENT_PROJECT_VERSION = 1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.black.BlackNotificationService;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = BlackNotificationService;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_STYLE = Automatic;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				SKIP_INSTALL = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				INFOPLIST_FILE = GlassNotificationService/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				APPLICATION_EXTENSION_API_ONLY = YES;
+			};
+			name = Release;
+		};
+		B2000000000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.black.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GateLynk_black;
+			};
+			name = Debug;
+		};
+		B2000000000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D6JQ5PL7FV;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gatelynk.app.black.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GateLynk_black;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1253,6 +2016,33 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B10000000000000000000058 /* Build configuration list for PBXNativeTarget "GateLynk_black" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000054 /* Debug */,
+				B10000000000000000000056 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B10000000000000000000059 /* Build configuration list for PBXNativeTarget "BlackNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000055 /* Debug */,
+				B10000000000000000000057 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B2000000000000000000000D /* Build configuration list for PBXNativeTarget "GateLynkBlackUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2000000000000000000000B /* Debug */,
+				B2000000000000000000000C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1275,6 +2065,11 @@
 		AA000000000000000000DD10 /* WebRTC */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3D99EDF02FE03F9D003E6631 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+		B10000000000000000000049 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3D99EDF02FE03F9D003E6631;
 			productName = WebRTC;
 		};
 /* End XCSwiftPackageProductDependency section */

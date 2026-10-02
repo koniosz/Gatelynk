@@ -211,6 +211,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        #if GATELYNK_BLACK && DEBUG
+        // The visual review fixture is isolated from auth, APNs and real devices.
+        if BlackPreviewMode.enabled { return true }
+        #endif
         UNUserNotificationCenter.current().delegate = self
         requestPushPermission()
         setupVoIP()

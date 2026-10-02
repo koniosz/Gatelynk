@@ -26,6 +26,20 @@ struct GateLynkGlassApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if GATELYNK_BLACK && DEBUG
+            if BlackPreviewMode.enabled {
+                BlackPreview()
+                    .preferredColorScheme(.dark)
+            } else {
+                residentApplication
+            }
+            #else
+            residentApplication
+            #endif
+        }
+    }
+
+    private var residentApplication: some View {
             ZStack {
                 Group {
                     if auth.isRestoring {
@@ -52,7 +66,6 @@ struct GateLynkGlassApp: App {
             }
             .animation(.easeInOut(duration: 0.2), value: call.activeSession != nil)
             .preferredColorScheme(.dark)
-        }
     }
 }
 

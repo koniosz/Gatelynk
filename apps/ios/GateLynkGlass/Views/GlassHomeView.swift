@@ -46,6 +46,9 @@ struct GlassHomeView: View {
 
     // UI
     @State private var tab: GlassHomeTab = .home
+    #if GATELYNK_BLACK
+    @State private var blackAccessState = BlackAccessState()
+    #endif
     @State private var activeSheet: GlassSheetKind?
     /// Wejście z „Wymaga uwagi" wprost w szczegóły przepustki (czyszczone,
     /// gdy sheet gości znika — jak `pushTicketId`).
@@ -84,10 +87,18 @@ struct GlassHomeView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                #if GATELYNK_BLACK
+                BlackBackground()
+                #else
                 GlassBackground(tod: tod, calm: isResident ? (tab == .home ? 0.16 : 0.42) : 0)
+                #endif
 
                 if isResident {
+                    #if GATELYNK_BLACK
+                    blackResidentRoot(availableHeight: geo.size.height)
+                    #else
                     residentRoot
+                    #endif
                     sheetHost(maxHeight: geo.size.height * 0.8)
                 } else if case .buildingAdmin(let admin) = auth.role {
                     // 2026-09-06: administrator osiedla dostaje własny zestaw
@@ -308,6 +319,113 @@ struct GlassHomeView: View {
             GlassTabBar(selection: $tab, flagged: flaggedTabs)
         }
     }
+
+    #if GATELYNK_BLACK
+    /// A presentation-only variant: authentication, permissions, push routing,
+    /// intercom and every detail sheet still use the existing resident flows.
+    private func blackResidentRoot(availableHeight: CGFloat) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: tab == .home ? 0 : 14) {
+                if loadFailed { offlineBanner.padding(.bottom, 10) }
+                switch tab {
+                case .home: blackHomeTab(availableHeight: availableHeight)
+                case .access: accessTab
+                case .matters: mattersTab
+                case .estate: estateTab
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, tab == .home ? 0 : 18)
+        }
+        .id(tab)
+        .refreshable { await loadAll() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            BlackHomeHeader(
+                propertyName: building?.name ?? "Twoje osiedle",
+                title: tab == .home ? "Cześć, \(firstName)" : nil,
+                compact: availableHeight < 750,
+                onProperty: { activeSheet = .properties },
+                onAccount: { activeSheet = .more }
+            )
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            BlackTabBar(selection: $tab, flagged: flaggedTabs)
+        }
+    }
+
+    @ViewBuilder
+    private func blackHomeTab(availableHeight: CGFloat) -> some View {
+        if !pendingApprovals.isEmpty {
+            guestApprovalsSection.padding(.bottom, 12)
+        }
+        BlackAccessDeck(
+            interaction: blackAccessState,
+            accessPoints: accessPoints,
+            loadFailed: loadFailed,
+            onOpen: { await openAccessPoint($0) },
+            onFireConfirm: { activeSheet = .fireConfirm($0.id) },
+            onOpenMenu: { activeSheet = .gate },
+            onCamera: { cameraAP = $0; activeSheet = .camera },
+            onIntercom: { ap in Task { await startIntercomFlow(preferred: ap) } },
+            intercomBusy: intercomBusy,
+            lockStatuses: nukiLockMap,
+            favoriteKey: favoriteEntranceKey,
+            cameraHeight: BlackTheme.cameraHeight(for: availableHeight),
+            isSuspended: activeSheet != nil || scenePhase != .active
+        )
+
+        if !blackModules.isEmpty {
+            BlackShortcutGrid(modules: blackModules, summaries: blackSummaries) {
+                activeSheet = $0.sheet
+            }
+            .padding(.top, 7)
+            .padding(.bottom, 12)
+        }
+
+        // Content is driven by real source states. More urgent items can extend
+        // the page; nothing is clipped just to force one fixed-height screen.
+        ForEach(attentionItems) { item in
+            BlackContextNotice(title: item.title, detail: item.detail,
+                               icon: blackAttentionIcon(item.id), tint: item.tint,
+                               action: item.action)
+                .padding(.bottom, attentionItems.count > 1 ? 8 : 0)
+        }
+        if [srcParcels, srcPayments, srcGuests, srcTickets].contains(.failed) {
+            BlackContextNotice(title: "Nie wszystkie dane są aktualne",
+                               detail: "Dotknij, aby odświeżyć sprawy osiedla",
+                               icon: "refresh-cw", tint: BlackTheme.amber) {
+                Task { await loadAll() }
+            }
+        }
+        BlackAssistantLink { activeSheet = .chat }
+    }
+
+    private var blackModules: [BlackModule] {
+        BlackModule.allCases.filter { module in
+            switch module {
+            case .vehicles: isAvailable("vehicles")
+            case .guests: isAvailable("guests", srcGuests)
+            case .payments: isAvailable("payments", srcPayments)
+            case .tickets: isAvailable("tickets", srcTickets)
+            case .parcels: isAvailable("parcels", srcParcels)
+            case .announcements: isAvailable("notifications")
+            }
+        }
+    }
+
+    private var blackSummaries: [BlackModule: String] {
+        [.vehicles: vehiclesSummary.text ?? "", .guests: guestsSummary ?? "",
+         .payments: paymentsSummary.text ?? "", .tickets: ticketsSummary ?? "",
+         .parcels: parcelsSummary ?? ""]
+    }
+
+    private func blackAttentionIcon(_ id: String) -> String {
+        if id.hasPrefix("payment") { return "credit-card" }
+        if id.hasPrefix("ticket") { return "wrench" }
+        if id.hasPrefix("guest") { return "users-round" }
+        return "package-check"
+    }
+    #endif
 
     private var initials: String {
         let first = firstName.first.map(String.init) ?? ""
