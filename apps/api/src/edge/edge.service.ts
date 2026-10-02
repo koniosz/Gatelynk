@@ -198,15 +198,33 @@ export class EdgeService {
           ? cfg.relays.map((r: any) => ({ index: r.index ?? 0, name: r.name || `Przekaźnik ${r.index ?? 0}` }))
           : [{ index: cfg.doorRelayIndex ?? 0, name: deviceName }]
 
+        // Przekaźniki tego urządzenia, które mają już wejście w budynku. Nowy
+        // przekaźnik urządzenia, które JUŻ ma wejście, to zwykle zmiana numeru
+        // przekaźnika w configu na Edge (VN 27.09: 0 → 1), a nie nowa brama —
+        // takie wejście tworzymy UKRYTE, żeby duplikat nie trafił do apki
+        // mieszkańców; admin włącza je w panelu, jeśli jest prawdziwe.
+        // Całkiem nowe urządzenie (bez wejść) dostaje widoczne wejścia jak dotąd.
+        const knownRelays = new Set(
+          (await this.prisma.accessPoint.findMany({
+            where: { buildingId, deviceId: d.deviceId },
+            select: { relayIndex: true },
+          })).map((ap) => ap.relayIndex),
+        )
+        const deviceHadAccessPoints = knownRelays.size > 0
+
         for (const relay of relays) {
+          if (deviceHadAccessPoints && !knownRelays.has(relay.index)) {
+            this.logger.warn(
+              `Nowy przekaźnik ${relay.index} urządzenia ${d.deviceId} (budynek ${buildingId}) — ` +
+              `wejście utworzone jako ukryte; włącz je w panelu, jeśli to nie duplikat`,
+            )
+          }
           // Faza 5 — przy update NIE nadpisujemy `label`/`icon`. Admin może
           // override-ować nazwę („Brama N" zamiast „Przekaźnik 0") w panelu
           // BA, a sync co 5 min nie powinien tego cofać. Update odświeża TYLKO
           // `edgeDeviceId` (gdyby Edge został wymieniony) — `isActive` zostaje
           // nietknięte, więc wejście ukryte przez admina („Pokazuj mieszkańcom
-          // w aplikacji" odznaczone) nie wraca po kolejnym syncu. Uwaga: zmiana
-          // numeru przekaźnika w configu urządzenia na Edge tworzy NOWY AP
-          // (klucz to deviceId+relayIndex) — stary zostaje, stąd duplikaty.
+          // w aplikacji" odznaczone) nie wraca po kolejnym syncu.
           await this.prisma.accessPoint.upsert({
             where: { buildingId_deviceId_relayIndex: { buildingId, deviceId: d.deviceId, relayIndex: relay.index } },
             create: {
@@ -216,7 +234,7 @@ export class EdgeService {
               relayIndex: relay.index,
               label: relay.name,
               icon: this.guessIcon(relay.name),
-              isActive: true,
+              isActive: !deviceHadAccessPoints,
             },
             update: {
               edgeDeviceId,
