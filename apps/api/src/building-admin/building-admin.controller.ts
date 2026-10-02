@@ -369,6 +369,23 @@ export class BuildingAdminController {
     })
   }
 
+  // ── Powiadomienie o przyjeździe śmieciarki (2026-10-02) ──────────────────
+  @UseGuards(BuildingAdminJwtAuthGuard)
+  @Get('buildings/:id/waste-truck-notify')
+  getWasteTruckNotify(@Param('id') id: string, @Request() req: any) {
+    return this.baService.getWasteTruckNotify(+id, req.user.buildingIds)
+  }
+
+  @UseGuards(BuildingAdminJwtAuthGuard)
+  @Patch('buildings/:id/waste-truck-notify')
+  setWasteTruckNotify(
+    @Param('id') id: string,
+    @Body() body: { enabled: boolean },
+    @Request() req: any,
+  ) {
+    return this.baService.setWasteTruckNotify(+id, req.user.buildingIds, body?.enabled)
+  }
+
   // ── Kamery LPR (read-only + linked AP edit) ───────────────────────────────
   @UseGuards(BuildingAdminJwtAuthGuard)
   @Get('buildings/:id/lpr-cameras')

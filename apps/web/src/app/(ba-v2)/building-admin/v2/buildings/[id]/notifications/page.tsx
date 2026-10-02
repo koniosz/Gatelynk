@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { buildingAdminApi } from "@/lib/building-admin-api";
 import { BUILDING_TZ, buildingDayKey } from "@/lib/building-time";
+import { BaSwitch } from "@/components/ba-v2/BaSwitch";
 
 interface Resident {
   id: number;
@@ -189,14 +190,17 @@ export default function NotificationsPage() {
         alignItems: "start",
       }}
     >
-      <ComposerCard
-        buildingId={buildingId}
-        residents={residents}
-        onSent={() => {
-          setPage(0);
-          void loadHistory();
-        }}
-      />
+      <div style={{ display: "grid", gap: 16 }}>
+        <ComposerCard
+          buildingId={buildingId}
+          residents={residents}
+          onSent={() => {
+            setPage(0);
+            void loadHistory();
+          }}
+        />
+        <AutomaticNotificationsCard buildingId={buildingId} />
+      </div>
 
       {/* ── Historia ── */}
       <div className="ba-panel">
@@ -655,6 +659,96 @@ function ComposerCard({
           </button>
         )}
       </form>
+    </div>
+  );
+}
+
+// 2026-10-02 — powiadomienia automatyczne ze zdarzeń kamer. Na razie jedno:
+// przyjazd śmieciarki (Edge: WASTE_TRUCK potwierdzony na ≥2 klatkach).
+interface WasteTruckNotify {
+  enabled: boolean;
+  recipients: number;
+  optedIn: number;
+  optedOut: number;
+}
+
+/** 1 osoba · 2 osoby · 5 osób */
+function personsLabel(n: number): string {
+  if (n === 1) return "osoba";
+  const d = n % 10;
+  const h = n % 100;
+  return d >= 2 && d <= 4 && (h < 12 || h > 14) ? "osoby" : "osób";
+}
+
+function AutomaticNotificationsCard({ buildingId }: { buildingId: number }) {
+  const [data, setData] = useState<WasteTruckNotify | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!Number.isFinite(buildingId)) return;
+    buildingAdminApi
+      .get<WasteTruckNotify>(`/building-admin/buildings/${buildingId}/waste-truck-notify`)
+      .then((r) => setData(r.data))
+      .catch(() => setError("Nie udało się pobrać ustawień powiadomień"));
+  }, [buildingId]);
+
+  const toggle = async (value: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await buildingAdminApi.patch<WasteTruckNotify>(
+        `/building-admin/buildings/${buildingId}/waste-truck-notify`,
+        { enabled: value },
+      );
+      setData(r.data);
+    } catch {
+      setError("Nie udało się zapisać — spróbuj ponownie");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="ba-panel">
+      <div className="ba-panel-head">
+        <div className="ba-panel-title">
+          <Bell size={16} />
+          Powiadomienia automatyczne
+        </div>
+      </div>
+      <div style={{ padding: "4px 16px 16px", display: "grid", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Przyjazd śmieciarki</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, lineHeight: 1.45 }}>
+              Gdy kamery rozpoznają pojazd odbioru odpadów (potwierdzenie na co najmniej dwóch ujęciach),
+              mieszkańcy dostaną powiadomienie w aplikacji — jedno na rundę odbioru.
+            </div>
+          </div>
+          <BaSwitch
+            checked={data?.enabled ?? false}
+            busy={busy}
+            disabled={!data}
+            ariaLabel="Powiadamiaj wszystkich mieszkańców o przyjeździe śmieciarki"
+            onChange={(v) => void toggle(v)}
+          >
+            <span style={{ fontSize: 12, color: data?.enabled ? "var(--green, #16a34a)" : "var(--muted)" }}>
+              {busy ? "Zapisywanie…" : data?.enabled ? "Wszyscy mieszkańcy" : "Wyłączone"}
+            </span>
+          </BaSwitch>
+        </div>
+        {data ? (
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+            Powiadomienie otrzyma teraz: <strong style={{ color: "var(--text)" }}>{data.recipients}</strong>{" "}
+            {personsLabel(data.recipients)}
+            {data.optedOut > 0 ? ` · ${data.optedOut} wyłączyło u siebie` : ""}
+            {!data.enabled && data.optedIn > 0 ? ` · ${data.optedIn} włączyło u siebie w aplikacji` : ""}
+            . Każdy mieszkaniec może zmienić to w aplikacji (Konto → Powiadomienia).
+          </div>
+        ) : null}
+        {error ? <div style={{ fontSize: 12, color: "var(--red)" }}>{error}</div> : null}
+      </div>
     </div>
   );
 }

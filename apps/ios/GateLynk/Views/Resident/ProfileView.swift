@@ -49,6 +49,8 @@ struct SettingsView: View {
     // `/resident/profile/notify-anomalies`. Disclaimer-sheet pokazujemy
     // tylko przy pierwszym włączeniu (track via `confirmedAnomalyOptIn`).
     @State private var notifyAnomalies = false
+    /// 2026-10-02 — przyjazd śmieciarki (nil = starszy backend, sekcja ukryta).
+    @State private var notifyWasteTruck: Bool?
     // 2026-06-02 — stały PIN do klawiatury bram/domofonu (offline-friendly).
     @State private var intercomPin: String = ""
     @State private var intercomPinSaved: String? = nil
@@ -120,6 +122,8 @@ struct SettingsView: View {
             if resident?.hasFeature("fall_detection") ?? true {
                 safetySection
             }
+            // Niezależne od wykrywania upadków — osobne źródło (kamery wizyjne).
+            if notifyWasteTruck != nil { wasteTruckSection }
             themeSection
             logoutSection
             versionSection
@@ -315,6 +319,40 @@ struct SettingsView: View {
             }
             .navigationTitle("Zgoda")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var wasteTruckSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { notifyWasteTruck ?? false },
+                set: { value in Task { await setWasteTruck(value) } },
+            )) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Przyjazd śmieciarki", systemImage: "truck.box.fill")
+                    Text("Powiadomienie, gdy kamery osiedla rozpoznają pojazd odbioru odpadów")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        } header: {
+            Label("Powiadomienia", systemImage: "bell.badge")
+        }
+    }
+
+    private func setWasteTruck(_ enabled: Bool) async {
+        let previous = notifyWasteTruck
+        notifyWasteTruck = enabled
+        do {
+            struct Body: Encodable { let enabled: Bool }
+            struct Resp: Decodable { let notifyWasteTruck: Bool }
+            let resp: Resp = try await APIClient.shared.patch(
+                "/resident/profile/notify-waste-truck",
+                body: Body(enabled: enabled),
+            )
+            notifyWasteTruck = resp.notifyWasteTruck
+        } catch {
+            notifyWasteTruck = previous
         }
     }
 
@@ -984,6 +1022,7 @@ struct SettingsView: View {
             let r: Resident = try await APIClient.shared.get("/resident/me")
             resident = r
             notifyAnomalies = r.notifyAnomalies ?? false
+            notifyWasteTruck = r.notifyWasteTruck
             intercomPinSaved = r.intercomPin
             // Jeśli flag jest ON to znaczy że user już kiedyś świadomie włączył
             // (backend ma true) — zaznacz lokalnie że disclaimer został zaakceptowany,

@@ -25,6 +25,10 @@ struct GlassMoreSheet: View {
     let onOpenProperties: () -> Void
     let onComingSoon: (GlassUpcomingFeature) -> Void
     let onClose: () -> Void
+    /// 2026-10-02 — aktualna wartość z `/resident/me` (nil = starszy backend:
+    /// przełącznika nie pokazujemy) + odświeżenie danych Domu po zmianie.
+    var notifyWasteTruck: Bool? = nil
+    var onPreferencesChanged: () async -> Void = {}
     /// true = sheet otwarty z zakładki Dostęp wprost na „Domowników"
     /// („Wróć" zamyka sheet zamiast wracać do konta).
     var startInHousehold = false
@@ -39,6 +43,9 @@ struct GlassMoreSheet: View {
     private enum Mode: Equatable { case main, deleteConfirm, household, householdInvite }
 
     @State private var mode: Mode = .main
+    @State private var wasteTruck: Bool?
+    @State private var wasteTruckSaving = false
+    @State private var wasteTruckError: String?
     @State private var deleting = false
     @State private var deleteError: String?
 
@@ -112,6 +119,16 @@ struct GlassMoreSheet: View {
             }
             .buttonStyle(.plain)
 
+            if let wasteTruck = wasteTruck ?? notifyWasteTruck {
+                Text("POWIADOMIENIA")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.0)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+                wasteTruckRow(wasteTruck)
+            }
+
             infoRow(icon: "sparkles", label: "Wersja", value: appVersion)
 
             // Polityka prywatności (wymóg App Store)
@@ -147,6 +164,69 @@ struct GlassMoreSheet: View {
                     .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: Powiadomienie o przyjeździe śmieciarki (2026-10-02)
+
+    private func wasteTruckRow(_ enabled: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                Image(systemName: "truck.box.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(GlassColor.accentLight)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Przyjazd śmieciarki")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text("Powiadomienie, gdy kamery osiedla rozpoznają pojazd odbioru odpadów.")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if wasteTruckSaving {
+                    ProgressView().tint(.white).scaleEffect(0.8)
+                }
+                Toggle("", isOn: Binding(
+                    get: { enabled },
+                    set: { value in Task { await setWasteTruck(value) } }
+                ))
+                .labelsHidden()
+                .tint(GlassColor.success)
+                .disabled(wasteTruckSaving)
+                .accessibilityLabel("Powiadomienie o przyjeździe śmieciarki")
+            }
+            if let wasteTruckError {
+                Text(wasteTruckError)
+                    .font(.footnote)
+                    .foregroundStyle(GlassColor.dangerSoft)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        }
+    }
+
+    private func setWasteTruck(_ enabled: Bool) async {
+        guard !wasteTruckSaving else { return }
+        wasteTruckSaving = true
+        wasteTruckError = nil
+        defer { wasteTruckSaving = false }
+        struct Body: Encodable { let enabled: Bool }
+        struct Resp: Decodable { let notifyWasteTruck: Bool }
+        do {
+            let resp: Resp = try await APIClient.shared.patch(
+                "/resident/profile/notify-waste-truck", body: Body(enabled: enabled)
+            )
+            wasteTruck = resp.notifyWasteTruck
+            await onPreferencesChanged()
+        } catch {
+            wasteTruckError = GlassErrorText.save(error, fallback: "Nie udało się zapisać ustawienia.")
         }
     }
 

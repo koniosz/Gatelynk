@@ -30,6 +30,7 @@ import { AnomalyEventsModule } from './anomaly-events/anomaly-events.module'
 import { ResidentsImportModule } from './residents-import/residents-import.module'
 import { AkuvoxDirectoryModule } from './akuvox-directory/akuvox-directory.module'
 import { EstateMapModule } from './estate-map/estate-map.module'
+import { WasteTruckModule } from './waste-truck/waste-truck.module'
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { EstateMapModule } from './estate-map/estate-map.module'
     AkuvoxDirectoryModule,
     // Mapa osiedla (2026-09-08) — render + przypisania miejsc na mapie do lokali.
     EstateMapModule,
+    WasteTruckModule,
   ],
   // AppController wystawia `/api/health` (Fly health check oczekuje 200 — bez
   // tego Fly proxy zwraca [PR01] na zewnątrz i sygnatura z `flyctl checks list`

@@ -987,6 +987,38 @@ export class BuildingAdminService {
    *
    * Bez nowych typów tunnelu — używamy istniejącego DEVICE_CONFIG_UPDATE.
    */
+  /**
+   * 2026-10-02 — powiadomienie o przyjeździe śmieciarki dla wszystkich
+   * mieszkańców. Zwraca też, ile osób dostanie je teraz (z uwzględnieniem
+   * wyboru mieszkańców w aplikacji) — panel pokazuje to obok przełącznika.
+   */
+  async getWasteTruckNotify(buildingId: number, buildingIds: number[]) {
+    this.guardBuilding(buildingId, buildingIds)
+    const rows = await this.prisma.$queryRaw<
+      { enabled: boolean; recipients: number; optedOut: number; optedIn: number }[]
+    >`
+      SELECT b."wasteTruckNotifyAll" AS enabled,
+             COUNT(r.id) FILTER (WHERE COALESCE(r."notifyWasteTruck", b."wasteTruckNotifyAll"))::int AS recipients,
+             COUNT(r.id) FILTER (WHERE r."notifyWasteTruck" = FALSE)::int AS "optedOut",
+             COUNT(r.id) FILTER (WHERE r."notifyWasteTruck" = TRUE)::int AS "optedIn"
+        FROM "buildings" b
+        LEFT JOIN "residents" r ON r."buildingId" = b.id
+       WHERE b.id = ${buildingId}
+       GROUP BY b.id
+    `
+    if (!rows[0]) throw new NotFoundException('Budynek nie istnieje')
+    return rows[0]
+  }
+
+  async setWasteTruckNotify(buildingId: number, buildingIds: number[], enabled: unknown) {
+    this.guardBuilding(buildingId, buildingIds)
+    if (typeof enabled !== 'boolean') throw new BadRequestException('enabled musi być true/false')
+    await this.prisma.$executeRaw`
+      UPDATE "buildings" SET "wasteTruckNotifyAll" = ${enabled} WHERE id = ${buildingId}
+    `
+    return this.getWasteTruckNotify(buildingId, buildingIds)
+  }
+
   async setLprLinkedAccessPoint(
     buildingId: number,
     deviceUuid: string,

@@ -3016,6 +3016,14 @@ export class StoreService implements OnModuleInit {
   // ── Zdarzenia sytuacyjne (2026-08-26) ───────────────────────────────
 
   /** INSERT OR IGNORE po dedup_key — zwraca rowid nowego wiersza, null gdy duplikat. */
+  /** Początek ostatniego zdarzenia danego typu przed `beforeTs` (null gdy brak). */
+  situationLastStartedTs(type: string, beforeTs: number): number | null {
+    const row = this.db
+      .prepare(`SELECT MAX(started_ts) AS ts FROM situation_events WHERE type = ? AND started_ts < ?`)
+      .get(type, beforeTs) as { ts: number | null } | undefined
+    return row?.ts ?? null
+  }
+
   situationInsert(ev: {
     type: string
     cameraDeviceId?: string | null
@@ -3141,12 +3149,17 @@ export class StoreService implements OnModuleInit {
     brandDetected: string | null
     anomalyType: string | null
     fallLikelihood: number | null
+    wasteCategory: string | null
+    wasteConf: number | null
+    wasteOperator: string | null
   }> {
     return this.db
       .prepare(
         `SELECT id, camera_device_id AS cameraDeviceId, ts, summary,
                 brand_detected AS brandDetected, anomaly_type AS anomalyType,
-                fall_likelihood AS fallLikelihood
+                fall_likelihood AS fallLikelihood,
+                waste_category AS wasteCategory, waste_conf AS wasteConf,
+                waste_operator AS wasteOperator
            FROM vision_detections
           WHERE ts >= ?
           ORDER BY ts ASC`,

@@ -2214,3 +2214,24 @@ testy node:test):
   `vehicledetection`; w logu: „decyzja po N ms od zdarzenia [motion|vehicle]".
 Weryfikacja po deployu: `grep "decyzja po" edge.log` — oczekiwane setki ms,
 nie tysiące; udział `probable_match` dla tablic z rejestru powinien spaść.
+
+## Powiadomienie o przyjeździe śmieciarki (2026-10-02)
+
+- Edge: `SituationCorrelator.detectWasteTruck` + czysty `waste-truck.util.ts`
+  (`findWasteVisits`, testy node:test). Klatka się liczy przy `waste_category`
+  z pewnością ≥0.5 albo rozpoznanym napisie firmy (`waste_operator`); wizyta
+  POTWIERDZONA, gdy druga taka klatka (dowolna kamera) w ≤10 min; przerwa
+  >20 min = nowa wizyta; 3 h od poprzedniego przyjazdu = ta sama runda.
+  Zapis `situation_events` typ `WASTE_TRUCK` od razu po potwierdzeniu (nie po
+  końcu wizyty); tunel `WASTE_TRUCK_ARRIVED {ts, confirmedTs, frames, cameras}`
+  tylko przy świeżym potwierdzeniu (≤20 min) — bootstrap 24 h nie budzi ludzi.
+- API: `WasteTruckService` (moduł `waste-truck`): odbiorcy
+  `COALESCE(residents.notifyWasteTruck, buildings.wasteTruckNotifyAll)`, push
+  „Śmieciarka na osiedlu", blokada 2 h per budynek, odrzuca potwierdzenia
+  starsze niż 30 min. Mieszkaniec: `PATCH /resident/profile/notify-waste-truck`,
+  `/resident/me.notifyWasteTruck` = skuteczna wartość. Administrator:
+  `GET/PATCH /building-admin/buildings/:id/waste-truck-notify` (+ liczba
+  odbiorców, ile osób wyłączyło/włączyło u siebie).
+- UI: panel BA › Powiadomienia › „Powiadomienia automatyczne"; Glass › Konto ›
+  Powiadomienia; GateLynk › Profil › Powiadomienia; etykieta „Śmieciarka"
+  w Zdarzeniach (web + Glass admin).

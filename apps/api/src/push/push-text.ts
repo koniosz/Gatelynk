@@ -35,7 +35,7 @@ export function pushThreadId(data?: Record<string, unknown>): string | undefined
   if (kind === 'NOTIFICATION') return 'announcements'
   if (kind === 'PAYMENT_REMINDER') return 'payments'
   if (kind === 'ANOMALY' || kind === 'COURIER_VISIT' || kind === 'OVERSTAY') return 'security'
-  if (kind === 'MORNING-BRIEF' || kind === 'EVENING-CHRONICLE' || kind === 'WASTE-REMINDER') return 'daily'
+  if (kind === 'MORNING-BRIEF' || kind === 'EVENING-CHRONICLE' || kind === 'WASTE-REMINDER' || kind === 'WASTE-TRUCK') return 'daily'
   return kind.toLowerCase()
 }
 

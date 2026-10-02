@@ -254,10 +254,16 @@ export class ResidentService {
     // kolumną. Faza 7.1 to powinno działać przez typed client, ale per-field
     // raw SQL nie boli i unika regresji.
     const rows = await this.prisma.$queryRaw<
-      { avatarBase64: string | null; notifyAnomalies: boolean | null; intercomPin: string | null }[]
+      {
+        avatarBase64: string | null; notifyAnomalies: boolean | null; intercomPin: string | null
+        notifyWasteTruck: boolean | null; wasteTruckNotifyAll: boolean | null
+      }[]
     >`
-      SELECT "avatarBase64", "notifyAnomalies", "intercomPin"
-        FROM residents WHERE id = ${residentId} LIMIT 1
+      SELECT r."avatarBase64", r."notifyAnomalies", r."intercomPin",
+             r."notifyWasteTruck", b."wasteTruckNotifyAll"
+        FROM residents r
+        JOIN buildings b ON b.id = r."buildingId"
+       WHERE r.id = ${residentId} LIMIT 1
     `
     // FAZA e — feature permissions dla iOS. Wysyłamy spłaszczony dict
     // tylko dla roli 'resident' żeby klient nie musiał rozumieć struktury
@@ -271,6 +277,8 @@ export class ResidentService {
       avatarBase64: rows[0]?.avatarBase64 ?? null,
       notifyAnomalies: rows[0]?.notifyAnomalies ?? false,
       intercomPin: rows[0]?.intercomPin ?? null,
+      // Skuteczna wartość: wybór mieszkańca, inaczej ustawienie administratora.
+      notifyWasteTruck: rows[0]?.notifyWasteTruck ?? rows[0]?.wasteTruckNotifyAll ?? false,
       featurePermissions,
     }
   }

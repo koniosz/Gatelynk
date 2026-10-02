@@ -122,6 +122,19 @@ export class EdgeGateway implements OnModuleInit {
   // push krytyczny do WSZYSTKICH mieszkańców budynku — na osiedlu bez
   // obsługi sąsiedzi są najszybszą pomocą. Lazy-resolve PushService jak
   // pozostałe serwisy z modułów importujących EdgeModule.
+  private wasteTruckSvc?: any
+  private getWasteTruck(): any | undefined {
+    if (this.wasteTruckSvc) return this.wasteTruckSvc
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { WasteTruckService } = require('../waste-truck/waste-truck.service')
+      this.wasteTruckSvc = this.moduleRef.get(WasteTruckService, { strict: false })
+    } catch {
+      // Moduł jeszcze niezaładowany — kolejne zdarzenie spróbuje ponownie.
+    }
+    return this.wasteTruckSvc
+  }
+
   private pushSvc?: any
   private getPush(): any | undefined {
     if (this.pushSvc) return this.pushSvc
@@ -600,6 +613,16 @@ export class EdgeGateway implements OnModuleInit {
               this.logger.warn(`SITUATION_ALERT push failed [${deviceId}]: ${e.message}`),
             )
             this.logger.warn(`SITUATION_ALERT b${buildingId}: ${title}`)
+          }
+        }
+        // 2026-10-02 — przyjazd śmieciarki (Edge: WASTE_TRUCK potwierdzony na
+        // ≥2 klatkach). Push tylko do mieszkańców, którzy tego chcą.
+        if (msg.event === 'WASTE_TRUCK_ARRIVED') {
+          const svc = this.getWasteTruck()
+          if (svc) {
+            svc.onArrival(buildingId, msg.data ?? {}).catch((e: Error) =>
+              this.logger.warn(`WASTE_TRUCK_ARRIVED failed [${deviceId}]: ${e.message}`),
+            )
           }
         }
         if (msg.event === 'ANOMALY_DETECTED') {

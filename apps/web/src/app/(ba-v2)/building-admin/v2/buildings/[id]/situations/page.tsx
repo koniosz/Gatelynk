@@ -49,6 +49,7 @@ const TYPE_META: Record<string, { icon: string; label: string }> = {
   NIGHT_PERSON: { icon: "🌙", label: "Osoba w nocy" },
   VEHICLE_WAITING: { icon: "⏳", label: "Pojazd czeka" },
   COURIER_VISIT: { icon: "📦", label: "Kurier / dostawa" },
+  WASTE_TRUCK: { icon: "🚛", label: "Śmieciarka" },
 };
 
 const RANGES: Array<{ key: string; hours: number; label: string }> = [

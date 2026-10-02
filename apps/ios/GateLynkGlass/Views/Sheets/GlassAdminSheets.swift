@@ -283,6 +283,7 @@ struct GlassAdminSituationsSheet: View {
         "NIGHT_PERSON": ("🌙", "Osoba w nocy"),
         "VEHICLE_WAITING": ("⏳", "Pojazd czeka"),
         "COURIER_VISIT": ("📦", "Kurier / dostawa"),
+        "WASTE_TRUCK": ("🚛", "Śmieciarka"),
     ]
 
     var body: some View {

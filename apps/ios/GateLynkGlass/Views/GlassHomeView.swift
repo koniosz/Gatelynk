@@ -1113,7 +1113,9 @@ struct GlassHomeView: View {
                 building: building,
                 onOpenProperties: { activeSheet = .properties },
                 onComingSoon: { activeSheet = .comingSoon($0) },
-                onClose: { activeSheet = nil }
+                onClose: { activeSheet = nil },
+                notifyWasteTruck: residentFull?.notifyWasteTruck,
+                onPreferencesChanged: { await loadAll() }
             )
         case .household:
             // Ten sam widok domowników co dawniej w „Więcej" — teraz z zakładki

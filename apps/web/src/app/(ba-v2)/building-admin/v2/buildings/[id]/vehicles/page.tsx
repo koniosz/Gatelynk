@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { buildingAdminApi } from "@/lib/building-admin-api";
 import { ResidentDrawer } from "@/components/ba-v2/ResidentDrawer";
+import { BaSwitch } from "@/components/ba-v2/BaSwitch";
 import { TagPicker } from "@/components/TagPicker";
 import { LazyLprThumbnail } from "@/components/LazyLprThumbnail";
 import { BUILDING_TZ } from "@/lib/building-time";
@@ -1057,10 +1058,7 @@ function VehicleDetails({
   );
 }
 
-/**
- * Przełącznik automatycznego wjazdu (role="switch"). Zmiana idzie od razu do
- * API; w trakcie zapisu kontrolka jest zablokowana i pokazuje „Zapisywanie…".
- */
+/** Przełącznik automatycznego wjazdu — podpis zależny od stanu. */
 function AutoOpenSwitch({
   plate,
   checked,
@@ -1076,54 +1074,15 @@ function AutoOpenSwitch({
   compact?: boolean;
   onChange: (value: boolean) => void;
 }) {
-  const off = disabled || busy;
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={`Automatyczny wjazd dla ${plate}`}
+    <BaSwitch
+      checked={checked}
+      busy={busy}
+      disabled={disabled}
+      onChange={onChange}
+      ariaLabel={`Automatyczny wjazd dla ${plate}`}
       title={checked ? "Automatyczny wjazd włączony — kliknij, aby wyłączyć" : "Automatyczny wjazd wyłączony — kliknij, aby włączyć"}
-      disabled={off}
-      onClick={() => onChange(!checked)}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        background: "transparent",
-        border: 0,
-        padding: 0,
-        cursor: off ? "default" : "pointer",
-        opacity: disabled ? 0.45 : 1,
-        font: "inherit",
-      }}
     >
-      <span
-        aria-hidden
-        style={{
-          position: "relative",
-          width: 36,
-          height: 20,
-          borderRadius: 999,
-          background: checked ? "var(--green, #16a34a)" : "var(--line-strong, #cbd5e1)",
-          transition: "background .15s",
-          flexShrink: 0,
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            top: 2,
-            left: checked ? 18 : 2,
-            width: 16,
-            height: 16,
-            borderRadius: 999,
-            background: "#fff",
-            boxShadow: "0 1px 2px rgba(0,0,0,.25)",
-            transition: "left .15s",
-          }}
-        />
-      </span>
       {compact ? (
         <span style={{ fontSize: 11.5, color: checked ? "var(--green, #16a34a)" : "var(--muted)" }}>
           {busy ? "Zapisywanie…" : checked ? "Auto-wjazd" : "Auto-wjazd wył."}
@@ -1131,7 +1090,7 @@ function AutoOpenSwitch({
       ) : busy ? (
         <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Zapisywanie…</span>
       ) : null}
-    </button>
+    </BaSwitch>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Query, Request, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Query, Request, Res, UseGuards, BadRequestException } from '@nestjs/common'
 import type { Response } from 'express'
 import { AuthGuard } from '@nestjs/passport'
 import { AnomalyEventsService } from './anomaly-events.service'
@@ -73,6 +73,24 @@ export class AnomalyEventsResidentController {
        WHERE id = ${req.user.residentId}
     `
     return { ok: true, notifyAnomalies: enabled }
+  }
+
+  /**
+   * 2026-10-02 — powiadomienie o przyjeździe śmieciarki. Wybór mieszkańca ma
+   * pierwszeństwo nad ustawieniem administratora (buildings.wasteTruckNotifyAll).
+   */
+  @Patch('profile/notify-waste-truck')
+  @UseGuards(AuthGuard('jwt-resident'))
+  async updateWasteTruck(@Request() req: any, @Body() body: { enabled: boolean }) {
+    if (typeof body?.enabled !== 'boolean') {
+      throw new BadRequestException('enabled musi być true/false')
+    }
+    await this.prisma.$executeRaw`
+      UPDATE "residents"
+         SET "notifyWasteTruck" = ${body.enabled}
+       WHERE id = ${req.user.residentId}
+    `
+    return { ok: true, notifyWasteTruck: body.enabled }
   }
 
   // Mieszkaniec może pobrać JPEG anomalii ze swojego budynku (read-only).

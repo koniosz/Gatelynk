@@ -404,6 +404,12 @@ export class VisionDetectService implements OnModuleInit, OnModuleDestroy {
    * potwierdzony przez VLM upadek (push krytyczny do mieszkańców).
    * Ten sam kanał co ANOMALY_DETECTED; false gdy tunel offline.
    */
+  /** 2026-10-02 — przyjazd śmieciarki (potwierdzony) → Cloud wysyła push do chętnych. */
+  emitWasteTruck(data: { ts: number; confirmedTs: number; frames: number; cameras: number }): boolean {
+    if (!this.tunnelSend) return false
+    return this.tunnelSend('WASTE_TRUCK_ARRIVED', data)
+  }
+
   emitSituationAlert(data: {
     kind: string
     title: string

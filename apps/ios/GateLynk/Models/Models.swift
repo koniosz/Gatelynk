@@ -110,6 +110,9 @@ struct Resident: Decodable, Identifiable {
     // 2026-05-24: opt-in dla pushy o zagrożeniach (FALL, w przyszłości FIRE/INTRUSION).
     // Optional bo starszy backend może nie zwracać tego pola — wtedy domyślnie OFF.
     let notifyAnomalies: Bool?
+    /// 2026-10-02 — powiadomienie o przyjeździe śmieciarki (skuteczna wartość:
+    /// wybór mieszkańca albo ustawienie administratora). nil = starszy backend.
+    let notifyWasteTruck: Bool?
     // 2026-06-02: stały PIN mieszkańca do klawiatury przy bramie.
     // 4-6 cyfr, ustawiany w iOS Profile. Null = brak ustawionego PIN-u.
     let intercomPin: String?

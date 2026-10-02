@@ -4,6 +4,7 @@ import { promises as fsp } from 'fs'
 import { join } from 'path'
 import { StoreService } from '../../store/store.service'
 import { VisionDetectService } from './vision-detect.service'
+import { findWasteVisits } from './waste-truck.util'
 
 /**
  * SituationCorrelatorService (2026-08-26) — warstwa zdarzeń sytuacyjnych.
@@ -24,6 +25,10 @@ import { VisionDetectService } from './vision-detect.service'
  *                      (przerwa >12 min = nowa wizyta). [OBSERVED]
  *   FALL_CONFIRMED   — anomaly FALL z likelihood ≥0.5 w ≥2 klatkach ≤3 min —
  *                      pojedyncza klatka to false positive. [INFERRED]
+ *   WASTE_TRUCK      — śmieciarka (frakcja ≥0.5 lub napis firmy) na ≥2 klatkach
+ *                      w ≤10 min z dowolnych kamer (2026-10-02). Zapis od razu
+ *                      po potwierdzeniu (nie po końcu wizyty) + push dla chętnych.
+ *                      [OBSERVED]
  *
  * Idempotencja: każde zdarzenie ma dedup_key pochodny od stabilnego początku
  * epizodu; INSERT OR IGNORE sprawia, że kolejne ticki (i restart z backfill)
@@ -43,6 +48,9 @@ interface VisionFrame {
   brandDetected: string | null
   anomalyType: string | null
   fallLikelihood: number | null
+  wasteCategory: string | null
+  wasteConf: number | null
+  wasteOperator: string | null
 }
 
 interface LprRead {
@@ -143,6 +151,7 @@ export class SituationCorrelatorService implements OnModuleInit {
       inserted += this.detectVehicleWaiting(frames, reads, since, now)
       inserted += this.detectCourierVisits(frames, since, now)
       inserted += await this.detectFallConfirmed(frames, since, now)
+      inserted += this.detectWasteTruck(frames, since, now)
 
       if (inserted > 0)
         this.logger.log(
@@ -357,6 +366,54 @@ export class SituationCorrelatorService implements OnModuleInit {
           dedupKey: `BRAND:${brand}:${Math.floor(ep.startTs / MIN)}`,
         })
         if (ok) inserted++
+      }
+    }
+    return inserted
+  }
+
+  // ── WASTE_TRUCK — przyjazd śmieciarki (2026-10-02) ─────────────────────
+  //
+  // W odróżnieniu od COURIER_VISIT nie czekamy na koniec wizyty: liczy się
+  // moment przyjazdu. Zdarzenie zapisujemy po potwierdzeniu (druga klatka),
+  // a push idzie tylko przy świeżym potwierdzeniu (≤20 min) — bootstrap 24 h
+  // po restarcie uzupełnia feed, ale nie budzi ludzi starą informacją.
+  // Kolejne potwierdzenia w ciągu 3 h od poprzedniego przyjazdu to ta sama
+  // runda odbioru (śmieciarka objeżdża osiedle) — bez nowego zdarzenia.
+  private detectWasteTruck(frames: VisionFrame[], since: number, now: number): number {
+    const GAP = 20 * MIN
+    const COOLDOWN = 3 * 60 * MIN
+    let inserted = 0
+    for (const visit of findWasteVisits(frames, { gapMs: GAP, confirmWindowMs: 10 * MIN })) {
+      if (visit.startTs - since <= GAP) continue // krawędź okna — początek mógł być wcześniej
+      const prev = this.store.situationLastStartedTs('WASTE_TRUCK', visit.startTs)
+      if (prev != null && visit.startTs - prev < COOLDOWN) continue
+      const cameras = new Set(visit.frames.map((f) => f.cameraDeviceId))
+      const categories = [...new Set(visit.frames.map((f) => f.wasteCategory).filter(Boolean))]
+      const operator = visit.frames.find((f) => f.wasteOperator)?.wasteOperator ?? null
+      const id = this.store.situationInsert({
+        type: 'WASTE_TRUCK',
+        cameraDeviceId: visit.frames[0].cameraDeviceId,
+        startedTs: visit.startTs,
+        endedTs: visit.endTs,
+        confidence: 'OBSERVED',
+        title: `Śmieciarka na osiedlu: ${hhmm(visit.startTs)}`,
+        details: { frames: visit.frames.length, cameras: cameras.size, categories, operator },
+        evidence: visit.frames.slice(0, 5).map((f) => ({ src: 'vision', id: f.id })),
+        dedupKey: `WASTE:${Math.floor(visit.startTs / MIN)}`,
+      })
+      if (id == null) continue
+      inserted++
+      if (now - visit.confirmedTs <= 20 * MIN) {
+        const sent = this.vision.emitWasteTruck({
+          ts: visit.startTs,
+          confirmedTs: visit.confirmedTs,
+          frames: visit.frames.length,
+          cameras: cameras.size,
+        })
+        this.logger.log(
+          `WASTE_TRUCK ${hhmm(visit.startTs)} (potwierdzone ${hhmm(visit.confirmedTs)}, ${visit.frames.length} klatek, ${cameras.size} kamer) — ` +
+          (sent ? 'zgłoszone do chmury' : 'tunel offline, bez powiadomienia'),
+        )
       }
     }
     return inserted

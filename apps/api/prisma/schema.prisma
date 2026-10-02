@@ -149,6 +149,10 @@ model Building {
   // nie blokuj feature których integrator nie skonfigurował). Patrz
   // `apps/api/src/buildings/feature-permissions.constants.ts`.
   featurePermissions Json @default("{}")
+  // 2026-10-02 — powiadomienie o przyjeździe śmieciarki dla WSZYSTKICH
+  // mieszkańców (włącza administrator). Mieszkaniec może to nadpisać
+  // w aplikacji (Resident.notifyWasteTruck).
+  wasteTruckNotifyAll Boolean @default(false)
   name       String
   address    String
   nip        String?
@@ -878,6 +882,9 @@ model Resident {
   // jest substytutem 112. Przyszłość: rozbicie na per-type
   // (FALL/FIRE/INTRUSION) gdy dodamy więcej kategorii.
   notifyAnomalies Boolean @default(false)
+  // 2026-10-02 — przyjazd śmieciarki: NULL = jak ustawił administrator
+  // (Building.wasteTruckNotifyAll), true/false = wybór mieszkańca.
+  notifyWasteTruck Boolean?
   // 2026-08-09 (Domownicy): audyt pochodzenia konta. NULL = konto założone
   // przez administratora/import; wartość = id mieszkańca, który zaprosił tego
   // domownika ze swojej aplikacji (HouseholdInvitation flow). Panel admina
