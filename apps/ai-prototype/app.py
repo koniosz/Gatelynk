@@ -299,7 +299,13 @@ async def ask(req: AskRequest) -> dict:
     # mimo intencji ukrycia). Deterministyczny tekst > kreatywny LLM.
     # 2026-08-24 — list_vehicles_recent: lista tablic z godzinami jest już
     # finalna; Bielik przy rewrap gubi/przekręca tablice rejestracyjne.
-    NO_SMART_INTENTS = {"vehicle_owner_by_plate", "list_vehicles_recent"}
+    # 2026-10-07 — search_by_brand_today / search_taxi_recent: wizyty
+    # z tablicą są składane deterministycznie; Bielik liczyłby klatki jako
+    # wizyty i przepisywał surowe wiersze.
+    NO_SMART_INTENTS = {
+        "vehicle_owner_by_plate", "list_vehicles_recent",
+        "search_by_brand_today", "search_taxi_recent",
+    }
 
     if not req.smart or intent in NO_SMART_INTENTS:
         # Strict template mode: deterministic, 5-15ms.

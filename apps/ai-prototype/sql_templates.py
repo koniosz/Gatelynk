@@ -86,6 +86,31 @@ OPTIONAL_DIRECTION = f"AND (? IS NULL OR {DIRECTION_NORM} = ?)"
 CANON_TEXT_RAW = "canon_ocr(COALESCE(v.text_raw, ''))"
 
 
+# 2026-10-07 — odczyty tablic w oknie wokół klatki wizji `v` (5 min przed,
+# 2 min po): pojazd marki widziany na osiedlu zwykle mija kamerę LPR przy
+# wjeździe chwilę przed kamerami wizji. JSON-array dla response buildera,
+# który wybiera tablicę WIZYTY (odczyty pojazdów mieszkańców/gości odrzuca —
+# to nie van dostawcy, a ich tablic nie pokazujemy innym mieszkańcom).
+# `tags` służą tylko do dopasowania marki, nigdy do treści odpowiedzi
+# (zawierają nazwy właścicieli — lekcja 8.h.23).
+LPR_NEAR_VISION = """(
+    SELECT json_group_array(json_object(
+             'plate', r.plate,
+             'ts', r.ts,
+             'dir', CASE WHEN r.direction IN ('forward','IN','in') THEN 'in'
+                         WHEN r.direction IN ('reverse','OUT','out') THEN 'out' END,
+             'kind', r.vehicle_kind,
+             'tags', r.vehicle_tags,
+             'type', r.vehicle_type,
+             'cam', COALESCE((SELECT json_extract(rc.config, '$.name')
+                                FROM device_config rc
+                               WHERE rc.device_id = r.camera_device_id),
+                             r.camera_device_id)))
+      FROM lpr_reads r
+     WHERE r.ts BETWEEN v.ts - 300000 AND v.ts + 120000
+  )"""
+
+
 TEMPLATES: dict[str, Template] = {
     # ── Counts ────────────────────────────────────────────────────────────
     "count_vehicles_today": {
@@ -402,7 +427,10 @@ TEMPLATES: dict[str, Template] = {
     "list_recent_detections": {
         "sql": """
             SELECT id,
-                   camera_device_id AS camera,
+                   COALESCE((SELECT json_extract(dc.config, '$.name')
+                               FROM device_config dc
+                              WHERE dc.device_id = camera_device_id),
+                            camera_device_id) AS camera,
                    summary,
                    COALESCE(inference_ms, 0) AS inference_ms,
                    strftime('%Y-%m-%d %H:%M',
@@ -421,21 +449,31 @@ TEMPLATES: dict[str, Template] = {
     # "Czy widziałeś dziś DHL?" — vision-side brand lookup. Czyta
     # vision_detections (YOLO+EasyOCR pipeline) zamiast lpr_reads.
     # Filtruje na partial index `vision_brand_ts_idx` (brand_detected!=NULL).
+    #
+    # 2026-10-07 (zgłoszenie Konrada: „odpowiedź totalnie śmieciowa —
+    # identyfikatory kamer nic nie mówią"): klatki to NIE wizyty — jeden van
+    # widzi kilka kamer w ciągu paru minut. Zwracamy klatki z NAZWĄ kamery
+    # i odczytami tablic z okna wokół klatki (`lpr_near`, JSON); response
+    # builder skleja je w wizyty i wybiera tablicę pojazdu. LIMIT 300 klatek
+    # (30 dni × kilka wizyt × kilka klatek), odczyty z indeksu lpr_reads_ts_idx.
     "search_by_brand_today": {
         "sql": """
-            SELECT camera_device_id AS camera,
+            SELECT v.ts AS ts,
                    strftime('%Y-%m-%d %H:%M',
-                            datetime(ts/1000, 'unixepoch', 'localtime')) AS time,
-                   brand_detected AS brand,
-                   COALESCE(brand_conf, 0.0) AS brand_conf,
-                   COALESCE(summary, '{}') AS summary,
-                   image_path
-              FROM vision_detections
-             WHERE brand_detected = ?
-               AND ts >= COALESCE(?, (strftime('%s','now') - ? * 3600) * 1000)
-               AND (? IS NULL OR ts < ?)
-             ORDER BY ts DESC
-             LIMIT 20
+                            datetime(v.ts/1000, 'unixepoch', 'localtime')) AS time,
+                   COALESCE(json_extract(dc.config, '$.name'),
+                            v.camera_device_id) AS camera,
+                   v.brand_detected AS brand,
+                   COALESCE(v.brand_conf, 0.0) AS brand_conf,
+                   v.image_path,
+                   """ + LPR_NEAR_VISION + """ AS lpr_near
+              FROM vision_detections v
+              LEFT JOIN device_config dc ON dc.device_id = v.camera_device_id
+             WHERE v.brand_detected = ?
+               AND v.ts >= COALESCE(?, (strftime('%s','now') - ? * 3600) * 1000)
+               AND (? IS NULL OR v.ts < ?)
+             ORDER BY v.ts DESC
+             LIMIT 300
         """,
         "params": ["brand", "since_ms", "range_hours", "until_ms", "until_ms"],
     },
@@ -539,7 +577,10 @@ TEMPLATES: dict[str, Template] = {
     # użyty nawet gdy pierwsza gałąź jest "skip-filter" (NULL → match all).
     "search_by_waste_today": {
         "sql": """
-            SELECT camera_device_id AS camera,
+            SELECT COALESCE((SELECT json_extract(dc.config, '$.name')
+                               FROM device_config dc
+                              WHERE dc.device_id = camera_device_id),
+                            camera_device_id) AS camera,
                    strftime('%Y-%m-%d %H:%M',
                             datetime(ts/1000, 'unixepoch', 'localtime')) AS time,
                    waste_category AS category,
@@ -587,23 +628,27 @@ TEMPLATES: dict[str, Template] = {
     # pułapka projektu #7). ORDER BY ts DESC → rows[0] = ostatnie wystąpienie.
     "search_taxi_recent": {
         "sql": """
-            SELECT camera_device_id AS camera,
+            SELECT v.ts AS ts,
+                   COALESCE(json_extract(dc.config, '$.name'),
+                            v.camera_device_id) AS camera,
                    strftime('%Y-%m-%d %H:%M',
-                            datetime(ts/1000, 'unixepoch', 'localtime')) AS time,
-                   brand_detected AS brand,
-                   COALESCE(summary, '{}') AS summary,
-                   image_path
-              FROM vision_detections
+                            datetime(v.ts/1000, 'unixepoch', 'localtime')) AS time,
+                   v.brand_detected AS brand,
+                   COALESCE(v.summary, '{}') AS summary,
+                   v.image_path,
+                   """ + LPR_NEAR_VISION + """ AS lpr_near
+              FROM vision_detections v
+              LEFT JOIN device_config dc ON dc.device_id = v.camera_device_id
              WHERE (
-                     brand_detected IN ('UBER', 'BOLT', 'FREENOW', 'FREE_NOW')
-                  OR LOWER(COALESCE(text_raw, '')) LIKE '%taxi%'
-                  OR LOWER(COALESCE(text_raw, '')) LIKE '%free now%'
-                  OR LOWER(COALESCE(text_raw, '')) LIKE '%freenow%'
+                     v.brand_detected IN ('UBER', 'BOLT', 'FREENOW', 'FREE_NOW')
+                  OR LOWER(COALESCE(v.text_raw, '')) LIKE '%taxi%'
+                  OR LOWER(COALESCE(v.text_raw, '')) LIKE '%free now%'
+                  OR LOWER(COALESCE(v.text_raw, '')) LIKE '%freenow%'
                    )
-               AND ts >= COALESCE(?, (strftime('%s','now') - ? * 3600) * 1000)
-               AND (? IS NULL OR ts < ?)
-             ORDER BY ts DESC
-             LIMIT 20
+               AND v.ts >= COALESCE(?, (strftime('%s','now') - ? * 3600) * 1000)
+               AND (? IS NULL OR v.ts < ?)
+             ORDER BY v.ts DESC
+             LIMIT 300
         """,
         "params": ["since_ms", "range_hours", "until_ms", "until_ms"],
     },

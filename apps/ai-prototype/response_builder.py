@@ -8,6 +8,7 @@ halucynacji — odpowiedzi mają stały kształt.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from typing import Any
 
 
@@ -297,49 +298,33 @@ def build(intent: str, parameters: dict, rows: list[dict]) -> dict:
         }
 
     # ── search_by_brand_today (vision-side brand lookup) ──
+    # 2026-10-07: odpowiedź = WIZYTY pojazdu (klatki sklejone w czasie),
+    # z tablicą z kamery LPR i nazwami kamer — zamiast listy klatek z UUID
+    # kamer i pewnością OCR („totalnie śmieciowa" — zgłoszenie Konrada).
     if intent == "search_by_brand_today":
         brand = parameters.get("brand", "?")
         range_hours = int(parameters.get("range_hours", 24))
         range_label = _wl or _range_label(range_hours)
+        label = _brand_label(brand)
         if not rows:
             return {
                 **base,
-                "answer": f"Kamery nie zarejestrowały marki {brand} {range_label}.",
-                "data": {"brand": brand, "count": 0, "range_hours": range_hours, "detections": []},
+                "answer": f"Kamery nie zarejestrowały pojazdu {label} {range_label}.",
+                "data": {"brand": brand, "count": 0, "range_hours": range_hours, "visits": []},
             }
-        lines = []
-        detections = []
-        for r in rows:
-            time = r.get("time") or "?"
-            cam = r.get("camera") or "?"
-            conf = r.get("brand_conf") or 0.0
-            try:
-                conf_f = float(conf)
-            except (TypeError, ValueError):
-                conf_f = 0.0
-            conf_str = f" ({conf_f:.2f})" if conf_f > 0 else ""
-            lines.append(f"  • {time} — kamera {cam}{conf_str}")
-            detections.append({
-                "time": time,
-                "camera": cam,
-                "brand_conf": conf_f,
-                "image_path": r.get("image_path"),
-            })
-        n = len(rows)
-        display = lines[:10]
-        more = f"\n  ... + {n - 10} więcej" if n > 10 else ""
+        visits = _group_visits(rows, brand_terms=_brand_terms(brand))
         answer = (
-            f"Tak, marka {brand} została wykryta {_visits_plural(n)} {range_label}:\n"
-            + "\n".join(display) + more
+            f"Tak — pojazd {label} był na osiedlu {_times_pl(len(visits))} {range_label}:\n"
+            + _visit_lines(visits)
         )
         return {
             **base,
             "answer": answer,
             "data": {
                 "brand": brand,
-                "count": n,
+                "count": len(visits),
                 "range_hours": range_hours,
-                "detections": detections,
+                "visits": [_visit_payload(v) for v in visits],
             },
         }
 
@@ -651,36 +636,18 @@ def build(intent: str, parameters: dict, rows: list[dict]) -> dict:
                     f"{range_label.capitalize()} nie zarejestrowałem żadnej "
                     f"taksówki (Uber/Bolt/taxi)."
                 ),
-                "data": {"count": 0, "range_hours": range_h, "detections": []},
+                "data": {"count": 0, "range_hours": range_h, "visits": []},
             }
-        lines = []
-        detections = []
-        for r in rows:
-            time = r.get("time") or "?"
-            cam = r.get("camera") or "?"
-            brand = r.get("brand")
-            brand_str = f" — {brand}" if brand else " — napis taxi"
-            lines.append(f"  • {time} — kamera {cam}{brand_str}")
-            detections.append({
-                "time": time,
-                "camera": cam,
-                "brand": brand,
-                "image_path": r.get("image_path"),
-            })
-        n = len(rows)
-        last = rows[0]
-        last_brand = f" ({last['brand']})" if last.get("brand") else ""
-        display = lines[:10]
-        more = f"\n  ... + {n - 10} więcej" if n > 10 else ""
+        visits = _group_visits(rows, brand_terms=["uber", "bolt", "taxi", "free now", "freenow"])
         answer = (
-            f"Tak — taksówka ostatnio była {last.get('time') or '?'}{last_brand}. "
-            f"Łącznie {_visits_plural(n)} {range_label}:\n"
-            + "\n".join(display) + more
+            f"Tak — taksówka była na osiedlu {_times_pl(len(visits))} {range_label}:\n"
+            + _visit_lines(visits, show_brand=True)
         )
         return {
             **base,
             "answer": answer,
-            "data": {"count": n, "range_hours": range_h, "detections": detections},
+            "data": {"count": len(visits), "range_hours": range_h,
+                     "visits": [_visit_payload(v) for v in visits]},
         }
 
     # ── search_courier_recent (FAZA 8.h.30 — agregat marek kurierskich) ──
@@ -1343,6 +1310,152 @@ def _events_plural(n: int) -> str:
     if 2 <= last <= 4:
         return f"{n} zdarzenia"
     return f"{n} zdarzeń"
+
+
+# ── Wizyty pojazdu z klatek wizji (2026-10-07) ─────────────────────────────
+# Jeden van widzi kilka kamer w ciągu kilku minut — mieszkańca interesuje
+# PRZYJAZD („pojazd FRISCO WX1234A, dziś 13:14"), nie lista klatek.
+# Przerwa >12 min = nowa wizyta (jak COURIER_VISIT w SituationCorrelator).
+VISIT_GAP_MS = 12 * 60_000
+MAX_VISIT_LINES = 8
+# Odczyty pojazdów mieszkańców i gości to nie van dostawcy — i nie
+# pokazujemy ich tablic innym mieszkańcom.
+_PRIVATE_KINDS = {"RESIDENT", "GUEST"}
+_PL_MONTHS_GEN = [
+    "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca",
+    "sierpnia", "września", "października", "listopada", "grudnia",
+]
+
+
+def _brand_label(brand: str) -> str:
+    return str(brand or "?").replace("_", " ")
+
+
+def _brand_terms(brand: str) -> list[str]:
+    b = str(brand or "").lower()
+    return sorted({b, b.replace("_", " "), b.replace("_", "")} - {""})
+
+
+def _times_pl(n: int) -> str:
+    return "raz" if n == 1 else f"{n} razy"
+
+
+def _hhmm(ts_ms: int) -> str:
+    return datetime.fromtimestamp(ts_ms / 1000).strftime("%H:%M")
+
+
+def _when_pl(ts_ms: int, now: datetime | None = None) -> str:
+    """„dziś 13:14" / „wczoraj 08:50" / „5 października 08:05" (czas lokalny Edge)."""
+    dt = datetime.fromtimestamp(ts_ms / 1000)
+    today = (now or datetime.now()).date()
+    hm = dt.strftime("%H:%M")
+    if dt.date() == today:
+        return f"dziś {hm}"
+    if dt.date() == today - timedelta(days=1):
+        return f"wczoraj {hm}"
+    return f"{dt.day} {_PL_MONTHS_GEN[dt.month - 1]} {hm}"
+
+
+def _group_visits(rows: list[dict], brand_terms: list[str]) -> list[dict]:
+    """Klatki (dowolna kolejność) → wizyty od najnowszej, z tablicą pojazdu."""
+    frames = sorted((r for r in rows if r.get("ts") is not None), key=lambda r: int(r["ts"]))
+    visits: list[dict] = []
+    for r in frames:
+        ts = int(r["ts"])
+        if visits and ts - visits[-1]["end"] <= VISIT_GAP_MS:
+            visits[-1]["end"] = ts
+            visits[-1]["frames"].append(r)
+        else:
+            visits.append({"start": ts, "end": ts, "frames": [r]})
+    for v in visits:
+        cams: list[str] = []
+        for f in v["frames"]:
+            cam = f.get("camera")
+            if cam and cam not in cams:
+                cams.append(cam)
+        v["cameras"] = cams
+        v["brands"] = sorted({f.get("brand") for f in v["frames"] if f.get("brand")})
+        v["plate"] = _visit_plate(v, brand_terms)
+    visits.reverse()
+    return visits
+
+
+def _visit_plate(visit: dict, brand_terms: list[str]) -> dict | None:
+    """Tablica pojazdu wizyty z odczytów LPR wokół klatek (`lpr_near`).
+
+    Pewna: odczyt, którego tagi z rejestru wskazują markę (np. van Frisco
+    dopisany jako pojazd serwisowy). Prawdopodobna: jedyny obcy pojazd
+    w oknie albo jedyny dostawczy. Inaczej None — nie zgadujemy.
+    """
+    cands: dict[str, dict] = {}
+    for f in visit["frames"]:
+        try:
+            reads = json.loads(f.get("lpr_near") or "[]")
+        except (TypeError, ValueError):
+            reads = []
+        for rd in reads if isinstance(reads, list) else []:
+            plate = (rd or {}).get("plate")
+            if not plate or str(rd.get("kind") or "").upper() in _PRIVATE_KINDS:
+                continue
+            ts = int(rd.get("ts") or 0)
+            c = cands.setdefault(plate, {"plate": plate, "ts": ts, "in_ts": None,
+                                         "cam": rd.get("cam"), "branded": False, "van": False})
+            c["ts"] = min(c["ts"], ts)
+            if rd.get("dir") == "in":
+                c["in_ts"] = ts if c["in_ts"] is None else min(c["in_ts"], ts)
+                c["cam"] = rd.get("cam") or c["cam"]
+            tags = str(rd.get("tags") or "").lower()
+            if any(t in tags for t in brand_terms):
+                c["branded"] = True
+            vtype = str(rd.get("type") or "").lower()
+            if any(k in vtype for k in ("van", "truck", "bus")):
+                c["van"] = True
+    if not cands:
+        return None
+    branded = [c for c in cands.values() if c["branded"]]
+    if len(branded) == 1:
+        return {**branded[0], "certain": True}
+    if branded:
+        return None
+    if len(cands) == 1:
+        return {**next(iter(cands.values())), "certain": False}
+    vans = [c for c in cands.values() if c["van"]]
+    if len(vans) == 1:
+        return {**vans[0], "certain": False}
+    return None
+
+
+def _visit_lines(visits: list[dict], show_brand: bool = False) -> str:
+    lines = []
+    for v in visits[:MAX_VISIT_LINES]:
+        p = v.get("plate")
+        brands = f" ({', '.join(_brand_label(b) for b in v['brands'])})" if show_brand and v.get("brands") else ""
+        if p:
+            # Czas wjazdu z kamery LPR, gdy jest — to moment, o który pyta mieszkaniec.
+            when = _when_pl(p["in_ts"] if p.get("in_ts") else v["start"])
+            verb = "wjechał pojazd" if p.get("in_ts") else "pojazd"
+            plate = f" {p['plate']}" if p["certain"] else f", prawdopodobnie {p['plate']}"
+            lines.append(f"  • {when}{brands} — {verb}{plate}")
+        else:
+            cams = v.get("cameras") or []
+            seen = f" (widziany: {', '.join(cams[:3])})" if cams else ""
+            lines.append(f"  • {_when_pl(v['start'])}{brands} — tablicy nie udało się ustalić{seen}")
+    rest = len(visits) - MAX_VISIT_LINES
+    if rest > 0:
+        lines.append(f"  … i {_times_pl(rest)} wcześniej")
+    return "\n".join(lines)
+
+
+def _visit_payload(v: dict) -> dict:
+    p = v.get("plate")
+    return {
+        "start": _when_pl(v["start"]),
+        "end": _hhmm(v["end"]),
+        "cameras": v.get("cameras") or [],
+        "frames": len(v["frames"]),
+        "plate": p["plate"] if p else None,
+        "plateCertain": bool(p and p["certain"]),
+    }
 
 
 def _range_label(range_hours: int) -> str:
