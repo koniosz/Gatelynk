@@ -36,6 +36,10 @@ struct BlackAccessDeck: View {
     @State private var appeared = false
     /// Ręczne „Odśwież podgląd" restartuje pętlę pobierania (część `cameraTaskID`).
     @State private var refreshTick = 0
+    /// Start bieżącej pętli podglądu (uruchomienie, powrót do apki, zmiana
+    /// wejścia). Przez chwilę po starcie stary kadr NIE jest „nieaktualny" —
+    /// trwa odświeżanie, więc nie każemy użytkownikowi stukać „Odśwież".
+    @State private var pollStartedAt: Date?
 
     private struct CameraFrame {
         let image: UIImage
@@ -216,7 +220,9 @@ struct BlackAccessDeck: View {
             let frame = frames[ap.id]
             let fixture = isDemo ? fixtureImages[ap.id] : nil
             let image = fixture ?? frame?.image
-            let stale = frame.map { context.date.timeIntervalSince($0.receivedAt) >= 15 } ?? false
+            let old = frame.map { context.date.timeIntervalSince($0.receivedAt) >= 15 } ?? false
+            let refreshingOld = old && pollStartedAt.map { context.date.timeIntervalSince($0) < Self.refreshGrace } == true
+            let stale = old && !refreshingOld
             // Obraz jest, ale nieaktualny (kamera przestała odpowiadać) albo demo
             // wymusza ten stan. Nakładka dotyczy WYŁĄCZNIE podglądu — sterowanie
             // bramą pozostaje dostępne (stan kamery ≠ możliwość wysłania polecenia).
@@ -266,7 +272,7 @@ struct BlackAccessDeck: View {
                         .transition(.opacity)
                 }
                 HStack(alignment: .top, spacing: 3) {
-                    cameraLabel(frame: frame, stale: stale || offline)
+                    cameraLabel(frame: frame, stale: stale || offline, refreshing: refreshingOld && !offline)
                         .padding(.top, 4)
                     Spacer(minLength: 0)
                     cameraButton(name: "maximize-2", label: "Powiększ kamerę: \(ap.label)", green: false) { onCamera(ap) }
@@ -329,11 +335,11 @@ struct BlackAccessDeck: View {
         .accessibilityLabel("Obraz z kamery \(ap.label) jest nieaktualny")
     }
 
-    private func cameraLabel(frame: CameraFrame?, stale: Bool) -> some View {
+    private func cameraLabel(frame: CameraFrame?, stale: Bool, refreshing: Bool) -> some View {
         HStack(spacing: 5) {
-            BlackIcon(name: stale ? "clock" : "video", size: 12)
+            BlackIcon(name: stale ? "clock" : refreshing ? "refresh-cw" : "video", size: 12)
                 .foregroundStyle(stale ? Color(hex: 0xFFCA76) : BlackTheme.accent)
-            Text(isDemo ? "DEMO · przykładowy kadr" : stale ? "Ostatni obraz" : frame == nil ? "Kamera" : "Podgląd")
+            Text(isDemo ? "DEMO · przykładowy kadr" : stale ? "Ostatni obraz" : refreshing ? "Odświeżanie…" : frame == nil ? "Kamera" : "Podgląd")
                 .font(.system(size: 10))
                 .lineLimit(1)
         }
@@ -544,17 +550,33 @@ struct BlackAccessDeck: View {
             case .unknown: outcome = .unknown
             case .failed(let message): outcome = .failed(message)
             }
-            if interaction.resolve(command, outcome: outcome) {
-                UINotificationFeedbackGenerator().notificationOccurred(outcome == .accepted ? .success : .warning)
-            }
+            guard interaction.resolve(command, outcome: outcome) else { return }
+            UINotificationFeedbackGenerator().notificationOccurred(outcome == .accepted ? .success : .warning)
+            // Wynik sam wraca do „Przytrzymaj, aby otworzyć" — wcześniej
+            // wisiał do stuknięcia w przycisk.
+            try? await Task.sleep(for: .seconds(interaction.resultDisplayDuration(outcome)))
+            interaction.expireResult(command)
         }
     }
 
+    /// Ile po starcie pętli stary kadr uchodzi za „odświeżany", a nie
+    /// „nieaktualny" — z zapasem na jedno żądanie z limitem czasu.
+    private static let refreshGrace: TimeInterval = 10
+    /// Limit jednego żądania podglądu: Cloud daje Edge ~5 s, reszta to transfer.
+    private static let snapshotTimeout: TimeInterval = 8
+
     private func pollSelectedCamera() async {
         guard !suspended, !isDemo, let ap = selectedAP else { return }
+        // Nowa pętla (start apki, powrót z tła, zmiana wejścia, „Odśwież"):
+        // poprzedni błąd nie zostaje na ekranie, póki trwa ponowna próba.
+        pollStartedAt = Date()
+        cameraFailed.remove(ap.id)
         while !Task.isCancelled && !suspended && interaction.selectedID == ap.id {
             do {
-                let data = try await APIClient.shared.getRawData("/resident/access-points/\(ap.id)/snapshot?w=720&q=60&live=1")
+                let data = try await APIClient.shared.getRawData(
+                    "/resident/access-points/\(ap.id)/snapshot?w=720&q=60&live=1",
+                    timeout: Self.snapshotTimeout
+                )
                 guard !Task.isCancelled, !suspended else { return }
                 if let image = UIImage(data: data) {
                     frames[ap.id] = CameraFrame(image: image, receivedAt: Date())

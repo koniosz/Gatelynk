@@ -397,6 +397,13 @@ struct GlassHomeView: View {
                 Task { await loadAll() }
             }
         }
+        // „Najnowsze na osiedlu" (brief AI) — ta sama karta co w Glass;
+        // wróciła na prośbę Konrada 2026-10-07 („podobała mi się").
+        GlassAssistantCard(cacheKey: favoriteEntranceKey) {
+            tab = .estate
+            activeSheet = .announcements
+        }
+        .padding(.top, 12)
         BlackAssistantLink { activeSheet = .chat }
     }
 

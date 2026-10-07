@@ -103,6 +103,32 @@ final class BlackAccessState {
         return true
     }
 
+    /// Jak długo wynik zostaje na przycisku, zanim sam wróci do „Przytrzymaj…"
+    /// (te same czasy co AccessHoldButton: przyjęte 4 s, pozostałe 7 s).
+    /// 2026-10-07: wcześniej wynik wisiał do stuknięcia — „przycisk zostaje
+    /// z napisem otwarte". Podgląd Debug może je wydłużyć (testy UI).
+    var acceptedResultDuration: TimeInterval = 4
+    var otherResultDuration: TimeInterval = 7
+
+    func resultDisplayDuration(_ outcome: Outcome) -> TimeInterval {
+        outcome == .accepted ? acceptedResultDuration : otherResultDuration
+    }
+
+    /// Wygaszenie wyniku TEGO polecenia. Nowsze polecenie albo wcześniejszy
+    /// ręczny reset unieważniają je — nie zeruje cudzego wyniku ani wysyłki.
+    @discardableResult
+    func expireResult(_ command: Command) -> Bool {
+        guard commands[command.accessPointID] == command else { return false }
+        switch phase(for: command.accessPointID) {
+        case .accepted, .unknown, .failed:
+            phases[command.accessPointID] = .idle
+            commands[command.accessPointID] = nil
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Reset is local UI only; a retry always requires another deliberate hold.
     func resetResult(id: Int) {
         switch phase(for: id) {

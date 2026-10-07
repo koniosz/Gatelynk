@@ -18,10 +18,25 @@ enum BlackPreviewMode {
         guard let i = args.firstIndex(of: "-black-preview-variant"), i + 1 < args.count else { return "default" }
         return args[i + 1]
     }
+
+    /// `-black-result-seconds <n>` — dłuższe wyświetlanie wyniku polecenia
+    /// (test UI nawigacji trwa dłużej niż domyślne 4 s).
+    static var resultSeconds: TimeInterval? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-black-result-seconds"), i + 1 < args.count else { return nil }
+        return TimeInterval(args[i + 1])
+    }
 }
 
 struct BlackPreview: View {
-    @State private var accessState = BlackAccessState()
+    @State private var accessState: BlackAccessState = {
+        let state = BlackAccessState()
+        if let seconds = BlackPreviewMode.resultSeconds {
+            state.acceptedResultDuration = seconds
+            state.otherResultDuration = seconds
+        }
+        return state
+    }()
     @State private var tab: GlassHomeTab = .home
     @State private var panel: String?
     @State private var confirmFire = false

@@ -18,6 +18,7 @@ struct BlackAccessStateTests {
             ("removing the selected point invalidates a hold", testRemovedSelection),
             ("reselecting the same point preserves a deliberate hold", testStableSelection),
             ("native recognition requires an active uncancelled hold", testRecognizedHold),
+            ("a result expires on its own, only for its command", testResultExpiry),
         ]
         var failures: [String] = []
         for (name, run) in tests {
@@ -154,6 +155,28 @@ struct BlackAccessStateTests {
         try expect(state.phase(for: 1) == .idle, "completed result returns locally to idle")
         try expect(state.commitHold(id: 1, now: start.addingTimeInterval(9)) == nil, "reset itself is never retry authorization")
         try expect(!state.resolve(command, outcome: .accepted), "reset removes the completed command token")
+    }
+
+    @MainActor private static func testResultExpiry() throws {
+        let state = try holding()
+        let first = try commit(state)
+        try expect(!state.expireResult(first), "expiry cannot clear an in-flight command")
+        try expect(state.phase(for: 1) == .sending, "sending survives an early expiry")
+        try expect(state.resolve(first, outcome: .accepted), "answer is accepted")
+        try expect(state.resultDisplayDuration(.accepted) == 4, "accepted shows for four seconds")
+        try expect(state.resultDisplayDuration(.failed(nil)) == 7, "failure shows longer")
+        try expect(state.expireResult(first), "result of this command expires")
+        try expect(state.phase(for: 1) == .idle, "expired result returns to idle")
+        try expect(!state.resolve(first, outcome: .accepted), "expiry removes the command token")
+
+        // Ręczny reset + nowe polecenie: stare wygaszenie nie dotyka nowego wyniku.
+        try expect(state.beginHold(id: 1, now: start), "idle point allows a new hold")
+        let second = try commit(state)
+        try expect(state.resolve(second, outcome: .unknown), "second answer is accepted")
+        try expect(!state.expireResult(first), "old expiry cannot clear a newer result")
+        try expect(state.phase(for: 1) == .unknown, "newer result stays visible")
+        state.resetResult(id: 1)
+        try expect(!state.expireResult(second), "manual reset already cleared the command")
     }
 
     @MainActor private static func testAccessibleConfirmation() throws {

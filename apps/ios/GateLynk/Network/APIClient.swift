@@ -123,11 +123,15 @@ final class APIClient {
     }
 
     /// Fetches raw binary data (e.g. JPEG snapshot) — no JSON decoding.
-    func getRawData(_ path: String) async throws -> Data {
+    /// `timeout` — dla odpytywania w pętli (podgląd kamery): domyślne 60 s
+    /// URLSession potrafi zawiesić pętlę na minutę, gdy pierwsze żądanie po
+    /// starcie/powrocie apki trafi na martwe połączenie.
+    func getRawData(_ path: String, timeout: TimeInterval? = nil) async throws -> Data {
         guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        if let timeout { req.timeoutInterval = timeout }
         if let token {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }

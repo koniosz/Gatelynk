@@ -7,10 +7,10 @@ final class BlackUITests: XCTestCase {
     private let accepted = "Polecenie otwarcia przyjęte"
 
     @MainActor
-    private func launchPreview() -> XCUIApplication {
+    private func launchPreview(extraArguments: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.gatelynk.app.black")
-        app.launchArguments = ["-black-design-preview"]
+        app.launchArguments = ["-black-design-preview"] + extraArguments
         app.launch()
         XCTAssertTrue(app.buttons["Wybierz wejście: Wjazd"].waitForExistence(timeout: 10))
         expectValue(idle, on: app.buttons["Otwórz: Wjazd"])
@@ -65,7 +65,9 @@ final class BlackUITests: XCTestCase {
 
     @MainActor
     func testFullHoldKeepsOutcomeWithItsEntranceAcrossNavigation() {
-        let app = launchPreview()
+        // Wynik sam znika po 4 s, a nawigacja w symulatorze trwa dłużej —
+        // tu sprawdzamy przypisanie wyniku do wejścia, nie czas wygaszania.
+        let app = launchPreview(extraArguments: ["-black-result-seconds", "120"])
         app.buttons["Otwórz: Wjazd"].press(forDuration: 2.2)
         expectValue(accepted, on: app.buttons["Otwórz: Wjazd"])
         attach("Entrance — command accepted", app: app)
@@ -79,6 +81,17 @@ final class BlackUITests: XCTestCase {
         app.buttons["Wybierz wejście: Wjazd"].tap()
         expectValue(accepted, on: app.buttons["Otwórz: Wjazd"])
         attach("Entrance — outcome retained after navigation", app: app)
+    }
+
+    /// 2026-10-07: wynik nie wisi do stuknięcia — po kilku sekundach przycisk
+    /// sam wraca do „Przytrzymaj, aby otworzyć".
+    @MainActor
+    func testOutcomeReturnsToIdleOnItsOwn() {
+        let app = launchPreview()
+        let open = app.buttons["Otwórz: Wjazd"]
+        open.press(forDuration: 2.2)
+        expectValue(accepted, on: open)
+        expectValue(idle, on: open, timeout: 10)
     }
 
     @MainActor

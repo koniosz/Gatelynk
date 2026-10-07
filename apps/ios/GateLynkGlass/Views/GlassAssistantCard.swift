@@ -40,12 +40,18 @@ struct GlassAssistantCard: View {
     @State private var visibleCount = 0
     @State private var loadTask: Task<Void, Never>?
 
+    #if GATELYNK_BLACK
+    private static let dotPalette: [Color] = [
+        BlackTheme.amber, BlackTheme.blue, BlackTheme.green, BlackTheme.accent,
+    ]
+    #else
     private static let dotPalette: [Color] = [
         GlassColor.orbAmber1,   // FBBF24
         GlassColor.orbBlue1,    // 5B9CFA
         GlassColor.success,     // 34D399
         GlassColor.accentLight, // C5B0FF
     ]
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -56,7 +62,7 @@ struct GlassAssistantCard: View {
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .padding(.bottom, 2)
-        .hubPanel(radius: 22)
+        .modifier(CardSurface())
         .onAppear {
             guard lines.isEmpty else { return }
             if let key = cacheKey, let c = Self.cache, c.key == key,
@@ -69,6 +75,20 @@ struct GlassAssistantCard: View {
             }
         }
         .onDisappear { loadTask?.cancel() }
+    }
+
+    /// Glass: szklany panel hubu. Black (2026-10-07, „zniknęła kronika ze
+    /// strony głównej"): płaska karta w stylu kafelków Black.
+    private struct CardSurface: ViewModifier {
+        func body(content: Content) -> some View {
+            #if GATELYNK_BLACK
+            content
+                .background(Color(hex: 0x1B1C23), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.055), lineWidth: 1))
+            #else
+            content.hubPanel(radius: 22)
+            #endif
+        }
     }
 
     // MARK: Header
