@@ -402,14 +402,23 @@ struct GlassHomeView: View {
                 Task { await loadAll() }
             }
         }
-        // „Najnowsze na osiedlu" (brief AI) — ta sama karta co w Glass;
-        // wróciła na prośbę Konrada 2026-10-07 („podobała mi się").
-        GlassAssistantCard(cacheKey: favoriteEntranceKey) {
-            tab = .estate
-            activeSheet = .announcements
-        }
+        // 2026-10-08 (Konrad): wyraźny przycisk asystenta + „Najnowsze na
+        // osiedlu" jako fakty dnia: ogłoszenie → moje auta → kurierzy → odpady.
+        BlackAskButton { activeSheet = .chat }
+            .padding(.top, 12)
+        BlackEstateTodayCard(
+            cacheKey: favoriteEntranceKey,
+            load: { refresh in
+                try await APIClient.shared.get("/resident/assistant/estate-today" + (refresh ? "?refresh=1" : ""))
+            },
+            onOpenAnnouncement: { id in
+                pushAnnouncementId = id
+                pushAnnouncementNewest = false
+                activeSheet = .announcements
+            }
+        )
         .padding(.top, 12)
-        BlackAssistantLink { activeSheet = .chat }
+        .padding(.bottom, 16)
     }
 
     private var blackModules: [BlackModule] {

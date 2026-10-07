@@ -42,7 +42,8 @@ _TYPE_PRIORITY = {t: i for i, (t, _) in enumerate(_TYPE_META)}
 _TYPE_ICON = dict(_TYPE_META)
 
 _SITUATIONS_SQL = """
-SELECT type, started_ts AS startedTs, ended_ts AS endedTs, confidence, title
+SELECT type, started_ts AS startedTs, ended_ts AS endedTs, confidence, title,
+       details_json AS details
   FROM situation_events
  WHERE started_ts >= ? AND started_ts < ?
  ORDER BY started_ts ASC
@@ -58,6 +59,120 @@ SELECT
   FROM lpr_reads
  WHERE ts >= ? AND ts < ?
 """
+
+
+# 2026-10-08 — dostawy z rejestru (pojazd DELIVERY z tagiem marki) wjeżdżające
+# dziś. Uzupełnia COURIER_VISIT z wizji: van z rejestru bywa odczytany przez
+# LPR, a napis na boku nie trafia w kadr kamer wizji (i odwrotnie).
+_DELIVERY_SQL = """
+SELECT ts, vehicle_tags AS tags
+  FROM lpr_reads
+ WHERE ts >= ? AND ts < ?
+   AND vehicle_kind = 'DELIVERY'
+   AND direction IN ('in','IN','forward')
+ ORDER BY ts ASC
+"""
+
+_TAXI_BRANDS = {"UBER", "BOLT", "FREENOW", "FREE_NOW"}
+# Etykiety marek dla mieszkańca (kanoniczne nazwy z brand_matcher są UPPER_SNAKE).
+_BRAND_LABELS = {
+    "INPOST": "InPost", "DHL": "DHL", "DPD": "DPD", "UPS": "UPS", "GLS": "GLS",
+    "FEDEX": "FedEx", "POCZTA_POLSKA": "Poczta Polska", "POCZTA": "Poczta Polska",
+    "ALLEGRO": "Allegro",
+    "ORLEN_PACZKA": "Orlen Paczka", "FRISCO": "Frisco", "BARBORA": "Barbora",
+    "MEDIA_EXPERT": "Media Expert", "MEDIA_MARKT": "MediaMarkt",
+    "RTV_EURO_AGD": "RTV Euro AGD", "X_KOM": "x-kom", "IKEA": "IKEA",
+    "LEROY_MERLIN": "Leroy Merlin", "CASTORAMA": "Castorama", "OBI": "OBI",
+    "LIDL": "Lidl", "BIEDRONKA": "Biedronka", "AUCHAN": "Auchan",
+    "CARREFOUR": "Carrefour", "UBER": "Uber", "BOLT": "Bolt", "GLOVO": "Glovo",
+    "WOLT": "Wolt", "PYSZNE": "Pyszne.pl",
+}
+
+
+def _brand_label(brand: str) -> str:
+    b = str(brand or "").upper()
+    if b in _BRAND_LABELS:
+        return _BRAND_LABELS[b]
+    words = b.replace("_", " ").split()
+    return " ".join(w if len(w) <= 3 else w.capitalize() for w in words) or "Dostawa"
+
+
+def _tag_brand(tags_json: str | None) -> str | None:
+    """Kanoniczna marka z tagów pojazdu z rejestru (np. ["InPost","van"])."""
+    import json
+
+    from intent_classifier import BRAND_KEYWORD_MAP
+
+    try:
+        tags = json.loads(tags_json or "[]")
+    except (TypeError, ValueError):
+        return None
+    canon = set(BRAND_KEYWORD_MAP.values())
+    for t in tags if isinstance(tags, list) else []:
+        key = str(t).strip().lower()
+        if key in BRAND_KEYWORD_MAP:
+            return BRAND_KEYWORD_MAP[key]
+        up = key.upper().replace(" ", "_")
+        if up in canon:
+            return up
+    return None
+
+
+def _today_block(events: list[dict], deliveries: list[dict]) -> dict[str, Any]:
+    """Zestawienie dnia dla karty „Najnowsze na osiedlu" (iOS przez Cloud).
+
+    Kurierzy per marka = wjazdy vanów z rejestru (LPR) + wizyty z wizji,
+    których LPR nie tłumaczy (start 5 min przed – 40 min po wjeździe tej
+    marki = ten sam van; dłuższy postój daje w wizji dwa skupiska klatek).
+    Taksówki osobno (to nie dostawy).
+    """
+    import json
+
+    vision: dict[str, list[int]] = {}
+    taxis = 0
+    waste: list[int] = []
+    for e in events:
+        if e["type"] == "WASTE_TRUCK":
+            waste.append(int(e["startedTs"]))
+            continue
+        if e["type"] != "COURIER_VISIT":
+            continue
+        try:
+            brand = str((json.loads(e.get("details") or "{}") or {}).get("brand") or "")
+        except (TypeError, ValueError):
+            brand = ""
+        if not brand:
+            continue
+        if brand.upper() in _TAXI_BRANDS:
+            taxis += 1
+            continue
+        vision.setdefault(brand.upper(), []).append(int(e["startedTs"]))
+
+    lpr: dict[str, list[int]] = {}
+    for d in deliveries:
+        brand = _tag_brand(d.get("tags"))
+        if brand and brand.upper() not in _TAXI_BRANDS:
+            lpr.setdefault(brand.upper(), []).append(int(d["ts"]))
+
+    couriers = []
+    for brand in sorted(set(vision) | set(lpr)):
+        v, l = vision.get(brand, []), lpr.get(brand, [])
+        unexplained = [
+            ts for ts in v
+            if not any(entry - 5 * 60_000 <= ts <= entry + 40 * 60_000 for entry in l)
+        ]
+        couriers.append({
+            "brand": brand,
+            "label": _brand_label(brand),
+            "visits": len(l) + len(unexplained),
+            "lastTs": max(v + l),
+        })
+    couriers.sort(key=lambda c: (-c["visits"], -c["lastTs"]))
+    return {
+        "couriers": couriers,
+        "taxis": taxis,
+        "wasteTruck": {"visits": len(waste), "lastTs": max(waste)} if waste else None,
+    }
 
 
 def _day_window_ms() -> tuple[int, int, str]:
@@ -130,6 +245,11 @@ async def build_chronicle(smart: bool = True) -> dict[str, Any]:
         # przy starcie) — kronika działa wtedy w trybie samych statystyk.
         log.warning("situation_events unavailable: %r", e)
         events = []
+    try:
+        deliveries = await execute_safe(_DELIVERY_SQL, [since_ms, until_ms])
+    except Exception as e:
+        log.warning("delivery reads unavailable: %r", e)
+        deliveries = []
     traffic_rows = await execute_safe(_TRAFFIC_SQL, [since_ms, until_ms])
     traffic = traffic_rows[0] if traffic_rows else {}
     ins = int(traffic.get("ins") or 0)
@@ -184,4 +304,5 @@ async def build_chronicle(smart: bool = True) -> dict[str, Any]:
             for e in ordered
         ],
         "traffic": {"ins": ins, "outs": outs, "unmatched": unmatched, "total": total},
+        "today": _today_block(events, deliveries),
     }

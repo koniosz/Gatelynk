@@ -347,6 +347,22 @@ export class ResidentAssistantController {
   }
 
   /**
+   * GET /api/resident/assistant/estate-today[?refresh=1]
+   * Karta „Najnowsze na osiedlu" (2026-10-08): ogłoszenie administracji,
+   * dzisiejsze przejazdy MOICH aut, kurierzy/taksówki/śmieciarka z kamer,
+   * odbiór odpadów dziś/jutro. Bez LLM — same fakty.
+   */
+  @Get('estate-today')
+  @UseGuards(AuthGuard('jwt-resident'))
+  async estateToday(@Req() req: AuthReq, @Query('refresh') refresh?: string) {
+    return this.dailyBrief.estateToday(
+      req.user.buildingId,
+      req.user.residentId,
+      refresh === '1' || refresh === 'true',
+    )
+  }
+
+  /**
    * PATCH /api/resident/assistant/morning-brief  Body: { enabled: boolean }
    * Opt-out z porannego briefu (default ON). Raw SQL — generated Prisma
    * Client może nie znać świeżej kolumny przed generate (konwencja repo).

@@ -251,6 +251,10 @@ export class BaUpdateVehicleStatusDto {
   @IsOptional() @IsString() reason?: string
 }
 
+/** Tytuł automatycznego przypomnienia o zaległości — to nie „ogłoszenie"
+ *  administracji (karta „Najnowsze na osiedlu" go pomija). */
+export const ARREARS_REMINDER_TITLE = 'Przypomnienie o zaległości w opłatach'
+
 @Injectable()
 export class BuildingAdminService {
   private readonly logger = new Logger(BuildingAdminService.name)
@@ -506,7 +510,7 @@ export class BuildingAdminService {
    * budynkach admina. Idempotentne per dzień (wpisy notifications z
    * senderBaId robią jednocześnie audyt i blokadę ponownej wysyłki).
    */
-  private static readonly ARREARS_REMINDER_TITLE = 'Przypomnienie o zaległości w opłatach'
+  private static readonly ARREARS_REMINDER_TITLE = ARREARS_REMINDER_TITLE
 
   async sendArrearsReminders(adminId: number, buildingIds: number[]) {
     if (!buildingIds.length) return { sentTo: 0 }

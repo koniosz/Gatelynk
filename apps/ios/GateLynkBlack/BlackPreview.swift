@@ -66,6 +66,28 @@ struct BlackPreview: View {
         return output
     }
 
+    /// Przykładowe fakty dnia dla karty „Najnowsze na osiedlu".
+    static func demoEstate(empty: Bool) -> EstateToday {
+        let at = { (h: Int, m: Int) in Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? Date() }
+        if empty {
+            return EstateToday(announcement: nil, myVehicles: nil,
+                               estate: .init(couriers: [], taxis: 0, wasteTruck: nil),
+                               wastePickup: .init(today: nil, tomorrow: nil))
+        }
+        return EstateToday(
+            announcement: .init(id: 1, title: "Awaria szlabanu wjazdowego",
+                                body: "Szlaban przy wjeździe jest serwisowany. Do 16:00 prosimy korzystać z bramy przy portierni.",
+                                sentAt: at(8, 15)),
+            myVehicles: .init(vehicles: 1, entries: 2, exits: 1, lastAt: at(13, 13)),
+            estate: .init(couriers: [.init(label: "InPost", visits: 2, lastAt: at(14, 38)),
+                                     .init(label: "DPD", visits: 1, lastAt: at(12, 23)),
+                                     .init(label: "DHL", visits: 1, lastAt: at(9, 33))],
+                          taxis: 3,
+                          wasteTruck: .init(visits: 1, lastAt: at(9, 49))),
+            wastePickup: .init(today: "bio", tomorrow: "szkło")
+        )
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -97,7 +119,15 @@ struct BlackPreview: View {
                             if variant != "empty" {
                                 BlackContextNotice(title: "Paczka czeka w recepcji", detail: "Odbierz dzisiaj do 20:00") { panel = "Przesyłki" }
                             }
-                            BlackAssistantLink { panel = "Asystent GateLynk" }
+                            BlackAskButton { panel = "Asystent GateLynk" }
+                                .padding(.top, 12)
+                            BlackEstateTodayCard(
+                                cacheKey: nil,
+                                load: { _ in Self.demoEstate(empty: variant == "empty") },
+                                onOpenAnnouncement: { _ in panel = "Ogłoszenie" }
+                            )
+                            .padding(.top, 12)
+                            .padding(.bottom, 16)
                         } else if tab != .access {
                             BlackContextNotice(title: tab.title, detail: "Podgląd wyglądu · dane przykładowe", icon: "info") { panel = tab.title }
                                 .padding(.top, 16)

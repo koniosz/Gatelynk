@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { PushService } from '../push/push.service'
 import { EdgeGateway } from '../edge/edge.gateway'
 import { ResidentAssistantService } from './resident-assistant.service'
+import { ARREARS_REMINDER_TITLE } from '../building-admin/building-admin.service'
 
 const edgeDispatcher: Dispatcher | undefined = process.env.TS_HTTP_PROXY
   ? new ProxyAgent(process.env.TS_HTTP_PROXY)
@@ -17,6 +18,32 @@ interface CalendarEvent {
 }
 
 const TZ = 'Europe/Warsaw'
+
+/**
+ * Karta „Najnowsze na osiedlu" w iOS (2026-10-08) — fakty dnia zamiast
+ * akapitów z LLM: aktualne ogłoszenie administracji, przejazdy MOICH aut,
+ * kurierzy / taksówki / śmieciarka z kamer i odbiór odpadów dziś/jutro.
+ */
+export interface EstateToday {
+  announcement: { id: number; title: string; body: string; sentAt: string } | null
+  /** null = mieszkaniec nie ma zatwierdzonego pojazdu (wiersz ukryty). */
+  myVehicles: { vehicles: number; entries: number; exits: number; lastAt: string | null } | null
+  /** null = Edge nieosiągalny (iOS: „brak danych z kamer"). */
+  estate: {
+    couriers: Array<{ label: string; visits: number; lastAt: string }>
+    taxis: number
+    wasteTruck: { visits: number; lastAt: string } | null
+  } | null
+  wastePickup: { today: string | null; tomorrow: string | null }
+  generatedAt: string
+}
+
+/** Ogłoszenie starsze niż tydzień nie jest już „aktualne". */
+const ANNOUNCEMENT_MAX_AGE_DAYS = 7
+/** Dane z Edge (kronika + harmonogram) wspólne dla budynku — krótki cache. */
+const ESTATE_TTL_MS = 3 * 60_000
+/** Kolejne odczyty tego samego kierunku w tym oknie = jeden przejazd. */
+const PASS_DEDUP_MS = 3 * 60_000
 
 /** YYYY-MM-DD w strefie osiedla (serwer Fly działa w UTC). */
 function warsawDayKey(offsetDays = 0): string {
@@ -71,19 +98,24 @@ export class DailyBriefService {
 
   /** Eventy harmonogramu z Edge dla danego dnia (YYYY-MM-DD). [] przy błędzie. */
   private async wasteEventsForDay(buildingId: number, dayKey: string): Promise<CalendarEvent[]> {
+    return ((await this.wasteEventsAhead(buildingId)) ?? []).filter((e) => e.date === dayKey)
+  }
+
+  /** Harmonogram na 3 dni z Edge. null przy błędzie (≠ pusty harmonogram). */
+  private async wasteEventsAhead(buildingId: number): Promise<CalendarEvent[] | null> {
     const ip = this.edgeGateway.getEdgeIpForBuilding(buildingId)
-    if (!ip) return []
+    if (!ip) return null
     try {
       const res = await undiciFetch(`http://${ip}:4000/assistant/calendar?days=3`, {
         dispatcher: edgeDispatcher,
         signal: AbortSignal.timeout(8_000),
       })
-      if (!res.ok) return []
+      if (!res.ok) return null
       const data = (await res.json()) as { events?: CalendarEvent[] }
-      return (data.events ?? []).filter((e) => e.date === dayKey)
+      return data.events ?? []
     } catch (err: any) {
       this.logger.warn(`calendar fetch b${buildingId} failed: ${err?.message}`)
-      return []
+      return null
     }
   }
 
@@ -190,20 +222,26 @@ export class DailyBriefService {
   }
 
   /** Kronika z Edge (`/assistant/chronicle` → prototyp). null przy błędzie. */
-  async fetchChronicle(buildingId: number, smart = true): Promise<{
+  async fetchChronicle(buildingId: number, smart = true, timeoutMs = 50_000): Promise<{
     date: string | null
     lines: string[]
     narrative: string | null
     push_text: string | null
     events: Array<{ type: string; title: string; startedTs: number }>
     traffic?: { ins: number; outs: number; unmatched: number; total: number }
+    /** 2026-10-08 — zestawienie dnia (starszy prototyp: brak pola). */
+    today?: {
+      couriers: Array<{ brand: string; label: string; visits: number; lastTs: number }>
+      taxis: number
+      wasteTruck: { visits: number; lastTs: number } | null
+    }
   } | null> {
     const ip = this.edgeGateway.getEdgeIpForBuilding(buildingId)
     if (!ip) return null
     try {
       const res = await undiciFetch(
         `http://${ip}:4000/assistant/chronicle?smart=${smart ? '1' : '0'}`,
-        { dispatcher: edgeDispatcher, signal: AbortSignal.timeout(50_000) },
+        { dispatcher: edgeDispatcher, signal: AbortSignal.timeout(timeoutMs) },
       )
       if (!res.ok) return null
       return (await res.json()) as any
@@ -211,6 +249,117 @@ export class DailyBriefService {
       this.logger.warn(`chronicle fetch b${buildingId} failed: ${err?.message}`)
       return null
     }
+  }
+
+  // ── 4. Karta „Najnowsze na osiedlu" (2026-10-08) ───────────────────────
+
+  private readonly estateCache = new Map<
+    number,
+    { at: number; estate: EstateToday['estate']; pickup: EstateToday['wastePickup'] }
+  >()
+
+  async estateToday(buildingId: number, residentId: number, refresh = false): Promise<EstateToday> {
+    const [announcement, myVehicles, edge] = await Promise.all([
+      this.currentAnnouncement(buildingId, residentId),
+      this.myVehiclesToday(buildingId, residentId),
+      this.estateFromEdge(buildingId, refresh),
+    ])
+    return {
+      announcement,
+      myVehicles,
+      estate: edge.estate,
+      wastePickup: edge.pickup,
+      generatedAt: new Date().toISOString(),
+    }
+  }
+
+  /** Najnowsze ogłoszenie ADMINISTRACJI (wysłane przez BA, nie przypomnienie
+   *  o zaległości) z ostatniego tygodnia — broadcast albo imienne. */
+  private async currentAnnouncement(
+    buildingId: number,
+    residentId: number,
+  ): Promise<EstateToday['announcement']> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: number; title: string; body: string; sentAt: Date }>
+    >`
+      SELECT id, title, body, "sentAt"
+        FROM notifications
+       WHERE "buildingId" = ${buildingId}
+         AND ("residentId" IS NULL OR "residentId" = ${residentId})
+         AND "senderBaId" IS NOT NULL
+         AND title <> ${ARREARS_REMINDER_TITLE}
+         AND "sentAt" >= NOW() - (${ANNOUNCEMENT_MAX_AGE_DAYS}::int * INTERVAL '1 day')
+       ORDER BY "sentAt" DESC
+       LIMIT 1
+    `
+    const a = rows[0]
+    if (!a) return null
+    return { id: a.id, title: a.title, body: a.body, sentAt: a.sentAt.toISOString() }
+  }
+
+  /** Dzisiejsze (czas osiedla) wjazdy i wyjazdy zatwierdzonych pojazdów
+   *  mieszkańca z access_events. Kilka odczytów jednego przejazdu (odczyt
+   *  + cooldown) liczy się raz. */
+  private async myVehiclesToday(
+    buildingId: number,
+    residentId: number,
+  ): Promise<EstateToday['myVehicles']> {
+    const [{ n }] = await this.prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT COUNT(*)::int AS n
+        FROM vehicles
+       WHERE "residentId" = ${residentId} AND "buildingId" = ${buildingId}
+         AND status = 'APPROVED'
+    `
+    if (!n) return null
+    const rows = await this.prisma.$queryRaw<Array<{ ts: Date; direction: string | null }>>`
+      SELECT e.ts, e.direction
+        FROM access_events e
+       WHERE e."buildingId" = ${buildingId}
+         AND e."vehicleId" IN (
+               SELECT id FROM vehicles
+                WHERE "residentId" = ${residentId} AND "buildingId" = ${buildingId})
+         AND e.type IN ('LPR_MATCH', 'LPR_NO_MATCH')
+         AND e.ts >= (date_trunc('day', NOW() AT TIME ZONE ${TZ})
+                        AT TIME ZONE ${TZ} AT TIME ZONE 'UTC')
+       ORDER BY e.ts ASC
+    `
+    const passes = countPasses(rows)
+    return { vehicles: n, ...passes }
+  }
+
+  private async estateFromEdge(
+    buildingId: number,
+    refresh: boolean,
+  ): Promise<{ estate: EstateToday['estate']; pickup: EstateToday['wastePickup'] }> {
+    const cached = this.estateCache.get(buildingId)
+    if (cached && !refresh && Date.now() - cached.at < ESTATE_TTL_MS) return cached
+    const [chronicle, calendar] = await Promise.all([
+      this.fetchChronicle(buildingId, false, 8_000),
+      this.wasteEventsAhead(buildingId),
+    ])
+    const t = chronicle?.today
+    const estate: EstateToday['estate'] = t
+      ? {
+          couriers: t.couriers.map((c) => ({
+            label: c.label,
+            visits: c.visits,
+            lastAt: new Date(c.lastTs).toISOString(),
+          })),
+          taxis: t.taxis,
+          wasteTruck: t.wasteTruck
+            ? { visits: t.wasteTruck.visits, lastAt: new Date(t.wasteTruck.lastTs).toISOString() }
+            : null,
+        }
+      : null
+    const day = (key: string) => {
+      const events = (calendar ?? []).filter((e) => e.date === key)
+      return events.length ? this.wasteLabel(events) : null
+    }
+    const pickup = { today: day(warsawDayKey(0)), tomorrow: day(warsawDayKey(1)) }
+    // Nie cache-ujemy porażki Edge — następne otwarcie karty spróbuje znowu.
+    const entry = { at: Date.now(), estate, pickup }
+    if (estate) this.estateCache.set(buildingId, entry)
+    return entry
   }
 
   /**
@@ -233,4 +382,28 @@ export class DailyBriefService {
     lines.push(...personal)
     return lines
   }
+}
+
+/** Kolejne odczyty tego samego kierunku w PASS_DEDUP_MS = jeden przejazd. */
+export function countPasses(
+  rows: Array<{ ts: Date; direction: string | null }>,
+): { entries: number; exits: number; lastAt: string | null } {
+  let entries = 0
+  let exits = 0
+  let last: { dir: string; ts: number } | null = null
+  for (const r of rows) {
+    const raw = String(r.direction ?? '').toUpperCase()
+    const dir = raw === 'IN' || raw === 'FORWARD' ? 'in' : raw === 'OUT' || raw === 'REVERSE' ? 'out' : null
+    if (!dir) continue
+    const ts = r.ts.getTime()
+    if (last && last.dir === dir && ts - last.ts <= PASS_DEDUP_MS) {
+      last.ts = ts
+      continue
+    }
+    if (dir === 'in') entries++
+    else exits++
+    last = { dir, ts }
+  }
+  const lastAt = rows.length ? rows[rows.length - 1].ts.toISOString() : null
+  return { entries, exits, lastAt }
 }

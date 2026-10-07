@@ -172,22 +172,333 @@ struct BlackContextNotice: View {
     }
 }
 
-struct BlackAssistantLink: View {
+/// „Zapytaj GateLynk AI" (2026-10-08, Konrad: „bardziej widoczny i chwytliwy
+/// button") — pełnej szerokości, z gradientem akcji i rotującym przykładem
+/// pytania, żeby było jasne, o co można zapytać.
+struct BlackAskButton: View {
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var titleSize = 15.0
+    @ScaledMetric(relativeTo: .caption) private var hintSize = 12.0
+
+    static let prompts = [
+        "„Czy był dziś kurier InPost?”",
+        "„Kiedy najbliższy odbiór szkła?”",
+        "„Kiedy była dziś śmieciarka?”",
+        "„Co działo się dziś na osiedlu?”",
+    ]
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                BlackIcon(name: "sparkles", size: 16)
-                Text("Zapytaj GateLynk").font(.system(size: 12))
-                Spacer()
-                BlackIcon(name: "arrow-up-right", size: 13)
+            HStack(spacing: 12) {
+                BlackIcon(name: "sparkles", size: 19)
+                    .foregroundStyle(Color(hex: 0x151222))
+                    .frame(width: 40, height: 40)
+                    .background(BlackTheme.actionGradient, in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Zapytaj GateLynk AI")
+                        .font(.system(size: titleSize, weight: .semibold))
+                        .foregroundStyle(BlackTheme.text)
+                    TimelineView(.periodic(from: .now, by: 3.5)) { context in
+                        let index = reduceMotion ? 0
+                            : Int(context.date.timeIntervalSinceReferenceDate / 3.5) % Self.prompts.count
+                        Text("np. \(Self.prompts[index])")
+                            .font(.system(size: hintSize))
+                            .foregroundStyle(Color(hex: 0xC9BCEB))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .id(index)
+                            .transition(.opacity)
+                            .animation(.easeInOut(duration: 0.35), value: index)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                BlackIcon(name: "arrow-up-right", size: 15)
+                    .foregroundStyle(BlackTheme.text)
+                    .frame(width: 32, height: 32)
+                    .background(.white.opacity(0.08), in: Circle())
             }
-            .foregroundStyle(Color(hex: 0xD1C1F3))
-            .padding(.horizontal, 4)
-            .frame(minHeight: 45)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 12)
+            .frame(minHeight: 64)
+            .background(
+                LinearGradient(colors: BlackTheme.actionColors.map { $0.opacity(0.16) },
+                               startPoint: .leading, endPoint: .trailing),
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(LinearGradient(colors: BlackTheme.actionColors.map { $0.opacity(0.5) },
+                                                 startPoint: .leading, endPoint: .trailing), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Zapytaj GateLynk AI")
+        .accessibilityHint("Otwiera czat z asystentem osiedla")
+    }
+}
+
+// MARK: - „Najnowsze na osiedlu" (2026-10-08)
+//
+// Fakty dnia zamiast akapitów z LLM, w kolejności Konrada: aktualne ogłoszenie
+// administracji → przejazdy MOICH aut dziś → kurierzy (i taksówki) → odpady.
+// Dane: GET /resident/assistant/estate-today (Cloud; część z kamer z Edge).
+
+struct EstateToday: Decodable, Equatable {
+    struct Announcement: Decodable, Equatable { let id: Int; let title: String; let body: String; let sentAt: Date }
+    struct MyVehicles: Decodable, Equatable { let vehicles: Int; let entries: Int; let exits: Int; let lastAt: Date? }
+    struct Courier: Decodable, Equatable { let label: String; let visits: Int; let lastAt: Date }
+    struct WasteTruck: Decodable, Equatable { let visits: Int; let lastAt: Date }
+    struct Estate: Decodable, Equatable { let couriers: [Courier]; let taxis: Int; let wasteTruck: WasteTruck? }
+    struct WastePickup: Decodable, Equatable { let today: String?; let tomorrow: String? }
+    let announcement: Announcement?
+    let myVehicles: MyVehicles?
+    let estate: Estate?
+    let wastePickup: WastePickup?
+}
+
+struct BlackEstateTodayCard: View {
+    /// Pamięć per mieszkaniec + nieruchomość — powrót na Dom nie przeładowuje.
+    let cacheKey: String?
+    let load: (_ refresh: Bool) async throws -> EstateToday
+    let onOpenAnnouncement: (Int) -> Void
+
+    private enum Phase: Equatable { case loading, loaded(EstateToday), failed }
+    @State private var phase: Phase = .loading
+    @State private var refreshing = false
+    @Environment(\.scenePhase) private var scenePhase
+    @ScaledMetric(relativeTo: .caption) private var labelSize = 11.0
+    @ScaledMetric(relativeTo: .body) private var valueSize = 13.5
+
+    private static var cache: (key: String, data: EstateToday, at: Date)?
+    private static let ttl: TimeInterval = 5 * 60
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            switch phase {
+            case .loading:
+                ProgressView().tint(BlackTheme.accent)
+                    .frame(maxWidth: .infinity, minHeight: 90)
+            case .failed:
+                Text("Nie udało się pobrać informacji — spróbuj odświeżyć.")
+                    .font(.system(size: valueSize))
+                    .foregroundStyle(BlackTheme.muted)
+                    .padding(.vertical, 12)
+            case .loaded(let data):
+                rows(data)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 6)
+        .background(Color(hex: 0x1B1C23), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.055), lineWidth: 1))
+        .task(id: cacheKey) { await initialLoad() }
+        .onChange(of: scenePhase) { _, value in
+            // Powrót do apki po dłuższej przerwie = świeże fakty dnia.
+            if value == .active, let c = Self.cache, Date().timeIntervalSince(c.at) > Self.ttl {
+                Task { await reload(refresh: false) }
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            HStack(spacing: 6) {
+                BlackIcon(name: "sparkles", size: 13).foregroundStyle(BlackTheme.accent)
+                Text("NAJNOWSZE NA OSIEDLU")
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(1.4)
+                    .foregroundStyle(Color(hex: 0xB4B0C0))
+            }
+            .accessibilityAddTraits(.isHeader)
+            Spacer()
+            Button { Task { await reload(refresh: true) } } label: {
+                BlackIcon(name: "refresh-cw", size: 15)
+                    .foregroundStyle(BlackTheme.muted)
+                    .rotationEffect(.degrees(refreshing ? 360 : 0))
+                    .animation(refreshing ? .linear(duration: 0.9).repeatForever(autoreverses: false) : .default,
+                               value: refreshing)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(refreshing)
+            .accessibilityLabel("Odśwież najnowsze na osiedlu")
+        }
+    }
+
+    @ViewBuilder
+    private func rows(_ d: EstateToday) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let a = d.announcement {
+                Button { onOpenAnnouncement(a.id) } label: { announcementRow(a) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Otwiera pełną treść ogłoszenia")
+            }
+            if let v = d.myVehicles {
+                divider
+                factRow(icon: "car-front", color: Color(hex: 0xC2A0FF), tint: Color(hex: 0x3D2E59),
+                        label: "Twoje auta dziś", value: Self.vehiclesText(v), detail: nil)
+            }
+            divider
+            factRow(icon: "package", color: BlackTheme.blue, tint: Color(hex: 0x253B5B),
+                    label: "Kurierzy i dostawy dziś",
+                    value: d.estate.map(Self.couriersText) ?? "Brak danych z kamer osiedla",
+                    detail: d.estate.flatMap { $0.taxis > 0 ? "oraz \(Self.taxis($0.taxis))" : nil })
+            if let waste = Self.wasteText(d) {
+                divider
+                factRow(icon: "trash-2", color: BlackTheme.green, tint: Color(hex: 0x1B454C),
+                        label: "Odpady", value: waste.value, detail: waste.detail)
+            }
+        }
+    }
+
+    private var divider: some View {
+        Rectangle().fill(.white.opacity(0.06)).frame(height: 1).padding(.leading, 44)
+    }
+
+    private func announcementRow(_ a: EstateToday.Announcement) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            iconBadge("megaphone", color: BlackTheme.amber, tint: Color(hex: 0x4B381F))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("OGŁOSZENIE ADMINISTRACJI · \(Self.relative(a.sentAt))")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(BlackTheme.amber)
+                Text(a.title)
+                    .font(.system(size: valueSize + 0.5, weight: .semibold))
+                    .foregroundStyle(BlackTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(a.body)
+                    .font(.system(size: labelSize + 1))
+                    .foregroundStyle(BlackTheme.muted)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            BlackIcon(name: "chevron-right", size: 14).foregroundStyle(BlackTheme.muted).padding(.top, 10)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    private func factRow(icon: String, color: Color, tint: Color, label: String, value: String, detail: String?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            iconBadge(icon, color: color, tint: tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: labelSize))
+                    .foregroundStyle(BlackTheme.muted)
+                Text(value)
+                    .font(.system(size: valueSize, weight: .medium))
+                    .foregroundStyle(BlackTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: labelSize))
+                        .foregroundStyle(BlackTheme.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func iconBadge(_ name: String, color: Color, tint: Color) -> some View {
+        BlackIcon(name: name, size: 16)
+            .foregroundStyle(color)
+            .frame(width: 32, height: 32)
+            .background(tint, in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+    }
+
+    // MARK: Ładowanie
+
+    private func initialLoad() async {
+        if let key = cacheKey, let c = Self.cache, c.key == key, Date().timeIntervalSince(c.at) < Self.ttl {
+            phase = .loaded(c.data)
+            return
+        }
+        await reload(refresh: false)
+    }
+
+    private func reload(refresh: Bool) async {
+        refreshing = true
+        defer { refreshing = false }
+        do {
+            let data = try await load(refresh)
+            if let key = cacheKey { Self.cache = (key, data, Date()) }
+            phase = .loaded(data)
+        } catch {
+            // Odświeżenie, które się nie udało, nie kasuje widocznych faktów.
+            if case .loaded = phase { return }
+            phase = .failed
+        }
+    }
+
+    // MARK: Teksty (czyste — testowalne)
+
+    static func vehiclesText(_ v: EstateToday.MyVehicles) -> String {
+        if v.entries == 0 && v.exits == 0 {
+            return v.vehicles == 1 ? "Twoje auto nie przejeżdżało dziś przez bramy" : "Bez przejazdów przez bramy"
+        }
+        var parts: [String] = []
+        if v.entries > 0 { parts.append(plural(v.entries, "wjazd", "wjazdy", "wjazdów")) }
+        if v.exits > 0 { parts.append(plural(v.exits, "wyjazd", "wyjazdy", "wyjazdów")) }
+        if let last = v.lastAt { parts.append("ostatnio \(hm(last))") }
+        return parts.joined(separator: " · ")
+    }
+
+    static func couriersText(_ e: EstateToday.Estate) -> String {
+        guard !e.couriers.isEmpty else { return "Jeszcze nikogo nie było" }
+        return e.couriers.prefix(4)
+            .map { $0.visits > 1 ? "\($0.label) ×\($0.visits)" : $0.label }
+            .joined(separator: " · ")
+    }
+
+    static func taxis(_ n: Int) -> String { plural(n, "taksówka", "taksówki", "taksówek") }
+
+    static func wasteText(_ d: EstateToday) -> (value: String, detail: String?)? {
+        let tomorrow = d.wastePickup?.tomorrow.map { "Jutro odbiór: \($0) — wystaw pojemniki wieczorem" }
+        if let truck = d.estate?.wasteTruck {
+            let times = truck.visits > 1 ? " (\(truck.visits)×)" : ""
+            return ("Śmieciarka była dziś o \(hm(truck.lastAt))\(times)", tomorrow)
+        }
+        if let today = d.wastePickup?.today {
+            return ("Dziś odbiór: \(today) — śmieciarki jeszcze nie było", tomorrow)
+        }
+        if let tomorrow { return (tomorrow, nil) }
+        return nil
+    }
+
+    static func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
+        let last = n % 10, lastTwo = n % 100
+        if n == 1 { return "1 \(one)" }
+        if (2...4).contains(last) && !(12...14).contains(lastTwo) { return "\(n) \(few)" }
+        return "\(n) \(many)"
+    }
+
+    private static let hmFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "pl_PL")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    static func hm(_ date: Date) -> String { hmFormatter.string(from: date) }
+
+    /// „dziś 18:20" / „wczoraj 18:20" / „6 paź".
+    static func relative(_ date: Date, now: Date = Date()) -> String {
+        let cal = Calendar.current
+        if cal.isDate(date, inSameDayAs: now) { return "dziś \(hm(date))" }
+        if let y = cal.date(byAdding: .day, value: -1, to: now), cal.isDate(date, inSameDayAs: y) {
+            return "wczoraj \(hm(date))"
+        }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "pl_PL")
+        f.dateFormat = "d MMM"
+        return f.string(from: date)
     }
 }
 
