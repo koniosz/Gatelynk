@@ -86,17 +86,19 @@ OPTIONAL_DIRECTION = f"AND (? IS NULL OR {DIRECTION_NORM} = ?)"
 CANON_TEXT_RAW = "canon_ocr(COALESCE(v.text_raw, ''))"
 
 
-# 2026-10-07 — odczyty tablic w oknie wokół klatki wizji `v` (5 min przed,
-# 2 min po): pojazd marki widziany na osiedlu zwykle mija kamerę LPR przy
-# wjeździe chwilę przed kamerami wizji. JSON-array dla response buildera,
-# który wybiera tablicę WIZYTY (odczyty pojazdów mieszkańców/gości odrzuca —
-# to nie van dostawcy, a ich tablic nie pokazujemy innym mieszkańcom).
+# 2026-10-07 — odczyty tablic w oknie wokół klatki wizji `v` (15 min przed,
+# 5 min po). JSON-array dla response buildera, który wybiera tablicę WIZYTY:
+# pewną — pojazd z rejestru otagowany marką (szerokie okno), prawdopodobną —
+# jedyny obcy odczyt TEJ SAMEJ kamery w ±20 s od klatki (`cam_id`). Na VN
+# w kilka minut przejeżdża po kilka obcych aut, więc samo „okno czasowe"
+# wskazywałoby cudze tablice. Pojazdy mieszkańców/gości są odrzucane.
 # `tags` służą tylko do dopasowania marki, nigdy do treści odpowiedzi
 # (zawierają nazwy właścicieli — lekcja 8.h.23).
 LPR_NEAR_VISION = """(
     SELECT json_group_array(json_object(
              'plate', r.plate,
              'ts', r.ts,
+             'cam_id', r.camera_device_id,
              'dir', CASE WHEN r.direction IN ('forward','IN','in') THEN 'in'
                          WHEN r.direction IN ('reverse','OUT','out') THEN 'out' END,
              'kind', r.vehicle_kind,
@@ -107,7 +109,7 @@ LPR_NEAR_VISION = """(
                                WHERE rc.device_id = r.camera_device_id),
                              r.camera_device_id)))
       FROM lpr_reads r
-     WHERE r.ts BETWEEN v.ts - 300000 AND v.ts + 120000
+     WHERE r.ts BETWEEN v.ts - 900000 AND v.ts + 300000
   )"""
 
 
@@ -461,6 +463,7 @@ TEMPLATES: dict[str, Template] = {
             SELECT v.ts AS ts,
                    strftime('%Y-%m-%d %H:%M',
                             datetime(v.ts/1000, 'unixepoch', 'localtime')) AS time,
+                   v.camera_device_id AS camera_id,
                    COALESCE(json_extract(dc.config, '$.name'),
                             v.camera_device_id) AS camera,
                    v.brand_detected AS brand,
@@ -629,6 +632,7 @@ TEMPLATES: dict[str, Template] = {
     "search_taxi_recent": {
         "sql": """
             SELECT v.ts AS ts,
+                   v.camera_device_id AS camera_id,
                    COALESCE(json_extract(dc.config, '$.name'),
                             v.camera_device_id) AS camera,
                    strftime('%Y-%m-%d %H:%M',

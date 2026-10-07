@@ -306,13 +306,14 @@ def build(intent: str, parameters: dict, rows: list[dict]) -> dict:
         range_hours = int(parameters.get("range_hours", 24))
         range_label = _wl or _range_label(range_hours)
         label = _brand_label(brand)
-        if not rows:
+        # Same słabe odczyty napisu (odfiltrowane w _group_visits) = brak wizyty.
+        visits = _group_visits(rows, brand_terms=_brand_terms(brand)) if rows else []
+        if not visits:
             return {
                 **base,
                 "answer": f"Kamery nie zarejestrowały pojazdu {label} {range_label}.",
                 "data": {"brand": brand, "count": 0, "range_hours": range_hours, "visits": []},
             }
-        visits = _group_visits(rows, brand_terms=_brand_terms(brand))
         answer = (
             f"Tak — pojazd {label} był na osiedlu {_times_pl(len(visits))} {range_label}:\n"
             + _visit_lines(visits)
@@ -629,7 +630,8 @@ def build(intent: str, parameters: dict, rows: list[dict]) -> dict:
     if intent == "search_taxi_recent":
         range_h = int(parameters.get("range_hours", 24))
         range_label = _wl or _range_label(range_h)
-        if not rows:
+        visits = _group_visits(rows, brand_terms=["uber", "bolt", "taxi", "free now", "freenow"]) if rows else []
+        if not visits:
             return {
                 **base,
                 "answer": (
@@ -638,7 +640,6 @@ def build(intent: str, parameters: dict, rows: list[dict]) -> dict:
                 ),
                 "data": {"count": 0, "range_hours": range_h, "visits": []},
             }
-        visits = _group_visits(rows, brand_terms=["uber", "bolt", "taxi", "free now", "freenow"])
         answer = (
             f"Tak — taksówka była na osiedlu {_times_pl(len(visits))} {range_label}:\n"
             + _visit_lines(visits, show_brand=True)
@@ -1356,6 +1357,26 @@ def _when_pl(ts_ms: int, now: datetime | None = None) -> str:
     return f"{dt.day} {_PL_MONTHS_GEN[dt.month - 1]} {hm}"
 
 
+# Wizyta oparta WYŁĄCZNIE na słabym odczycie napisu (0.3 = fragment słowa)
+# to zwykle szum OCR — nie pokazujemy jej. Brak pewności (taksówka po
+# napisie „taxi") = przepuszczamy.
+MIN_VISIT_CONF = 0.4
+# Okna dopasowania tablicy: pojazd z rejestru otagowany marką — od 15 min
+# przed pierwszą klatką do 5 min po ostatniej; obcy pojazd — tylko odczyt
+# TEJ SAMEJ kamery w ±20 s od klatki z napisem (pewność napisu ≥ 0.5).
+BRANDED_BEFORE_MS = 15 * 60_000
+BRANDED_AFTER_MS = 5 * 60_000
+SAME_CAMERA_MS = 20_000
+SAME_CAMERA_MIN_CONF = 0.5
+
+
+def _conf(row: dict) -> float | None:
+    try:
+        return float(row["brand_conf"]) if row.get("brand_conf") is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _group_visits(rows: list[dict], brand_terms: list[str]) -> list[dict]:
     """Klatki (dowolna kolejność) → wizyty od najnowszej, z tablicą pojazdu."""
     frames = sorted((r for r in rows if r.get("ts") is not None), key=lambda r: int(r["ts"]))
@@ -1367,61 +1388,88 @@ def _group_visits(rows: list[dict], brand_terms: list[str]) -> list[dict]:
             visits[-1]["frames"].append(r)
         else:
             visits.append({"start": ts, "end": ts, "frames": [r]})
+    kept: list[dict] = []
     for v in visits:
+        confs = [c for c in (_conf(f) for f in v["frames"]) if c is not None]
+        if confs and max(confs) < MIN_VISIT_CONF:
+            continue
         cams: list[str] = []
         for f in v["frames"]:
-            cam = f.get("camera")
+            cam = str(f.get("camera") or "").strip()
             if cam and cam not in cams:
                 cams.append(cam)
         v["cameras"] = cams
         v["brands"] = sorted({f.get("brand") for f in v["frames"] if f.get("brand")})
         v["plate"] = _visit_plate(v, brand_terms)
-    visits.reverse()
-    return visits
+        # Van stojący dłużej niż przerwa wizyty daje dwa skupiska klatek: oba
+        # wskazują TEN SAM odczyt przy wjeździe albo drugie ma już tylko
+        # wyjazd tej samej tablicy — to jedna wizyta.
+        prev = kept[-1] if kept else None
+        if (prev and v["plate"] and prev.get("plate")
+                and v["plate"]["plate"] == prev["plate"]["plate"]
+                and (v["plate"]["ts"] == prev["plate"]["ts"] or not v["plate"].get("in_ts"))):
+            prev["end"] = v["end"]
+            prev["frames"].extend(v["frames"])
+            prev["cameras"] += [c for c in cams if c not in prev["cameras"]]
+            prev["brands"] = sorted(set(prev["brands"]) | set(v["brands"]))
+            continue
+        kept.append(v)
+    kept.reverse()
+    return kept
+
+
+def _other_brand(tags: str, brand_terms: list[str]) -> bool:
+    """Pojazd z rejestru otagowany INNĄ marką (np. van DHL obok Frisco)."""
+    from intent_classifier import BRAND_KEYWORD_MAP
+    low = tags.lower()
+    if any(t in low for t in brand_terms):
+        return False
+    return any(b.lower() in low for b in set(BRAND_KEYWORD_MAP.values()))
 
 
 def _visit_plate(visit: dict, brand_terms: list[str]) -> dict | None:
     """Tablica pojazdu wizyty z odczytów LPR wokół klatek (`lpr_near`).
 
-    Pewna: odczyt, którego tagi z rejestru wskazują markę (np. van Frisco
-    dopisany jako pojazd serwisowy). Prawdopodobna: jedyny obcy pojazd
-    w oknie albo jedyny dostawczy. Inaczej None — nie zgadujemy.
+    Pewna: odczyt pojazdu z rejestru otagowanego marką w oknie wizyty.
+    Prawdopodobna: klatkę z wyraźnym napisem zrobiła kamera, która w ±20 s
+    odczytała DOKŁADNIE jedną obcą tablicę. Inaczej None — nie zgadujemy
+    (na ruchliwym osiedlu „jedyne auto w oknie" bywało cudze).
     """
-    cands: dict[str, dict] = {}
+    branded: dict[str, dict] = {}
+    same_cam: dict[str, dict] = {}
     for f in visit["frames"]:
         try:
             reads = json.loads(f.get("lpr_near") or "[]")
         except (TypeError, ValueError):
             reads = []
+        frame_ts = int(f["ts"])
+        conf = _conf(f)
         for rd in reads if isinstance(reads, list) else []:
             plate = (rd or {}).get("plate")
             if not plate or str(rd.get("kind") or "").upper() in _PRIVATE_KINDS:
                 continue
             ts = int(rd.get("ts") or 0)
-            c = cands.setdefault(plate, {"plate": plate, "ts": ts, "in_ts": None,
-                                         "cam": rd.get("cam"), "branded": False, "van": False})
-            c["ts"] = min(c["ts"], ts)
-            if rd.get("dir") == "in":
-                c["in_ts"] = ts if c["in_ts"] is None else min(c["in_ts"], ts)
-                c["cam"] = rd.get("cam") or c["cam"]
-            tags = str(rd.get("tags") or "").lower()
-            if any(t in tags for t in brand_terms):
-                c["branded"] = True
-            vtype = str(rd.get("type") or "").lower()
-            if any(k in vtype for k in ("van", "truck", "bus")):
-                c["van"] = True
-    if not cands:
-        return None
-    branded = [c for c in cands.values() if c["branded"]]
+            entry = {"plate": plate, "ts": ts,
+                     "in_ts": ts if rd.get("dir") == "in" else None}
+            tags = str(rd.get("tags") or "")
+            if any(t in tags.lower() for t in brand_terms):
+                if visit["start"] - BRANDED_BEFORE_MS <= ts <= visit["end"] + BRANDED_AFTER_MS:
+                    prev = branded.get(plate)
+                    if prev is None or (entry["in_ts"] and not prev["in_ts"]):
+                        branded[plate] = entry
+                continue
+            if _other_brand(tags, brand_terms):
+                continue
+            if (rd.get("cam_id") and rd.get("cam_id") == f.get("camera_id")
+                    and abs(ts - frame_ts) <= SAME_CAMERA_MS
+                    and (conf is None or conf >= SAME_CAMERA_MIN_CONF)):
+                same_cam.setdefault(plate, entry)
     if len(branded) == 1:
-        return {**branded[0], "certain": True}
+        return {**next(iter(branded.values())), "certain": True}
     if branded:
         return None
-    if len(cands) == 1:
-        return {**next(iter(cands.values())), "certain": False}
-    vans = [c for c in cands.values() if c["van"]]
-    if len(vans) == 1:
-        return {**vans[0], "certain": False}
+    if len(same_cam) == 1:
+        return {**next(iter(same_cam.values())), "certain": False}
     return None
 
 
