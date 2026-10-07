@@ -20,6 +20,8 @@ struct GlassTicketsSheet: View {
     /// Deep-link z pusha `ticket_reply` (2026-08-13) — otwórz od razu wątek
     /// tego zgłoszenia zamiast listy. Nil = normalne wejście z kafla.
     var initialTicketId: Int? = nil
+    /// „Kontakt z administracją" z Konta (2026-10-08) — od razu formularz.
+    var startInForm = false
     let onReload: () async -> Void
     let onClose: () -> Void
 
@@ -75,6 +77,7 @@ struct GlassTicketsSheet: View {
                 }
             }
         }
+        .onAppear { if startInForm, detailTicket == nil { mode = .form } }
         // Deep-link z pusha: otwórz wątek initialTicketId. `id:` — gdy sheet
         // już jest otwarty i przychodzi push o INNYM zgłoszeniu, task odpala
         // się ponownie i przełącza wątek.

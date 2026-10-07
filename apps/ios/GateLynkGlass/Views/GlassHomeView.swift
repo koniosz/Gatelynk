@@ -58,6 +58,8 @@ struct GlassHomeView: View {
     /// (dowolną drogą: ✕, scrim, drag) — ręczne wejście z kafla startuje
     /// wtedy normalnie od listy.
     @State private var pushTicketId: Int?
+    /// Konto › „Kontakt z administracją" → sheet zgłoszeń od razu w formularzu.
+    @State private var ticketsStartInForm = false
     /// Push z ogłoszeniem (2026-08-15): id do auto-otwarcia w sheecie
     /// ogłoszeń (wysyłka imienna) albo flaga „otwórz najnowsze" (broadcast).
     @State private var pushAnnouncementId: Int?
@@ -178,7 +180,10 @@ struct GlassHomeView: View {
         // Sheet zgłoszeń zniknął (✕ / scrim / drag / inny sheet) → route
         // przestaje obowiązywać.
         .onChange(of: activeSheet) { _, newSheet in
-            if newSheet != .tickets { pushTicketId = nil }
+            if newSheet != .tickets {
+                pushTicketId = nil
+                ticketsStartInForm = false
+            }
             if newSheet != .guests { focusGuestId = nil }
             if newSheet != .announcements {
                 pushAnnouncementId = nil
@@ -1216,6 +1221,7 @@ struct GlassHomeView: View {
             GlassTicketsSheet(
                 tickets: tickets,
                 initialTicketId: pushTicketId,
+                startInForm: ticketsStartInForm,
                 onReload: { await reloadTickets() },
                 onClose: { activeSheet = nil }
             )
@@ -1240,7 +1246,11 @@ struct GlassHomeView: View {
                 onComingSoon: { activeSheet = .comingSoon($0) },
                 onClose: { activeSheet = nil },
                 notifyWasteTruck: residentFull?.notifyWasteTruck,
-                onPreferencesChanged: { await loadAll() }
+                onPreferencesChanged: { await loadAll() },
+                onContactAdmin: isAvailable("tickets", srcTickets) ? {
+                    ticketsStartInForm = true
+                    activeSheet = .tickets
+                } : nil
             )
         case .household:
             // Ten sam widok domowników co dawniej w „Więcej" — teraz z zakładki

@@ -9,7 +9,9 @@ import SwiftUI
 // i domownicy → zakładka Dostęp (domownicy otwierają ten sam widok przez
 // `startInHousehold`).
 // Zapowiedzi „WKRÓTCE" zdjęte z list operacyjnych lądują w sekcji
-// „W przygotowaniu" na dole.
+// „Dodatki" na dole (2026-10-08, decyzja Konrada: zamiast „W przygotowaniu")
+// razem z dodatkami na zapytanie (e-mail do GateLynk) i przyciskiem
+// „Kontakt z administracją" (nowe zgłoszenie do administracji).
 //
 // 2026-07-07 (produkcja): profil + wejścia wymagane przez App Store:
 //   • Historia zdarzeń osiedla (parity z główną apką),
@@ -29,6 +31,9 @@ struct GlassMoreSheet: View {
     /// przełącznika nie pokazujemy) + odświeżenie danych Domu po zmianie.
     var notifyWasteTruck: Bool? = nil
     var onPreferencesChanged: () async -> Void = {}
+    /// „Kontakt z administracją" — formularz nowego zgłoszenia. nil = moduł
+    /// zgłoszeń wyłączony w budynku (przycisk ukryty).
+    var onContactAdmin: (() -> Void)? = nil
     /// true = sheet otwarty z zakładki Dostęp wprost na „Domowników"
     /// („Wróć" zamyka sheet zamiast wracać do konta).
     var startInHousehold = false
@@ -39,6 +44,8 @@ struct GlassMoreSheet: View {
 
     /// Polityka prywatności GateLynk (żywy URL — landing gatelynk.pl).
     private static let privacyURL = URL(string: "https://gatelynk.pl/polityka-prywatnosci")!
+    /// Dodatki na zapytanie — wiadomość do zespołu GateLynk.
+    private static let addonsEmail = "hello@gatelynk.com"
 
     private enum Mode: Equatable { case main, deleteConfirm, household, householdInvite }
 
@@ -136,9 +143,10 @@ struct GlassMoreSheet: View {
                 openURL(Self.privacyURL)
             }
 
-            // Zapowiedzi zdjęte z widoków operacyjnych (E01) — informacja
-            // o rozwoju produktu, nie pozycje „do kliknięcia" w codziennych listach.
-            Text("W PRZYGOTOWANIU")
+            // Dodatki (2026-10-08): zapowiedzi WKRÓTCE (zdjęte z widoków
+            // operacyjnych, E01) + dodatki na zapytanie — tap otwiera e-mail
+            // do GateLynk z nazwą dodatku i nieruchomości.
+            Text("DODATKI")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.0)
                 .foregroundStyle(.white.opacity(0.6))
@@ -147,6 +155,16 @@ struct GlassMoreSheet: View {
             upcomingRow(icon: "location.viewfinder", label: "Otwieranie przy zbliżaniu", feature: .geofencing)
             upcomingRow(icon: "lock.rectangle.on.rectangle", label: "Kod skrytki paczkomatu", feature: .lockerCode)
             upcomingRow(icon: "wave.3.right.circle", label: "Płatność BLIK", feature: .blik)
+            addonRow(icon: "bolt.car", label: "Ładowarki PV")
+            addonRow(icon: "gauge.with.dots.needle.67percent", label: "Odczyt mediów")
+            addonRow(icon: "calendar.badge.clock", label: "Rezerwacje")
+            addonRow(icon: "homekit", label: "Mój Smart Home")
+
+            if let onContactAdmin {
+                GlassButton(title: "Kontakt z administracją", action: onContactAdmin)
+                    .padding(.top, 4)
+                    .accessibilityHint("Otwiera formularz nowego zgłoszenia do administracji osiedla")
+            }
 
             GlassButton(title: "Wyloguj się", style: .ghost) {
                 auth.logout()
@@ -252,6 +270,57 @@ struct GlassMoreSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Dodatek na zapytanie: wiadomość do GateLynk z nazwą dodatku. Bez
+    /// skonfigurowanej poczty — adres trafia do schowka.
+    private func addonRow(icon: String, label: String) -> some View {
+        Button { requestAddon(label) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(GlassColor.accentLight)
+                    .frame(width: 24)
+                Text(label)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                Spacer()
+                HStack(spacing: 4) {
+                    Text("Zapytaj")
+                        .font(.system(size: 11.5, weight: .semibold))
+                    Image(systemName: "envelope")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(GlassColor.accentLight)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label). Zapytaj o dodatek")
+        .accessibilityHint("Otwiera wiadomość e-mail do zespołu GateLynk")
+    }
+
+    private func requestAddon(_ label: String) {
+        let property = building?.name ?? "mojej nieruchomości"
+        var parts = URLComponents()
+        parts.scheme = "mailto"
+        parts.path = Self.addonsEmail
+        parts.queryItems = [
+            URLQueryItem(name: "subject", value: "Dodatek GateLynk: \(label)"),
+            URLQueryItem(name: "body", value: "Dzień dobry,\n\njestem zainteresowany/a dodatkiem „\(label)” dla nieruchomości \(property). Proszę o kontakt.\n"),
+        ]
+        guard let url = parts.url else { return }
+        openURL(url) { accepted in
+            guard !accepted else { return }
+            UIPasteboard.general.string = Self.addonsEmail
+            toast.show("Skopiowano adres \(Self.addonsEmail)")
+        }
     }
 
     private var appVersion: String {
