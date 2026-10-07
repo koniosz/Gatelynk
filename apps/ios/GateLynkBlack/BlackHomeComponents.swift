@@ -342,8 +342,8 @@ struct BlackEstateTodayCard: View {
             if let v = d.myVehicles {
                 divider
                 factRow(icon: "car-front", color: Color(hex: 0xC2A0FF), tint: Color(hex: 0x3D2E59),
-                        label: "Twoje auta · \(Self.window(d))", value: Self.vehiclesText(v, hours: d.windowHours ?? 24),
-                        detail: nil)
+                        label: "Twoje auta · \(Self.window(d))", value: Self.vehiclesText(v),
+                        detail: v.lastAt.map { "ostatnio \(Self.at($0))" })
             }
             divider
             factRow(icon: "package", color: BlackTheme.blue, tint: Color(hex: 0x253B5B),
@@ -445,12 +445,11 @@ struct BlackEstateTodayCard: View {
 
     static func window(_ d: EstateToday) -> String { "ostatnie \(d.windowHours ?? 24) h" }
 
-    static func vehiclesText(_ v: EstateToday.MyVehicles, hours: Int = 24, now: Date = Date()) -> String {
+    static func vehiclesText(_ v: EstateToday.MyVehicles) -> String {
         if v.entries == 0 && v.exits == 0 { return "Bez przejazdów przez bramy" }
         var parts: [String] = []
         if v.entries > 0 { parts.append(plural(v.entries, "wjazd", "wjazdy", "wjazdów")) }
         if v.exits > 0 { parts.append(plural(v.exits, "wyjazd", "wyjazdy", "wyjazdów")) }
-        if let last = v.lastAt { parts.append("ostatnio \(at(last, now: now))") }
         return parts.joined(separator: " · ")
     }
 
