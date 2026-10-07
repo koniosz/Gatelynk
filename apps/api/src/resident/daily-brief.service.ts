@@ -19,12 +19,20 @@ interface CalendarEvent {
 
 const TZ = 'Europe/Warsaw'
 
+export interface ChronicleFacts {
+  couriers: Array<{ brand: string; label: string; visits: number; lastTs: number }>
+  taxis: number
+  wasteTruck: { visits: number; lastTs: number } | null
+}
+
 /**
- * Karta „Najnowsze na osiedlu" w iOS (2026-10-08) — fakty dnia zamiast
- * akapitów z LLM: aktualne ogłoszenie administracji, przejazdy MOICH aut,
- * kurierzy / taksówki / śmieciarka z kamer i odbiór odpadów dziś/jutro.
+ * Karta „Najnowsze na osiedlu" w iOS (2026-10-08) — fakty zamiast akapitów
+ * z LLM: aktualne ogłoszenie administracji, przejazdy MOICH aut, kurierzy /
+ * taksówki / śmieciarka z kamer i odbiór odpadów dziś/jutro. Okno KROCZĄCE
+ * (`windowHours`) — tuż po północy „dziś" było puste (uwaga Konrada).
  */
 export interface EstateToday {
+  windowHours: number
   announcement: { id: number; title: string; body: string; sentAt: string } | null
   /** null = mieszkaniec nie ma zatwierdzonego pojazdu (wiersz ukryty). */
   myVehicles: { vehicles: number; entries: number; exits: number; lastAt: string | null } | null
@@ -38,6 +46,8 @@ export interface EstateToday {
   generatedAt: string
 }
 
+/** Okno faktów karty (przejazdy, kurierzy, śmieciarka). */
+const RECENT_HOURS = 24
 /** Ogłoszenie starsze niż tydzień nie jest już „aktualne". */
 const ANNOUNCEMENT_MAX_AGE_DAYS = 7
 /** Dane z Edge (kronika + harmonogram) wspólne dla budynku — krótki cache. */
@@ -229,12 +239,9 @@ export class DailyBriefService {
     push_text: string | null
     events: Array<{ type: string; title: string; startedTs: number }>
     traffic?: { ins: number; outs: number; unmatched: number; total: number }
-    /** 2026-10-08 — zestawienie dnia (starszy prototyp: brak pola). */
-    today?: {
-      couriers: Array<{ brand: string; label: string; visits: number; lastTs: number }>
-      taxis: number
-      wasteTruck: { visits: number; lastTs: number } | null
-    }
+    /** 2026-10-08 — zestawienie dnia / ostatnich 24 h (starszy prototyp: brak pól). */
+    today?: ChronicleFacts
+    last24h?: ChronicleFacts & { hours: number }
   } | null> {
     const ip = this.edgeGateway.getEdgeIpForBuilding(buildingId)
     if (!ip) return null
@@ -261,10 +268,11 @@ export class DailyBriefService {
   async estateToday(buildingId: number, residentId: number, refresh = false): Promise<EstateToday> {
     const [announcement, myVehicles, edge] = await Promise.all([
       this.currentAnnouncement(buildingId, residentId),
-      this.myVehiclesToday(buildingId, residentId),
+      this.myVehiclesRecent(buildingId, residentId),
       this.estateFromEdge(buildingId, refresh),
     ])
     return {
+      windowHours: RECENT_HOURS,
       announcement,
       myVehicles,
       estate: edge.estate,
@@ -297,10 +305,10 @@ export class DailyBriefService {
     return { id: a.id, title: a.title, body: a.body, sentAt: a.sentAt.toISOString() }
   }
 
-  /** Dzisiejsze (czas osiedla) wjazdy i wyjazdy zatwierdzonych pojazdów
-   *  mieszkańca z access_events. Kilka odczytów jednego przejazdu (odczyt
-   *  + cooldown) liczy się raz. */
-  private async myVehiclesToday(
+  /** Wjazdy i wyjazdy zatwierdzonych pojazdów mieszkańca z ostatnich
+   *  RECENT_HOURS godzin (access_events). Kilka odczytów jednego przejazdu
+   *  (odczyt + cooldown) liczy się raz. */
+  private async myVehiclesRecent(
     buildingId: number,
     residentId: number,
   ): Promise<EstateToday['myVehicles']> {
@@ -319,8 +327,7 @@ export class DailyBriefService {
                SELECT id FROM vehicles
                 WHERE "residentId" = ${residentId} AND "buildingId" = ${buildingId})
          AND e.type IN ('LPR_MATCH', 'LPR_NO_MATCH')
-         AND e.ts >= (date_trunc('day', NOW() AT TIME ZONE ${TZ})
-                        AT TIME ZONE ${TZ} AT TIME ZONE 'UTC')
+         AND e.ts >= (NOW() AT TIME ZONE 'UTC') - (${RECENT_HOURS}::int * INTERVAL '1 hour')
        ORDER BY e.ts ASC
     `
     const passes = countPasses(rows)
@@ -337,7 +344,8 @@ export class DailyBriefService {
       this.fetchChronicle(buildingId, false, 8_000),
       this.wasteEventsAhead(buildingId),
     ])
-    const t = chronicle?.today
+    // Okno kroczące; starszy prototyp (bez last24h) → zestawienie dobowe.
+    const t = chronicle?.last24h ?? chronicle?.today
     const estate: EstateToday['estate'] = t
       ? {
           couriers: t.couriers.map((c) => ({

@@ -240,9 +240,10 @@ struct BlackAskButton: View {
 
 // MARK: - „Najnowsze na osiedlu" (2026-10-08)
 //
-// Fakty dnia zamiast akapitów z LLM, w kolejności Konrada: aktualne ogłoszenie
-// administracji → przejazdy MOICH aut dziś → kurierzy (i taksówki) → odpady.
-// Dane: GET /resident/assistant/estate-today (Cloud; część z kamer z Edge).
+// Fakty zamiast akapitów z LLM, w kolejności Konrada: aktualne ogłoszenie
+// administracji → przejazdy MOICH aut → kurierzy (i taksówki) → odpady.
+// Okno kroczące (24 h) — tuż po północy „dziś" było puste; godziny mają
+// dopisek dziś/wczoraj. Dane: GET /resident/assistant/estate-today.
 
 struct EstateToday: Decodable, Equatable {
     struct Announcement: Decodable, Equatable { let id: Int; let title: String; let body: String; let sentAt: Date }
@@ -251,6 +252,8 @@ struct EstateToday: Decodable, Equatable {
     struct WasteTruck: Decodable, Equatable { let visits: Int; let lastAt: Date }
     struct Estate: Decodable, Equatable { let couriers: [Courier]; let taxis: Int; let wasteTruck: WasteTruck? }
     struct WastePickup: Decodable, Equatable { let today: String?; let tomorrow: String? }
+    /// Długość okna faktów w godzinach (starsze API: brak → 24).
+    var windowHours: Int? = 24
     let announcement: Announcement?
     let myVehicles: MyVehicles?
     let estate: Estate?
@@ -339,12 +342,13 @@ struct BlackEstateTodayCard: View {
             if let v = d.myVehicles {
                 divider
                 factRow(icon: "car-front", color: Color(hex: 0xC2A0FF), tint: Color(hex: 0x3D2E59),
-                        label: "Twoje auta dziś", value: Self.vehiclesText(v), detail: nil)
+                        label: "Twoje auta · \(Self.window(d))", value: Self.vehiclesText(v, hours: d.windowHours ?? 24),
+                        detail: nil)
             }
             divider
             factRow(icon: "package", color: BlackTheme.blue, tint: Color(hex: 0x253B5B),
-                    label: "Kurierzy i dostawy dziś",
-                    value: d.estate.map(Self.couriersText) ?? "Brak danych z kamer osiedla",
+                    label: "Kurierzy i dostawy · \(Self.window(d))",
+                    value: d.estate.map { Self.couriersText($0, hours: d.windowHours ?? 24) } ?? "Brak danych z kamer osiedla",
                     detail: d.estate.flatMap { $0.taxis > 0 ? "oraz \(Self.taxis($0.taxis))" : nil })
             if let waste = Self.wasteText(d) {
                 divider
@@ -439,19 +443,19 @@ struct BlackEstateTodayCard: View {
 
     // MARK: Teksty (czyste — testowalne)
 
-    static func vehiclesText(_ v: EstateToday.MyVehicles) -> String {
-        if v.entries == 0 && v.exits == 0 {
-            return v.vehicles == 1 ? "Twoje auto nie przejeżdżało dziś przez bramy" : "Bez przejazdów przez bramy"
-        }
+    static func window(_ d: EstateToday) -> String { "ostatnie \(d.windowHours ?? 24) h" }
+
+    static func vehiclesText(_ v: EstateToday.MyVehicles, hours: Int = 24, now: Date = Date()) -> String {
+        if v.entries == 0 && v.exits == 0 { return "Bez przejazdów przez bramy" }
         var parts: [String] = []
         if v.entries > 0 { parts.append(plural(v.entries, "wjazd", "wjazdy", "wjazdów")) }
         if v.exits > 0 { parts.append(plural(v.exits, "wyjazd", "wyjazdy", "wyjazdów")) }
-        if let last = v.lastAt { parts.append("ostatnio \(hm(last))") }
+        if let last = v.lastAt { parts.append("ostatnio \(at(last, now: now))") }
         return parts.joined(separator: " · ")
     }
 
-    static func couriersText(_ e: EstateToday.Estate) -> String {
-        guard !e.couriers.isEmpty else { return "Jeszcze nikogo nie było" }
+    static func couriersText(_ e: EstateToday.Estate, hours: Int = 24) -> String {
+        guard !e.couriers.isEmpty else { return "Nikogo nie było" }
         return e.couriers.prefix(4)
             .map { $0.visits > 1 ? "\($0.label) ×\($0.visits)" : $0.label }
             .joined(separator: " · ")
@@ -459,17 +463,32 @@ struct BlackEstateTodayCard: View {
 
     static func taxis(_ n: Int) -> String { plural(n, "taksówka", "taksówki", "taksówek") }
 
-    static func wasteText(_ d: EstateToday) -> (value: String, detail: String?)? {
+    static func wasteText(_ d: EstateToday, now: Date = Date()) -> (value: String, detail: String?)? {
         let tomorrow = d.wastePickup?.tomorrow.map { "Jutro odbiór: \($0) — wystaw pojemniki wieczorem" }
+        let today = d.wastePickup?.today
         if let truck = d.estate?.wasteTruck {
             let times = truck.visits > 1 ? " (\(truck.visits)×)" : ""
-            return ("Śmieciarka była dziś o \(hm(truck.lastAt))\(times)", tomorrow)
+            // Dziś jest odbiór, a ostatnia śmieciarka była wczoraj → dzisiejsza
+            // jeszcze nie przyjechała (okno 24 h obejmuje poprzednią dobę).
+            if let today, !Calendar.current.isDate(truck.lastAt, inSameDayAs: now) {
+                return ("Dziś odbiór: \(today) — śmieciarki jeszcze nie było",
+                        "Ostatnio: \(at(truck.lastAt, now: now))")
+            }
+            return ("Śmieciarka była \(at(truck.lastAt, now: now))\(times)", tomorrow)
         }
-        if let today = d.wastePickup?.today {
-            return ("Dziś odbiór: \(today) — śmieciarki jeszcze nie było", tomorrow)
-        }
+        if let today { return ("Dziś odbiór: \(today) — śmieciarki jeszcze nie było", tomorrow) }
         if let tomorrow { return (tomorrow, nil) }
         return nil
+    }
+
+    /// „dziś o 09:49" / „wczoraj o 09:49" / „6 paź o 09:49".
+    static func at(_ date: Date, now: Date = Date()) -> String {
+        let cal = Calendar.current
+        if cal.isDate(date, inSameDayAs: now) { return "dziś o \(hm(date))" }
+        if let y = cal.date(byAdding: .day, value: -1, to: now), cal.isDate(date, inSameDayAs: y) {
+            return "wczoraj o \(hm(date))"
+        }
+        return "\(relative(date, now: now)) o \(hm(date))"
     }
 
     static func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {

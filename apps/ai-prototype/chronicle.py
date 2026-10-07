@@ -175,6 +175,11 @@ def _today_block(events: list[dict], deliveries: list[dict]) -> dict[str, Any]:
     }
 
 
+# 2026-10-08 — karta „Najnowsze na osiedlu" pokazuje okno KROCZĄCE (Konrad:
+# tuż po północy „dziś" jest puste). Kronika wieczorna zostaje dobowa.
+RECENT_HOURS = 24
+
+
 def _day_window_ms() -> tuple[int, int, str]:
     now = datetime.now()
     sod = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -305,4 +310,21 @@ async def build_chronicle(smart: bool = True) -> dict[str, Any]:
         ],
         "traffic": {"ins": ins, "outs": outs, "unmatched": unmatched, "total": total},
         "today": _today_block(events, deliveries),
+        "last24h": await _recent_block(until_ms),
     }
+
+
+async def _recent_block(until_ms: int) -> dict[str, Any]:
+    """To samo zestawienie co `today`, ale z ostatnich RECENT_HOURS godzin."""
+    since_ms = until_ms - RECENT_HOURS * 3600 * 1000
+    try:
+        events = await execute_safe(_SITUATIONS_SQL, [since_ms, until_ms])
+    except Exception as e:
+        log.warning("situation_events unavailable: %r", e)
+        events = []
+    try:
+        deliveries = await execute_safe(_DELIVERY_SQL, [since_ms, until_ms])
+    except Exception as e:
+        log.warning("delivery reads unavailable: %r", e)
+        deliveries = []
+    return {"hours": RECENT_HOURS, **_today_block(events, deliveries)}

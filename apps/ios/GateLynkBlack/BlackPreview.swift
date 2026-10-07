@@ -70,11 +70,12 @@ struct BlackPreview: View {
     static func demoEstate(empty: Bool) -> EstateToday {
         let at = { (h: Int, m: Int) in Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? Date() }
         if empty {
-            return EstateToday(announcement: nil, myVehicles: nil,
+            return EstateToday(windowHours: 24, announcement: nil, myVehicles: nil,
                                estate: .init(couriers: [], taxis: 0, wasteTruck: nil),
                                wastePickup: .init(today: nil, tomorrow: nil))
         }
         return EstateToday(
+            windowHours: 24,
             announcement: .init(id: 1, title: "Awaria szlabanu wjazdowego",
                                 body: "Szlaban przy wjeździe jest serwisowany. Do 16:00 prosimy korzystać z bramy przy portierni.",
                                 sentAt: at(8, 15)),

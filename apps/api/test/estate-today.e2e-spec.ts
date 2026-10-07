@@ -4,8 +4,8 @@
  * Chroni:
  *   • ogłoszenie = najnowsze od ADMINISTRACJI (senderBaId) z ostatniego tygodnia;
  *     przypomnienie o zaległości i ogłoszenia starsze niż 7 dni nie są „aktualne",
- *   • przejazdy MOICH aut dziś: kilka odczytów jednego przejazdu liczy się raz,
- *     cudze auta i wczorajsze przejazdy się nie liczą,
+ *   • przejazdy MOICH aut z ostatnich 24 h: kilka odczytów jednego przejazdu
+ *     liczy się raz, cudze auta i przejazdy sprzed >24 h się nie liczą,
  *   • mieszkaniec bez pojazdu → myVehicles = null (wiersz ukryty w apce),
  *   • Edge nieosiągalny → estate = null, odbiór odpadów pusty (bez 5xx).
  */
@@ -76,13 +76,13 @@ describe('Estate today card (e2e)', () => {
         INSERT INTO access_events ("buildingId", ts, type, direction, "gateOpened", "vehicleId", plate)
         VALUES (${buildingId}, ${ts}, 'LPR_MATCH', ${direction}, true, ${vehicleId}, 'X')
       `
-    // Dzisiejszy wjazd: dwa odczyty jednego przejazdu (30 s) → 1 wjazd.
-    // Wyjazd 10 min później. Przejazdy tworzymy blisko „teraz", żeby test
-    // nie zależał od godziny uruchomienia (północ czasu osiedla).
+    // Wjazd: dwa odczyty jednego przejazdu (30 s) → 1 wjazd. Wyjazd 10 min
+    // później. Wjazd sprzed 20 h też się liczy (okno kroczące 24 h).
     await ev(mine.id, 'IN', minutesAgo(12))
     await ev(mine.id, 'IN', new Date(minutesAgo(12).getTime() + 30_000))
     await ev(mine.id, 'OUT', minutesAgo(2))
-    // Wczorajszy przejazd i cudzy pojazd — nie liczą się.
+    await ev(mine.id, 'IN', new Date(Date.now() - 20 * 3600_000))
+    // Przejazd sprzed 30 h i cudzy pojazd — nie liczą się.
     await ev(mine.id, 'IN', new Date(Date.now() - 30 * 3600_000))
     await ev(foreign.id, 'IN', minutesAgo(5))
     await prisma.vehicle.delete({ where: { id: foreign.id } })
@@ -112,9 +112,10 @@ describe('Estate today card (e2e)', () => {
     expect(res.body.announcement).toMatchObject({ title: 'Awaria szlabanu wjazdowego', body: 'Treść' })
   })
 
-  it('liczy dzisiejsze przejazdy moich aut (jeden przejazd = jeden wjazd)', async () => {
+  it('liczy przejazdy moich aut z ostatnich 24 h (jeden przejazd = jeden wjazd)', async () => {
     const res = await get(residentToken).expect(200)
-    expect(res.body.myVehicles).toMatchObject({ vehicles: 1, entries: 1, exits: 1 })
+    expect(res.body.windowHours).toBe(24)
+    expect(res.body.myVehicles).toMatchObject({ vehicles: 1, entries: 2, exits: 1 })
     expect(res.body.myVehicles.lastAt).toBeTruthy()
   })
 
